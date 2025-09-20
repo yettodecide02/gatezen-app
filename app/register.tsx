@@ -42,7 +42,7 @@ export default function RegisterScreen() {
 
   useEffect(() => {
     (async () => {
-      if (await isAuthed()) router.replace("/(drawer)/dashboard");
+      if (await isAuthed()) router.replace("/(tabs)/home");
     })();
   }, []);
 
@@ -58,32 +58,46 @@ export default function RegisterScreen() {
 
       // Check existing user
       try {
-        const existing = await axios.get(`${backendUrl}/existing-user`, {
-          params: { email },
-        });
-        if (existing?.data?.exists) {
+        const existingUser = await axios.get(
+          `${backendUrl}/auth/existing-user`,
+          {
+            params: { email },
+          }
+        );
+
+        if (existingUser.data.exists) {
           setErr("User with this email already exists. Please login.");
           return;
         }
-      } catch {
-        // If the check fails for network reasons, continue
+      } catch (existingCheckError) {
+        // If the check fails for network reasons, continue with registration
+        console.log(
+          "Could not check existing user, proceeding with registration"
+        );
       }
 
-      const res = await axios.post(`${backendUrl}/signup`, {
+      const res = await axios.post(`${backendUrl}/auth/signup`, {
         name,
         email,
         password,
       });
-      if (res?.status !== 200 || !res?.data?.jwttoken) {
+
+      if (res.status !== 201) {
         setErr("User registration failed");
         return;
       }
 
       await setToken(res.data.jwttoken);
       if (res.data.user) await setUser(res.data.user);
-      router.replace("/(drawer)/dashboard");
-    } catch {
-      setErr("Registration failed");
+
+      // Check user status after registration
+      if (res.data.user.status === "PENDING") {
+        router.replace("/pending");
+      } else {
+        router.replace("/(tabs)/home");
+      }
+    } catch (e) {
+      setErr(e?.response?.data?.error || e?.message || "Registration failed");
     } finally {
       setLoading(false);
     }

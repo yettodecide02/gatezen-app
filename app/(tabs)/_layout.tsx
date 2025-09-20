@@ -1,21 +1,44 @@
 // @ts-nocheck
+import { useEffect } from "react";
 import { Tabs } from "expo-router/tabs";
 import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
+import { Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColor } from "@/hooks/useThemeColor";
+import { useColorScheme } from "@/hooks/useColorScheme";
+import { getUser } from "@/lib/auth";
+import { router } from "expo-router";
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
+  const colorScheme = useColorScheme();
   const tint = useThemeColor({}, "tint");
   const text = useThemeColor({}, "text");
   const bg = useThemeColor({}, "background");
+  const isDark = colorScheme === "dark";
+
+  useEffect(() => {
+    // Check if user is admin and redirect to admin dashboard
+    const checkUserRole = async () => {
+      try {
+        const user = await getUser();
+        if (user && user.role === "ADMIN") {
+          router.replace("/admin");
+        }
+      } catch (error) {
+        console.error("Error checking user role:", error);
+      }
+    };
+
+    checkUserRole();
+  }, []);
 
   const bottomInset = Math.max(insets.bottom ?? 0, 8);
   const side = 16;
-  const barHeight = 64;
-  const radius = 50;
-  const barBottom = bottomInset + 20; 
+  const barHeight = Platform.OS === "ios" ? 80 : 70;
+  const radius = Platform.OS === "ios" ? 25 : 20;
+  const barBottom = Platform.OS === "ios" ? bottomInset + 16 : bottomInset + 12;
 
   return (
     <Tabs
@@ -33,22 +56,35 @@ export default function TabsLayout() {
           left: side,
           right: side,
           bottom: barBottom,
-          backgroundColor: "rgba(255,255,255,0.08)",
+          backgroundColor: isDark
+            ? "rgba(31, 31, 31, 0.95)"
+            : "rgba(255, 255, 255, 0.95)",
           borderRadius: radius,
           height: barHeight,
-          paddingVertical: 8, // Y-axis padding inside bar
-          paddingHorizontal: 8,
+          paddingVertical: Platform.OS === "ios" ? 12 : 10,
+          paddingHorizontal: 16,
           marginHorizontal: 20,
           borderWidth: 1,
-          borderColor: "rgba(255,255,255,0.12)",
-          elevation: 12,
-          shadowColor: "#000",
-          shadowOpacity: 0.15,
-          shadowRadius: 12,
-          shadowOffset: { width: 0, height: 6 },
+          borderColor: isDark
+            ? "rgba(255, 255, 255, 0.1)"
+            : "rgba(0, 0, 0, 0.1)",
+          elevation: Platform.OS === "android" ? 16 : 0,
+          shadowColor: isDark ? "#000" : "#000",
+          shadowOpacity: Platform.OS === "ios" ? (isDark ? 0.3 : 0.1) : 0,
+          shadowRadius: Platform.OS === "ios" ? 20 : 0,
+          shadowOffset: { width: 0, height: 8 },
         },
-        tabBarItemStyle: { paddingTop: 6 },
-        tabBarLabelStyle: { marginBottom: 6, fontSize: 11 },
+        tabBarItemStyle: {
+          paddingTop: Platform.OS === "ios" ? 8 : 6,
+          paddingBottom: Platform.OS === "ios" ? 4 : 2,
+          height: "100%",
+        },
+        tabBarLabelStyle: {
+          marginBottom: Platform.OS === "ios" ? 4 : 2,
+          fontSize: Platform.OS === "ios" ? 12 : 11,
+          fontWeight: "500",
+          marginTop: 2,
+        },
       }}
       sceneContainerStyle={{
         backgroundColor: bg as any,
@@ -61,7 +97,11 @@ export default function TabsLayout() {
           title: "Dummy",
           tabBarLabel: "Dummy",
           tabBarIcon: ({ color, size }) => (
-            <Feather name="grid" color={color as any} size={size} />
+            <Feather
+              name="grid"
+              color={color as any}
+              size={Platform.OS === "ios" ? 22 : 20}
+            />
           ),
         }}
       />
@@ -73,7 +113,11 @@ export default function TabsLayout() {
           headerTitle: "",
           headerShown: false,
           tabBarIcon: ({ color, size }) => (
-            <Feather name="home" color={color as any} size={size} />
+            <Feather
+              name="home"
+              color={color as any}
+              size={Platform.OS === "ios" ? 22 : 20}
+            />
           ),
         }}
       />
@@ -81,9 +125,14 @@ export default function TabsLayout() {
         name="profile"
         options={{
           title: "Profile",
+          headerShown: false,
           tabBarLabel: "Profile",
           tabBarIcon: ({ color, size }) => (
-            <Feather name="user" color={color as any} size={size} />
+            <Feather
+              name="user"
+              color={color as any}
+              size={Platform.OS === "ios" ? 22 : 20}
+            />
           ),
         }}
       />

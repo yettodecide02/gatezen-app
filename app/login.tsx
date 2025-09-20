@@ -49,38 +49,41 @@ export default function LoginScreen() {
     if (!email || !password) return;
     setLoading(true);
     try {
-
       const backendUrl =
-        process.env.EXPO_PUBLIC_BACKEND_URL ||
-        "http://localhost:3000";
+        process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:3000";
 
       try {
-        const res = await axios.post(`${backendUrl}/login`, {
+        const res = await axios.post(`${backendUrl}/auth/login`, {
           email,
           password,
         });
         if (!res?.data?.jwttoken) {
-          setErr(
-            "Login succeeded, but backend did not return a token."
-          );
+          setErr("Login succeeded, but backend did not return a token.");
           return;
         }
 
         await setToken(res.data.jwttoken);
         if (res.data.user) await setUser(res.data.user);
 
-        router.replace("/(tabs)/home");
+        // Check user status
+        if (res.data.user.status === "PENDING") {
+          router.replace("/pending");
+        } else if (res.data.user.role === "ADMIN") {
+          router.replace("/admin");
+        } else {
+          router.replace("/(tabs)/home");
+        }
       } catch (errAny: any) {
         const status = errAny?.response?.status;
         const code = errAny?.code;
         if (status === 401 || status === 400) {
-          setErr("Backend rejected credentials. Check your email/password.");
+          setErr("Invalid email or password");
         } else if (code === "ERR_NETWORK") {
           setErr(
             `Cannot reach backend from device. Ensure EXPO_BACKEND_URL points to your computer's LAN IP (e.g., http://192.168.x.x:PORT).`
           );
         } else {
-          setErr(`Backend error. Status: ${status ?? "unknown"}`);
+          setErr(errAny.response?.data?.error || "Login failed");
         }
         return;
       }

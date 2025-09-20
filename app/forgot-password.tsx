@@ -56,7 +56,7 @@ export default function ForgotPasswordScreen() {
           setErr("Email is required");
           return;
         }
-        const res = await axios.post(`${backendUrl}/send-otp`, {
+        const res = await axios.post(`${backendUrl}/auth/send-otp`, {
           email: email.trim(),
         });
         setMsg(res?.data?.message || "If the account exists, a code was sent.");
@@ -66,7 +66,7 @@ export default function ForgotPasswordScreen() {
           setErr("Enter the verification code");
           return;
         }
-        const res = await axios.post(`${backendUrl}/check-otp`, {
+        const res = await axios.post(`${backendUrl}/auth/check-otp`, {
           email: email.trim(),
           otp: otp.trim(),
         });
@@ -82,7 +82,7 @@ export default function ForgotPasswordScreen() {
           setErr("Error updating password");
           return;
         }
-        const res = await axios.post(`${backendUrl}/password-reset`, {
+        const res = await axios.post(`${backendUrl}/auth/password-reset`, {
           email: email.trim(),
           password: newPassword,
         });

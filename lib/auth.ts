@@ -40,6 +40,15 @@ export async function getUser<T = unknown>() {
   }
 }
 
+export async function getCommunityId(): Promise<string | null> {
+  try {
+    const user = await getUser<{ communityId?: string }>();
+    return user?.communityId || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function logout() {
   try {
     await supabase.auth.signOut();

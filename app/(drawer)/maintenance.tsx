@@ -103,7 +103,7 @@ export default function Maintenance() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await axios.get(`${backendUrl}/maintenance`, {
+      const res = await axios.get(`${backendUrl}/resident/maintenance`, {
         params: { userId: user.id },
       });
       const list = Array.isArray(res.data) ? res.data : [];
@@ -171,7 +171,10 @@ export default function Maintenance() {
         description: desc,
         images,
       };
-      const res = await axios.post(`${backendUrl}/maintenance`, payload);
+      const res = await axios.post(
+        `${backendUrl}/resident/maintenance`,
+        payload
+      );
       const t = res.data;
       setTitle("");
       setCategory("General");
@@ -232,11 +235,14 @@ export default function Maintenance() {
         const b64 = await FileSystem.readAsStringAsync(a.uri, {
           encoding: FileSystem.EncodingType.Base64,
         });
-        await axios.post(`${backendUrl}/maintenance/${selected.id}/images`, {
-          imageData: `data:${picked.mimeType};base64,${b64}`,
-          fileName: picked.name,
-          mimeType: picked.mimeType,
-        });
+        await axios.post(
+          `${backendUrl}/resident/maintenance/${selected.id}/images`,
+          {
+            imageData: `data:${picked.mimeType};base64,${b64}`,
+            fileName: picked.name,
+            mimeType: picked.mimeType,
+          }
+        );
         setSelected((s: any) => {
           if (!s) return s;
           const next = [...(s.images || [])];
@@ -271,7 +277,7 @@ export default function Maintenance() {
     if (!selected || !message.trim()) return;
     try {
       const res = await axios.post(
-        `${backendUrl}/maintenance/${selected.id}/comments`,
+        `${backendUrl}/resident/maintenance/${selected.id}/comments`,
         { userId: user.id, name: user.name, text: message.trim() }
       );
       const c = res.data;
@@ -297,7 +303,7 @@ export default function Maintenance() {
       if (!selected) return;
       try {
         const res = await axios.patch(
-          `${backendUrl}/maintenance/${selected.id}/status`,
+          `${backendUrl}/resident/maintenance/${selected.id}`,
           { status: next }
         );
         const updated = res.data;

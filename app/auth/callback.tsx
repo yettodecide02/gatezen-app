@@ -41,7 +41,7 @@ export default function AuthCallback() {
 
         // Check if user exists in our backend; if not, create it
         const exists = await axios
-          .get(`${backendUrl}/existing-user`, { params: { email } })
+          .get(`${backendUrl}/auth/existing-user`, { params: { email } })
           .then((r) => r.data)
           .catch(() => ({ exists: false }));
 
@@ -51,7 +51,7 @@ export default function AuthCallback() {
         if (!exists?.exists) {
           const name =
             userRes?.data?.user?.user_metadata?.full_name || "Google User";
-          const signup = await axios.post(`${backendUrl}/signup`, {
+          const signup = await axios.post(`${backendUrl}/auth/signup`, {
             name,
             email,
             password: "google-oauth",

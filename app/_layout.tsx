@@ -3,7 +3,7 @@ import {
   DefaultTheme,
   ThemeProvider,
 } from "@react-navigation/native";
-import { View } from "react-native";
+import { View, Platform } from "react-native";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -56,7 +56,7 @@ export default function RootLayout() {
             initialRouteName="login"
             screenOptions={{
               headerShown: false,
-              animation: "fade",
+              animation: Platform.OS === "ios" ? "slide_from_right" : "fade",
               contentStyle: {
                 backgroundColor: (colorScheme === "dark"
                   ? "#000"
@@ -69,11 +69,7 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="auth/callback" />
           </Stack>
-          <StatusBar
-            style={colorScheme === "dark" ? "light" : "dark"}
-            backgroundColor={colorScheme === "dark" ? "#000000" : "#ffffff"}
-            translucent={false}
-          />
+          <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
         </ThemeProvider>
       </View>
     </SafeAreaProvider>

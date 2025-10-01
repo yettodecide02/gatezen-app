@@ -19,12 +19,14 @@ export default function TabsLayout() {
   const isDark = colorScheme === "dark";
 
   useEffect(() => {
-    // Check if user is admin and redirect to admin dashboard
+    // Check if user is admin or gatekeeper and redirect to appropriate dashboard
     const checkUserRole = async () => {
       try {
         const user = await getUser();
         if (user && user.role === "ADMIN") {
           router.replace("/admin");
+        } else if (user && user.role === "GATEKEEPER") {
+          router.replace("/gatekeeper/visitors");
         }
       } catch (error) {
         console.error("Error checking user role:", error);

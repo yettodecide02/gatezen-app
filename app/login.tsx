@@ -70,6 +70,8 @@ export default function LoginScreen() {
           router.replace("/pending");
         } else if (res.data.user.role === "ADMIN") {
           router.replace("/admin");
+        } else if (res.data.user.role === "GATEKEEPER") {
+          router.replace("/gatekeeper/visitors");
         } else {
           router.replace("/(tabs)/home");
         }

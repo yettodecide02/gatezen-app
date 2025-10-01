@@ -67,6 +67,7 @@ export default function RootLayout() {
             <Stack.Screen name="login" />
             <Stack.Screen name="register" />
             <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="gatekeeper" />
             <Stack.Screen name="auth/callback" />
           </Stack>
           <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />

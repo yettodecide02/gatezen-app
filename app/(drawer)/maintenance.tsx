@@ -1,7 +1,14 @@
 // @ts-nocheck
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   ScrollView,
   StyleSheet,
@@ -9,23 +16,26 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  Alert,
 } from "react-native";
-import { useThemeColor } from "@/hooks/useThemeColor";
-import { useColorScheme } from "@/hooks/useColorScheme";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import axios from "axios";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system";
+
+import { useThemeColor } from "@/hooks/useThemeColor";
+import { useColorScheme } from "@/hooks/useColorScheme";
+import { getToken, getUser } from "@/lib/auth";
 
 const STATUS_LABEL: any = {
   submitted: "Submitted",
   in_progress: "In Progress",
   resolved: "Resolved",
+  cancelled: "Cancelled",
 };
 
 function StatusChip({ status }: any) {
+  const key = (status || "submitted").toLowerCase();
   const map: any = {
     submitted: {
       bg: "#fffbeb",
@@ -45,8 +55,13 @@ function StatusChip({ status }: any) {
       br: "#a7f3d0",
       icon: <Feather name="check-circle" size={14} color="#065f46" />,
     },
+    cancelled: {
+      bg: "#fef2f2",
+      clr: "#991b1b",
+      br: "#fecaca",
+      icon: <Feather name="x-circle" size={14} color="#991b1b" />,
+    },
   };
-  const key = (status || "submitted").toLowerCase();
   const s = map[key] || map.submitted;
   return (
     <View
@@ -63,14 +78,14 @@ function StatusChip({ status }: any) {
       }}
     >
       {s.icon}
-      <Text style={{ color: s.clr, fontWeight: "600" }}>
+      <Text style={{ color: s.clr, fontWeight: "700" }}>
         {STATUS_LABEL[key] || status}
       </Text>
     </View>
   );
 }
 
-export default function Maintenance() {
+export default function MaintenanceScreen() {
   const insets = useSafeAreaInsets();
   const theme = useColorScheme() ?? "light";
   const bg = useThemeColor({}, "background");
@@ -79,125 +94,87 @@ export default function Maintenance() {
   const card = theme === "dark" ? "#111111" : "#ffffff";
   const border = theme === "dark" ? "#262626" : "#E5E7EB";
 
-  const [tickets, setTickets] = useState<any[]>([]);
-  const [selected, setSelected] = useState<any | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  // new ticket
-  const [title, setTitle] = useState("");
-  const [category, setCategory] = useState("General");
-  const [desc, setDesc] = useState("");
-  const [newImages, setNewImages] = useState<any[]>([]); // [{ uri, kind: 'local'|'remote', name?, mimeType? }]
-  const [attaching, setAttaching] = useState(false);
-  const MAX_IMAGES = 5;
-
-  // comments
-  const [message, setMessage] = useState("");
-  const user = useMemo(() => ({ id: "u1", name: "Admin" }), []);
-
+  // Backend
   const backendUrl =
     process.env.EXPO_PUBLIC_BACKEND_URL ||
     process.env.EXPO_BACKEND_URL ||
     "http://localhost:4000";
 
+  // Auth
+  const [user, setUserState] = useState<any>(null);
+  const [token, setTokenState] = useState<string | null>(null);
+  useEffect(() => {
+    (async () => {
+      try {
+        const [t, u] = await Promise.all([getToken(), getUser()]);
+        setTokenState(t);
+        setUserState(u || { id: "u1", name: "Admin", communityId: "c1" });
+      } catch {
+        setUserState({ id: "u1", name: "Admin", communityId: "c1" });
+      }
+    })();
+  }, []);
+
+  // Data
+  const [tickets, setTickets] = useState<any[]>([]);
+  const [selected, setSelected] = useState<any | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // New ticket
+  const [title, setTitle] = useState("");
+  const [category, setCategory] = useState("General");
+  const [desc, setDesc] = useState("");
+  const [newImages, setNewImages] = useState<string[]>([]); // list of data URLs or http URLs
+  const MAX_IMAGES = 5;
+
+  // Comments
+  const [message, setMessage] = useState("");
+
+  // Toast
+  const toastTimer = useRef<any>();
+  const [toast, setToast] = useState<string | null>(null);
+  const showToast = useCallback((msg: string) => {
+    clearTimeout(toastTimer.current);
+    setToast(msg);
+    toastTimer.current = setTimeout(() => setToast(null), 2200);
+  }, []);
+
+  const authHeaders = useMemo(
+    () => (token ? { Authorization: `Bearer ${token}` } : undefined),
+    [token]
+  );
+
   const load = useCallback(async () => {
+    if (!user?.id || !user?.communityId) return;
     setLoading(true);
     try {
       const res = await axios.get(`${backendUrl}/resident/maintenance`, {
-        params: { userId: user.id },
+        params: { userId: user.id, communityId: user.communityId },
+        headers: authHeaders,
       });
       const list = Array.isArray(res.data) ? res.data : [];
       setTickets(list);
       setSelected(
         (prev) =>
-          (prev
-            ? list.find((t: any) => t.id === prev.id) || list[0]
-            : list[0]) || null
+          (prev ? list.find((t: any) => t.id === prev.id) : list[0]) || null
       );
-    } catch (err) {
-      console.warn("Failed to load maintenance tickets:", err);
+    } catch (e) {
+      console.warn("Failed to load maintenance tickets", e);
       setTickets([]);
       setSelected(null);
     } finally {
       setLoading(false);
     }
-  }, [backendUrl, user.id]);
+  }, [backendUrl, user?.id, user?.communityId, authHeaders]);
 
   useEffect(() => {
-    load();
-    const id = setInterval(load, 5000);
-    return () => clearInterval(id);
-  }, [load]);
+    if (user) load();
+  }, [user, load]);
 
-  const submitTicket = useCallback(async () => {
+  const pickImage = useCallback(async () => {
     try {
-      let staged = [...newImages];
-      if (staged.length > MAX_IMAGES) {
-        staged = staged.slice(0, MAX_IMAGES);
-        Alert.alert(
-          "Image limit",
-          `Only the first ${MAX_IMAGES} images will be submitted.`
-        );
-      }
-      const images: string[] = [];
-      for (const item of staged) {
-        const uri = typeof item === "string" ? item : item?.uri;
-        const kind =
-          typeof item === "object"
-            ? item?.kind
-            : uri?.startsWith("http")
-            ? "remote"
-            : "local";
-        if (!uri) continue;
-        if (kind === "remote" || uri.startsWith("http")) {
-          images.push(uri);
-        } else {
-          try {
-            const mime =
-              (typeof item === "object" && item?.mimeType) || "image/jpeg";
-            const b64 = await FileSystem.readAsStringAsync(uri, {
-              encoding: FileSystem.EncodingType.Base64,
-            });
-            images.push(`data:${mime};base64,${b64}`);
-          } catch (e) {
-            console.warn("Failed to read file for new ticket:", e);
-          }
-        }
-      }
-      const payload = {
-        userId: user.id,
-        title,
-        category,
-        description: desc,
-        images,
-      };
-      const res = await axios.post(
-        `${backendUrl}/resident/maintenance`,
-        payload
-      );
-      const t = res.data;
-      setTitle("");
-      setCategory("General");
-      setDesc("");
-      setNewImages([]);
-      setTickets((prev) => [t, ...prev]);
-      setSelected(t);
-    } catch (err) {
-      console.warn("Failed to submit maintenance ticket:", err);
-    }
-  }, [backendUrl, user.id, title, category, desc, newImages]);
-
-  const handlePickImage = useCallback(async () => {
-    try {
-      // Enforce limit before opening picker
-      const currentCount = selected
-        ? selected.images?.length || 0
-        : newImages.length;
-      if (currentCount >= MAX_IMAGES) {
-        Alert.alert(
-          "Limit reached",
-          `You can attach up to ${MAX_IMAGES} images.`
-        );
+      if (newImages.length >= MAX_IMAGES) {
+        Alert.alert("Limit", `You can attach up to ${MAX_IMAGES} images.`);
         return;
       }
       const { status } =
@@ -209,80 +186,76 @@ export default function Maintenance() {
       });
       if (res.canceled || !res.assets?.length) return;
       const a = res.assets[0];
-      const picked = {
-        uri: a.uri,
-        name: a.fileName || "image.jpg",
-        mimeType: a.mimeType || "image/jpeg",
-        kind: "local",
-      };
-      if (!selected) {
-        setNewImages((prev) => {
-          if (prev.length >= MAX_IMAGES) return prev;
-          return [...prev, picked];
-        });
-        return;
-      }
-      setAttaching(true);
-      try {
-        const count = selected.images?.length || 0;
-        if (count >= MAX_IMAGES) {
-          Alert.alert(
-            "Limit reached",
-            `This ticket already has ${count} images (max ${MAX_IMAGES}).`
-          );
-          return;
-        }
-        const b64 = await FileSystem.readAsStringAsync(a.uri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        await axios.post(
-          `${backendUrl}/resident/maintenance/${selected.id}/images`,
-          {
-            imageData: `data:${picked.mimeType};base64,${b64}`,
-            fileName: picked.name,
-            mimeType: picked.mimeType,
-          }
-        );
-        setSelected((s: any) => {
-          if (!s) return s;
-          const next = [...(s.images || [])];
-          if (next.length < MAX_IMAGES) next.push(picked.uri);
-          return { ...s, images: next };
-        });
-        setTickets((prev) =>
-          prev.map((t) => {
-            if (t.id !== selected.id) return t;
-            const next = [...(t.images || [])];
-            if (next.length < MAX_IMAGES) next.push(picked.uri);
-            return { ...t, images: next };
-          })
-        );
-      } catch (err) {
-        console.warn("Failed to attach picked image:", err);
-      } finally {
-        setAttaching(false);
-      }
-    } catch (err) {
-      console.warn("Image picker failed:", err);
+      const mime = a.mimeType || "image/jpeg";
+      const b64 = await FileSystem.readAsStringAsync(a.uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      const dataUrl = `data:${mime};base64,${b64}`;
+      setNewImages((prev) =>
+        prev.length < MAX_IMAGES ? [...prev, dataUrl] : prev
+      );
+    } catch (e) {
+      console.warn("Image pick failed", e);
     }
-  }, [selected, backendUrl]);
+  }, [newImages.length]);
 
-  // file picking removed (images only)
+  const removeNewImage = (idx: number) => {
+    setNewImages((prev) => prev.filter((_, i) => i !== idx));
+  };
 
-  const removeStaged = useCallback((index: number) => {
-    setNewImages((prev) => prev.filter((_, i) => i !== index));
-  }, []);
+  const submitTicket = useCallback(async () => {
+    if (!title.trim()) return;
+    if (!user?.id || !user?.communityId) return;
+    try {
+      const payload = {
+        userId: user.id,
+        communityId: user.communityId,
+        title: title.trim(),
+        category: category.trim() || "General",
+        description: desc.trim(),
+        images: newImages, // data URLs or http URLs
+      };
+      const res = await axios.post(
+        `${backendUrl}/resident/maintenance`,
+        payload,
+        {
+          headers: authHeaders,
+        }
+      );
+      const t = res.data;
+      setTitle("");
+      setCategory("General");
+      setDesc("");
+      setNewImages([]);
+      setTickets((prev) => [t, ...prev]);
+      setSelected(t);
+      showToast("Ticket created");
+    } catch (e: any) {
+      Alert.alert("Error", e?.response?.data?.error || "Failed to submit");
+    }
+  }, [
+    backendUrl,
+    authHeaders,
+    user?.id,
+    user?.communityId,
+    title,
+    category,
+    desc,
+    newImages,
+    showToast,
+  ]);
 
   const addComment = useCallback(async () => {
     if (!selected || !message.trim()) return;
     try {
       const res = await axios.post(
         `${backendUrl}/resident/maintenance/${selected.id}/comments`,
-        { userId: user.id, name: user.name, text: message.trim() }
+        { userId: user?.id, name: user?.name, text: message.trim() },
+        { headers: authHeaders }
       );
       const c = res.data;
       setTickets((prev) =>
-        prev.map((t: any) =>
+        prev.map((t) =>
           t.id === selected.id
             ? { ...t, comments: [...(t.comments || []), c] }
             : t
@@ -293,33 +266,82 @@ export default function Maintenance() {
         comments: [...(s?.comments || []), c],
       }));
       setMessage("");
-    } catch (err) {
-      console.warn("Failed to add comment:", err);
+    } catch (e) {
+      Alert.alert("Error", "Failed to add comment");
     }
-  }, [backendUrl, selected, message, user.id, user.name]);
+  }, [backendUrl, authHeaders, selected, user?.id, user?.name, message]);
 
   const changeStatus = useCallback(
     async (next: "submitted" | "in_progress" | "resolved") => {
-      if (!selected) return;
+      if (!selected || !user?.communityId) return;
       try {
         const res = await axios.patch(
-          `${backendUrl}/resident/maintenance/${selected.id}`,
-          { status: next }
+          `${backendUrl}/resident/maintenance/${selected.id}/status`,
+          { status: next, communityId: user.communityId },
+          { headers: authHeaders }
         );
         const updated = res.data;
         setTickets((prev) =>
-          prev.map((t: any) => (t.id === updated.id ? updated : t))
+          prev.map((t) => (t.id === updated.id ? updated : t))
         );
         setSelected(updated);
-      } catch (err) {
-        console.warn("Failed to change ticket status:", err);
+      } catch (e) {
+        Alert.alert("Error", "Failed to change status");
       }
     },
-    [backendUrl, selected]
+    [backendUrl, authHeaders, selected, user?.communityId]
   );
+
+  const attachImageToSelected = useCallback(async () => {
+    if (!selected) return;
+    if (newImages.length === 0) return;
+    // Attach the first staged image as example
+    const imageUrl = newImages[0];
+    try {
+      await axios.post(
+        `${backendUrl}/resident/maintenance/${selected.id}/images`,
+        { imageUrl },
+        { headers: authHeaders }
+      );
+      // Reflect in UI
+      setSelected((s: any) => ({
+        ...s,
+        images: [...(s?.images || []), imageUrl],
+      }));
+      setTickets((prev) =>
+        prev.map((t) =>
+          t.id === selected.id
+            ? { ...t, images: [...(t.images || []), imageUrl] }
+            : t
+        )
+      );
+      // remove from staged
+      setNewImages((prev) => prev.slice(1));
+      showToast("Image attached");
+    } catch (e) {
+      Alert.alert("Error", "Failed to attach image");
+    }
+  }, [backendUrl, authHeaders, selected, newImages, showToast]);
 
   return (
     <View style={{ flex: 1, backgroundColor: bg, paddingTop: insets.top + 8 }}>
+      {toast ? (
+        <View
+          style={{
+            position: "absolute",
+            top: insets.top + 8,
+            alignSelf: "center",
+            backgroundColor: theme === "dark" ? "#0B0B0B" : "#111827",
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            borderRadius: 8,
+            zIndex: 10,
+          }}
+        >
+          <Text style={{ color: "#fff" }}>{toast}</Text>
+        </View>
+      ) : null}
+
       <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
           <View
@@ -341,6 +363,7 @@ export default function Maintenance() {
           </Text>
         </View>
 
+        {/* New Request */}
         <View
           style={[styles.card, { backgroundColor: card, borderColor: border }]}
         >
@@ -379,6 +402,8 @@ export default function Maintenance() {
               placeholderTextColor={icon as any}
               value={desc}
               onChangeText={setDesc}
+              multiline
+              numberOfLines={4}
               style={[
                 styles.textarea,
                 {
@@ -387,106 +412,98 @@ export default function Maintenance() {
                   backgroundColor: theme === "dark" ? "#0B0B0B" : "#F9FAFB",
                 },
               ]}
-              multiline
-              numberOfLines={4}
             />
-            <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
+
+            {/* Staged images */}
+            {newImages.length > 0 ? (
+              <ScrollView horizontal contentContainerStyle={{ gap: 8 }}>
+                {newImages.map((u, i) => (
+                  <View key={i} style={{ alignItems: "center" }}>
+                    <Image
+                      source={{ uri: u }}
+                      style={{
+                        width: 72,
+                        height: 72,
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: border,
+                      }}
+                    />
+                    <TouchableOpacity onPress={() => removeNewImage(i)}>
+                      <Text style={{ color: icon as any, marginTop: 4 }}>
+                        Remove
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </ScrollView>
+            ) : null}
+
+            <View style={{ flexDirection: "row", gap: 8 }}>
               <TouchableOpacity
-                onPress={handlePickImage}
-                disabled={
-                  attaching ||
-                  (selected
-                    ? (selected.images?.length || 0) >= MAX_IMAGES
-                    : newImages.length >= MAX_IMAGES)
-                }
-                style={[styles.btnOutline, { borderColor: border }]}
+                onPress={pickImage}
+                style={[styles.btn, styles.btnOutline, { borderColor: border }]}
               >
                 <Feather name="image" size={16} color={icon as any} />
-                <Text style={{ color: text, marginLeft: 6 }}>Pick Image</Text>
+                <Text style={{ color: icon as any, fontWeight: "700" }}>
+                  Add Image
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={submitTicket}
+                style={[styles.btn, styles.btnPrimary]}
+              >
+                <Feather name="plus" size={16} color="#fff" />
+                <Text style={{ color: "#fff", fontWeight: "700" }}>
+                  Submit Request
+                </Text>
               </TouchableOpacity>
             </View>
-            {!!newImages.length && (
-              <View style={{ marginTop: 6 }}>
-                <View
-                  style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}
-                >
-                  {newImages.map((item, i) => {
-                    const uri = typeof item === "string" ? item : item.uri;
-                    const mime =
-                      typeof item === "object" ? item.mimeType : undefined;
-                    const isImg =
-                      (mime ? mime.startsWith("image/") : true) ||
-                      (uri || "").startsWith("http");
-                    return (
-                      <View key={i} style={{ alignItems: "center" }}>
-                        <View style={{ position: "relative" }}>
-                          {isImg ? (
-                            <Image
-                              source={{ uri }}
-                              style={{
-                                width: 90,
-                                height: 70,
-                                borderRadius: 8,
-                                borderWidth: 1,
-                                borderColor: border,
-                              }}
-                            />
-                          ) : (
-                            <View
-                              style={{
-                                borderWidth: 1,
-                                borderColor: border,
-                                borderRadius: 8,
-                                padding: 10,
-                              }}
-                            >
-                              <Feather
-                                name="file"
-                                size={16}
-                                color={icon as any}
-                              />
-                            </View>
-                          )}
-                          <TouchableOpacity
-                            onPress={() => removeStaged(i)}
-                            style={{
-                              position: "absolute",
-                              top: -6,
-                              right: -6,
-                              backgroundColor:
-                                theme === "dark" ? "#111111" : "#ffffff",
-                              borderWidth: 1,
-                              borderColor: border,
-                              borderRadius: 999,
-                              padding: 4,
-                            }}
-                          >
-                            <Feather name="x" size={12} color={icon as any} />
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
-            )}
-            <TouchableOpacity onPress={submitTicket} style={styles.btnPrimary}>
-              <Feather name="plus" size={16} color="#fff" />
-              <Text style={{ color: "#fff", marginLeft: 6, fontWeight: "700" }}>
-                Submit Request
-              </Text>
-            </TouchableOpacity>
           </View>
         </View>
 
+        {/* My Tickets */}
         <View
           style={[styles.card, { backgroundColor: card, borderColor: border }]}
         >
-          <Text style={[styles.cardTitle, { color: text }]}>My Tickets</Text>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <Text style={[styles.cardTitle, { color: text }]}>My Tickets</Text>
+            <TouchableOpacity
+              onPress={load}
+              style={[
+                styles.btn,
+                styles.btnOutline,
+                {
+                  borderColor: border,
+                  paddingVertical: 6,
+                  paddingHorizontal: 10,
+                },
+              ]}
+            >
+              {loading ? (
+                <ActivityIndicator />
+              ) : (
+                <>
+                  <Feather name="refresh-cw" size={16} color={icon as any} />
+                  <Text style={{ color: icon as any, fontWeight: "700" }}>
+                    Refresh
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
           {loading ? (
-            <ActivityIndicator />
+            <View style={{ paddingVertical: 12 }}>
+              <ActivityIndicator />
+            </View>
           ) : tickets.length === 0 ? (
-            <Text style={{ color: icon }}>No requests yet.</Text>
+            <Text style={{ color: icon as any }}>No requests yet.</Text>
           ) : (
             <View style={{ gap: 8 }}>
               {tickets.map((t) => (
@@ -494,7 +511,7 @@ export default function Maintenance() {
                   key={t.id}
                   onPress={() => setSelected(t)}
                   style={[
-                    styles.item,
+                    styles.listItem,
                     {
                       borderColor: selected?.id === t.id ? "#c7d2fe" : border,
                       backgroundColor:
@@ -502,30 +519,36 @@ export default function Maintenance() {
                           ? theme === "dark"
                             ? "#0b1220"
                             : "#eef2ff"
-                          : theme === "dark"
-                          ? "#0B0B0B"
-                          : "#F9FAFB",
+                          : "transparent",
                     },
                   ]}
                 >
-                  <Text style={[styles.itemTitle, { color: text }]}>
-                    {t.title}
-                  </Text>
-                  <Text style={{ color: icon, marginBottom: 6 }}>
-                    {t.category} • {new Date(t.createdAt).toLocaleString()}
-                  </Text>
-                  <StatusChip status={t.status} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: text, fontWeight: "700" }}>
+                      {t.title}
+                    </Text>
+                    <Text style={{ color: icon as any }}>
+                      {t.category} •{" "}
+                      {new Date(
+                        t.createdAt || t.created_at || Date.now()
+                      ).toLocaleString()}
+                    </Text>
+                  </View>
+                  <StatusChip
+                    status={(t.status || "submitted").toLowerCase()}
+                  />
                 </TouchableOpacity>
               ))}
             </View>
           )}
         </View>
 
+        {/* Details */}
         <View
           style={[styles.card, { backgroundColor: card, borderColor: border }]}
         >
           {!selected ? (
-            <Text style={{ color: icon }}>
+            <Text style={{ color: icon as any }}>
               Select a ticket to view details.
             </Text>
           ) : (
@@ -533,48 +556,49 @@ export default function Maintenance() {
               <View
                 style={{
                   flexDirection: "row",
-                  justifyContent: "space-between",
                   alignItems: "center",
+                  justifyContent: "space-between",
                 }}
               >
                 <View>
-                  <Text
-                    style={[styles.itemTitle, { color: text, marginBottom: 4 }]}
-                  >
+                  <Text style={[styles.cardTitle, { color: text }]}>
                     {selected.title}
                   </Text>
-                  <Text style={{ color: icon }}>
+                  <Text style={{ color: icon as any }}>
                     {selected.category} • Opened{" "}
-                    {new Date(selected.createdAt).toLocaleString()}
+                    {new Date(
+                      selected.createdAt || selected.created_at || Date.now()
+                    ).toLocaleString()}
                   </Text>
                 </View>
-                <StatusChip status={selected.status} />
+                <StatusChip
+                  status={(selected.status || "submitted").toLowerCase()}
+                />
               </View>
 
               <View>
-                <Text style={[styles.sectionTitle, { color: text }]}>
+                <Text
+                  style={{ color: text, fontWeight: "700", marginBottom: 6 }}
+                >
                   Description
                 </Text>
-                <Text style={{ color: text, marginTop: 6 }}>
+                <Text style={{ color: icon as any }}>
                   {selected.description || "—"}
                 </Text>
               </View>
 
+              {/* Images */}
               <View>
-                <Text style={[styles.sectionTitle, { color: text }]}>
+                <Text
+                  style={{ color: text, fontWeight: "700", marginBottom: 6 }}
+                >
                   Images
                 </Text>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    flexWrap: "wrap",
-                    gap: 10,
-                    marginTop: 10,
-                  }}
-                >
-                  {(selected.images || []).map((src: string, i: number) => (
-                    <TouchableOpacity key={i}>
+                {selected.images?.length ? (
+                  <ScrollView horizontal contentContainerStyle={{ gap: 10 }}>
+                    {(selected.images || []).map((src: string, i: number) => (
                       <Image
+                        key={i}
                         source={{ uri: src }}
                         style={{
                           width: 120,
@@ -584,67 +608,97 @@ export default function Maintenance() {
                           borderColor: border,
                         }}
                       />
-                    </TouchableOpacity>
-                  ))}
-                  {(!selected.images || selected.images.length === 0) && (
-                    <Text style={{ color: icon }}>No images</Text>
-                  )}
-                </View>
-              </View>
+                    ))}
+                  </ScrollView>
+                ) : (
+                  <Text style={{ color: icon as any }}>No images</Text>
+                )}
 
-              <View>
-                <Text style={[styles.sectionTitle, { color: text }]}>
-                  Timeline
-                </Text>
-                <View style={{ marginTop: 8, gap: 8 }}>
-                  {(selected.history || []).map((h: any) => (
-                    <View
-                      key={h.id}
-                      style={{
-                        borderTopWidth: StyleSheet.hairlineWidth,
-                        borderTopColor: border,
-                        paddingTop: 8,
-                      }}
-                    >
-                      <StatusChip status={h.status} />
-                      <Text style={{ color: icon, marginTop: 4 }}>
-                        {new Date(h.at).toLocaleString()}
-                      </Text>
-                      {!!h.note && (
-                        <Text style={{ color: text, marginTop: 4 }}>
-                          {h.note}
+                {newImages.length > 0 ? (
+                  <View style={{ marginTop: 8, gap: 8 }}>
+                    <Text style={{ color: icon as any }}>
+                      Staged to attach:
+                    </Text>
+                    <ScrollView horizontal contentContainerStyle={{ gap: 8 }}>
+                      {newImages.map((u, i) => (
+                        <Image
+                          key={i}
+                          source={{ uri: u }}
+                          style={{
+                            width: 72,
+                            height: 72,
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor: border,
+                          }}
+                        />
+                      ))}
+                    </ScrollView>
+                    <View style={{ flexDirection: "row", gap: 8 }}>
+                      <TouchableOpacity
+                        onPress={pickImage}
+                        style={[
+                          styles.btn,
+                          styles.btnOutline,
+                          { borderColor: border },
+                        ]}
+                      >
+                        <Feather name="image" size={16} color={icon as any} />
+                        <Text style={{ color: icon as any, fontWeight: "700" }}>
+                          Add More
                         </Text>
-                      )}
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={attachImageToSelected}
+                        style={[styles.btn, styles.btnPrimary]}
+                      >
+                        <Feather name="paperclip" size={16} color="#fff" />
+                        <Text style={{ color: "#fff", fontWeight: "700" }}>
+                          Attach
+                        </Text>
+                      </TouchableOpacity>
                     </View>
-                  ))}
-                </View>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    onPress={pickImage}
+                    style={[
+                      styles.btn,
+                      styles.btnOutline,
+                      { borderColor: border, marginTop: 8 },
+                    ]}
+                  >
+                    <Feather name="image" size={16} color={icon as any} />
+                    <Text style={{ color: icon as any, fontWeight: "700" }}>
+                      Add Image
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
 
+              {/* Quick actions */}
               <View style={{ flexDirection: "row", gap: 8 }}>
                 <TouchableOpacity
-                  onPress={() => changeStatus("in_progress")}
-                  disabled={
-                    selected.status === "in_progress" ||
-                    selected.status === "resolved"
-                  }
+                  onPress={() => changeStatus("cancelled")}
+                  disabled={selected.status === "cancelled"}
                   style={[
+                    styles.btn,
                     styles.btnOutline,
                     {
                       borderColor: border,
-                      opacity:
-                        selected.status === "in_progress" ||
-                        selected.status === "resolved"
-                          ? 0.6
-                          : 1,
+                      opacity: selected.status === "cancelled" ? 0.6 : 1,
                     },
                   ]}
                 >
-                  <Text style={{ color: text }}>Start Progress</Text>
+                  <Text style={{ color: icon as any, fontWeight: "700" }}>
+                    Cancel
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => changeStatus("resolved")}
                   disabled={selected.status === "resolved"}
                   style={[
+                    styles.btn,
                     styles.btnOutline,
                     {
                       borderColor: border,
@@ -652,59 +706,68 @@ export default function Maintenance() {
                     },
                   ]}
                 >
-                  <Text style={{ color: text }}>Mark Resolved</Text>
+                  <Text style={{ color: icon as any, fontWeight: "700" }}>
+                    Mark Resolved
+                  </Text>
                 </TouchableOpacity>
               </View>
 
+              {/* Comments */}
               <View>
-                <Text style={[styles.sectionTitle, { color: text }]}>
+                <Text
+                  style={{ color: text, fontWeight: "700", marginBottom: 6 }}
+                >
                   Comments
                 </Text>
-                <View style={{ gap: 10, marginTop: 10 }}>
+                <View style={{ gap: 8 }}>
                   {(selected.comments || []).map((c: any) => {
-                    const mine = c.userId === user.id;
+                    const mine = c.userId === user?.id;
                     return (
                       <View
                         key={c.id}
-                        style={[
-                          styles.bubble,
-                          mine && styles.bubbleMe,
-                          {
-                            borderColor: border,
-                            backgroundColor:
-                              theme === "dark"
-                                ? mine
-                                  ? "#0b1220"
-                                  : "#0B0B0B"
-                                : mine
-                                ? "#eef2ff"
-                                : "#F9FAFB",
-                          },
-                        ]}
+                        style={{
+                          alignSelf: mine ? "flex-end" : "flex-start",
+                          maxWidth: "90%",
+                          paddingHorizontal: 12,
+                          paddingVertical: 8,
+                          borderRadius: 12,
+                          backgroundColor: mine
+                            ? "#2563EB"
+                            : theme === "dark"
+                            ? "#0B0B0B"
+                            : "#F3F4F6",
+                        }}
                       >
-                        {!mine && (
+                        {!mine ? (
                           <Text
                             style={{
-                              color: icon,
-                              marginBottom: 4,
-                              fontWeight: "600",
+                              color: theme === "dark" ? "#ddd" : "#111",
+                              fontWeight: "700",
                             }}
                           >
                             {c.name || "User"}
                           </Text>
-                        )}
-                        <Text style={{ color: text }}>{c.text}</Text>
+                        ) : null}
+                        <Text style={{ color: mine ? "#fff" : text }}>
+                          {c.text}
+                        </Text>
                         <Text
-                          style={{ color: icon, marginTop: 4, fontSize: 12 }}
+                          style={{
+                            color: mine ? "#e5e7eb" : (icon as any),
+                            fontSize: 11,
+                            marginTop: 4,
+                          }}
                         >
-                          {new Date(c.at).toLocaleTimeString()}
+                          {new Date(
+                            c.at || c.createdAt || Date.now()
+                          ).toLocaleTimeString()}
                         </Text>
                       </View>
                     );
                   })}
-                  {(!selected.comments || selected.comments.length === 0) && (
-                    <Text style={{ color: icon }}>No messages yet.</Text>
-                  )}
+                  {(selected.comments || []).length === 0 ? (
+                    <Text style={{ color: icon as any }}>No messages yet.</Text>
+                  ) : null}
 
                   <View style={{ flexDirection: "row", gap: 8 }}>
                     <TextInput
@@ -726,14 +789,21 @@ export default function Maintenance() {
                     />
                     <TouchableOpacity
                       onPress={addComment}
-                      style={styles.btnOutline}
+                      style={[
+                        styles.btn,
+                        styles.btnOutline,
+                        { borderColor: border },
+                      ]}
                     >
                       <Feather name="send" size={16} color={icon as any} />
-                      <Text style={{ color: text, marginLeft: 6 }}>Send</Text>
+                      <Text style={{ color: icon as any, fontWeight: "700" }}>
+                        Send
+                      </Text>
                     </TouchableOpacity>
                   </View>
-                  <Text style={{ color: icon, fontSize: 12 }}>
-                    Use the image picker to attach up to {MAX_IMAGES} images.
+                  <Text style={{ color: icon as any, fontSize: 12 }}>
+                    You can also attach images above; they’ll be stored inline
+                    as data URLs.
                   </Text>
                 </View>
               </View>
@@ -746,9 +816,16 @@ export default function Maintenance() {
 }
 
 const styles = StyleSheet.create({
-  card: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 12 },
-  cardTitle: { fontSize: 16, fontWeight: "700" },
-  sectionTitle: { fontSize: 14, fontWeight: "700" },
+  card: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 14,
+    gap: 10,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+  },
   input: {
     borderWidth: 1,
     borderRadius: 10,
@@ -760,26 +837,25 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 10,
+    minHeight: 96,
     textAlignVertical: "top",
   },
-  item: { borderWidth: 1, borderRadius: 10, padding: 12 },
-  itemTitle: { fontSize: 14, fontWeight: "700" },
-  btnPrimary: {
+  btn: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#6366F1",
-    paddingVertical: 10,
+    gap: 8,
     borderRadius: 10,
-  },
-  btnOutline: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    borderRadius: 10,
   },
-  bubble: { borderWidth: 1, borderRadius: 12, padding: 10 },
-  bubbleMe: { alignSelf: "flex-end" },
+  btnPrimary: { backgroundColor: "#2563EB" },
+  btnOutline: { backgroundColor: "transparent", borderWidth: 1 },
+  listItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 10,
+  },
 });

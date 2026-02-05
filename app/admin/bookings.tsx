@@ -197,14 +197,12 @@ export default function AdminBookings() {
         return;
       }
 
-      const res = await axios.get(
-        `${url}/admin/bookings?communityId=${communityId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const res = await axios.get(`${url}/admin/bookings`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        params: { communityId: communityId },
+      });
       setBookings(res.data.bookings || []);
     } catch (error) {
       console.error("Error fetching bookings:", error);

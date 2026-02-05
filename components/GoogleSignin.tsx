@@ -11,45 +11,59 @@ WebBrowser.maybeCompleteAuthSession();
 export default function GoogleSignin() {
   const bg = useThemeColor({}, "background");
   const text = useThemeColor({}, "text");
-  const icon = useThemeColor({}, "icon");
-  const border = icon;
+  const border = useThemeColor({}, "icon");
 
   const onPress = async () => {
     try {
-      // Use the AuthSession proxy in Expo Go for reliable redirects
-      const redirectTo = makeRedirectUri({ useProxy: true });
+      // ✅ Construct redirect dynamically
+      const redirectTo = makeRedirectUri({
+        scheme: "gatezenapp",
+        path: "auth/callback",
+      });
+
+      // ✅ Start OAuth
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo, skipBrowserRedirect: true },
+        options: {
+          redirectTo,
+          skipBrowserRedirect: false,
+          flowType: "pkce",
+        },
       });
+
       if (error) throw error;
       if (!data?.url) throw new Error("No OAuth URL returned");
 
+      // ✅ Open system browser
       const result = await WebBrowser.openAuthSessionAsync(
         data.url,
         redirectTo
       );
-      if (result.type !== "success" || !result.url) {
-        throw new Error("Authentication was cancelled or failed");
-      }
 
-      // Try to exchange the authorization code for a session, if present
-      const parsed = new URL(result.url);
-      const code = parsed.searchParams.get("code");
-      if (code) {
-        // exchangeCodeForSession is supported on RN for PKCE flow
-        try {
-          // @ts-ignore
-          await supabase.auth.exchangeCodeForSession({ code });
-        } catch {
-          // Fallback: ignore, callback screen will also handle it if needed
+
+      // ✅ When user returns
+      if (result.type === "success" && result.url) {
+
+        // 👇 Parse tokens from the URL fragment
+        const hash = result.url.split("#")[1];
+        const params = Object.fromEntries(new URLSearchParams(hash));
+
+
+        if (params.access_token && params.refresh_token) {
+          const { data, error } = await supabase.auth.setSession({
+            access_token: params.access_token,
+            refresh_token: params.refresh_token,
+          });
+
+          if (error) throw error;
+          router.replace("/auth/callback");
+        } else {
+          throw new Error("No access or refresh token in redirect URL");
         }
       }
-
-      // Continue to the callback screen which finalizes backend user and navigation
-      router.replace("/auth/callback");
-    } catch (err: any) {
-      Alert.alert("Google Sign-In failed", err?.message ?? "");
+    } catch (err) {
+      console.error("Google Sign-In Error:", err);
+      Alert.alert("Google Sign-In failed", err?.message ?? "Unknown error");
     }
   };
 

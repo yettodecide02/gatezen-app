@@ -94,13 +94,15 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen
-        name="dummy"
+        name="mypackages"
         options={{
-          title: "Dummy",
-          tabBarLabel: "Dummy",
+          title: "My Packages",
+          tabBarLabel: "My Packages",
+          headerTitle: "",
+          headerShown: false,
           tabBarIcon: ({ color, size }) => (
             <Feather
-              name="grid"
+              name="package"
               color={color as any}
               size={Platform.OS === "ios" ? 22 : 20}
             />

@@ -22,7 +22,8 @@ export async function clearUser() {
 
 export async function isAuthed() {
   const token = await getToken();
-  return !!token;
+  const user = await getUser();
+  return !!(token && user);
 }
 
 export async function setUser(user: unknown) {

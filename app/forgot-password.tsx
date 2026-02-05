@@ -8,23 +8,32 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  ScrollView,
+  SafeAreaView,
+  useWindowDimensions,
+  PixelRatio,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import axios from "axios";
 import { router } from "expo-router";
 
 import supabase from "@/lib/supabase";
+import Toast from "@/components/Toast";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
+import { useToast } from "@/hooks/useToast";
 
 export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState("");
-  const [msg, setMsg] = useState("");
-  const [err, setErr] = useState("");
-  const [stage, setStage] = useState("email_verification");
   const [otp, setOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [stage, setStage] = useState("email_verification");
 
+  const { width } = useWindowDimensions();
+  const scale = width / 375; // base scale for responsiveness
+  const normalize = (size: number) => Math.round(PixelRatio.roundToNearestPixel(size * scale));
+
+  const { toast, showError, showSuccess, hideToast } = useToast();
   const theme = useColorScheme() ?? "light";
   const bg = useThemeColor({}, "background");
   const textColor = useThemeColor({}, "text");
@@ -32,19 +41,13 @@ export default function ForgotPasswordScreen() {
   const iconColor = useThemeColor({}, "icon");
   const cardBg = theme === "dark" ? "#1F1F1F" : "#ffffff";
   const fieldBg = theme === "dark" ? "#181818" : "#f3f4f6";
-  const borderCol =
-    theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
+  const borderCol = theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
   const muted = iconColor;
   const placeholder = iconColor;
   const buttonBg = tint;
   const buttonText = theme === "dark" ? "#11181C" : "#ffffff";
-  const successColor = "#10b981";
-  const errorColor = "#f87171";
 
   const submit = async () => {
-    setMsg("");
-    setErr("");
-
     const backendUrl =
       process.env.EXPO_PUBLIC_BACKEND_URL ||
       process.env.EXPO_BACKEND_URL ||
@@ -53,33 +56,31 @@ export default function ForgotPasswordScreen() {
     try {
       if (stage === "email_verification") {
         if (!email.trim()) {
-          setErr("Email is required");
+          showError("Email is required");
           return;
         }
-        const res = await axios.post(`${backendUrl}/auth/send-otp`, {
-          email: email.trim(),
-        });
-        setMsg(res?.data?.message || "If the account exists, a code was sent.");
+        const res = await axios.post(`${backendUrl}/auth/send-otp`, { email: email.trim() });
+        showSuccess(res?.data?.message || "If the account exists, a code was sent.");
         setStage("otp");
       } else if (stage === "otp") {
         if (!otp.trim()) {
-          setErr("Enter the verification code");
+          showError("Enter the verification code");
           return;
         }
         const res = await axios.post(`${backendUrl}/auth/check-otp`, {
           email: email.trim(),
           otp: otp.trim(),
         });
-        setMsg(res?.data?.message || "Code verified. Set a new password.");
+        showSuccess(res?.data?.message || "Code verified. Set a new password.");
         setStage("reset");
       } else if (stage === "reset") {
         if (!newPassword) {
-          setErr("New password is required");
+          showError("New password is required");
           return;
         }
         const authP = await supabase.auth.updateUser({ password: newPassword });
         if (!authP) {
-          setErr("Error updating password");
+          showError("Error updating password");
           return;
         }
         const res = await axios.post(`${backendUrl}/auth/password-reset`, {
@@ -87,20 +88,15 @@ export default function ForgotPasswordScreen() {
           password: newPassword,
         });
         if (!res) {
-          setErr("Error resetting password");
+          showError("Error resetting password");
           return;
         }
-        setMsg(
-          res?.data?.message ||
-            "Password reset successful. You can now sign in."
-        );
+        showSuccess(res?.data?.message || "Password reset successful. You can now sign in.");
         router.replace("/login");
       }
     } catch (e: any) {
       console.error("Error resetting password:", e);
-      setErr(
-        e?.response?.data?.message || e?.message || "Something went wrong"
-      );
+      showError(e?.response?.data?.message || e?.message || "Something went wrong");
     }
   };
 
@@ -165,95 +161,118 @@ export default function ForgotPasswordScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: bg }]}
-      behavior={Platform.select({ ios: "padding", android: undefined })}
-    >
-      <View
-        style={[
-          styles.card,
-          { backgroundColor: cardBg, borderColor: borderCol },
-        ]}
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: bg }]}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.select({ ios: "padding", android: undefined })}
       >
-        <View style={styles.brandRow}>
-          <View style={[styles.logoBadge, { backgroundColor: tint }]}>
-            <Text style={[styles.logoText, { color: buttonText }]}>GZ</Text>
-          </View>
-          <View>
-            <Text style={[styles.brandName, { color: textColor }]}>
-              Reset password
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.form}>
+        <ScrollView
+          contentContainerStyle={[styles.scrollContent, { padding: normalize(16) }]}
+          keyboardShouldPersistTaps="handled"
+        >
           <View
             style={[
-              styles.field,
-              { backgroundColor: fieldBg, borderColor: borderCol },
+              styles.card,
+              {
+                backgroundColor: cardBg,
+                borderColor: borderCol,
+                padding: normalize(20),
+                width: width < 400 ? "100%" : 420,
+              },
             ]}
           >
-            <Feather
-              name={getInputIcon()}
-              size={18}
-              color={iconColor}
-              style={styles.icon}
-            />
-            <TextInput
-              style={[styles.input, { color: textColor }]}
-              placeholderTextColor={placeholder}
-              selectionColor={tint}
-              returnKeyType="done"
-              onSubmitEditing={submit}
-              {...getInputProps()}
-            />
-          </View>
-
-          <TouchableOpacity
-            style={[styles.authBtn, { backgroundColor: buttonBg }]}
-            onPress={submit}
-          >
-            <Text style={[styles.authBtnText, { color: buttonText }]}>
-              {getButtonText()}
-            </Text>
-          </TouchableOpacity>
-
-          {msg ? (
-            <Text style={[styles.message, { color: successColor }]}>{msg}</Text>
-          ) : null}
-
-          {err ? (
-            <Text style={[styles.error, { color: errorColor }]}>{err}</Text>
-          ) : null}
-
-          <View style={styles.foot}>
-            <Text style={[styles.muted, { color: muted }]}>
-              Remember your password?{" "}
-              <Text
-                style={[styles.link, { color: tint }]}
-                onPress={() => router.push("/login")}
+            <View style={[styles.brandRow, { marginBottom: normalize(16) }]}>
+              <View
+                style={[
+                  styles.logoBadge,
+                  { backgroundColor: tint, width: normalize(44), height: normalize(44) },
+                ]}
               >
-                Sign in
+                <Text style={[styles.logoText, { color: buttonText, fontSize: normalize(18) }]}>
+                  GZ
+                </Text>
+              </View>
+              <Text
+                style={[
+                  styles.brandName,
+                  { color: textColor, fontSize: normalize(20), flexShrink: 1 },
+                ]}
+              >
+                Reset password
               </Text>
-            </Text>
+            </View>
+
+            <View style={styles.form}>
+              <View
+                style={[
+                  styles.field,
+                  { backgroundColor: fieldBg, borderColor: borderCol, paddingHorizontal: normalize(12) },
+                ]}
+              >
+                <Feather
+                  name={getInputIcon()}
+                  size={normalize(18)}
+                  color={iconColor}
+                  style={styles.icon}
+                />
+                <TextInput
+                  style={[styles.input, { color: textColor, fontSize: normalize(15) }]}
+                  placeholderTextColor={placeholder}
+                  selectionColor={tint}
+                  returnKeyType="done"
+                  onSubmitEditing={submit}
+                  {...getInputProps()}
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.authBtn,
+                  { backgroundColor: buttonBg, paddingVertical: normalize(12), borderRadius: normalize(10) },
+                ]}
+                onPress={submit}
+              >
+                <Text
+                  style={[
+                    styles.authBtnText,
+                    { color: buttonText, fontSize: normalize(15) },
+                  ]}
+                >
+                  {getButtonText()}
+                </Text>
+              </TouchableOpacity>
+
+              <View style={styles.foot}>
+                <Text style={[styles.muted, { color: muted, fontSize: normalize(14) }]}>
+                  Remember your password?{" "}
+                  <Text
+                    style={[styles.link, { color: tint, fontSize: normalize(14) }]}
+                    onPress={() => router.push("/login")}
+                  >
+                    Sign in
+                  </Text>
+                </Text>
+              </View>
+            </View>
           </View>
-        </View>
-      </View>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      <Toast visible={toast.visible} message={toast.message} type={toast.type} onHide={hideToast} />
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
     alignItems: "center",
     justifyContent: "center",
-    padding: 16,
   },
   card: {
-    width: "100%",
-    maxWidth: 420,
-    padding: 20,
     borderRadius: 16,
     borderWidth: 1,
   },
@@ -261,24 +280,20 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    marginBottom: 16,
   },
   logoBadge: {
-    height: 44,
-    width: 44,
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
   logoText: { fontWeight: "800" },
-  brandName: { fontSize: 20, fontWeight: "700" },
+  brandName: { fontWeight: "700" },
   form: { marginTop: 8 },
   field: {
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
     borderRadius: 10,
-    paddingHorizontal: 12,
     marginBottom: 12,
   },
   icon: { marginRight: 8 },
@@ -288,23 +303,10 @@ const styles = StyleSheet.create({
   },
   authBtn: {
     marginTop: 4,
-    borderRadius: 10,
-    paddingVertical: 12,
     alignItems: "center",
     justifyContent: "center",
   },
   authBtnText: { fontWeight: "700" },
-  message: {
-    marginTop: 10,
-    textAlign: "center",
-    fontSize: 14,
-  },
-  error: {
-    marginTop: 10,
-    textAlign: "center",
-    fontSize: 14,
-  },
   foot: { marginTop: 12, alignItems: "center" },
-  muted: {},
   link: { fontWeight: "600", textDecorationLine: "underline" },
 });

@@ -192,14 +192,12 @@ export default function AdminMaintenance() {
         return;
       }
 
-      const res = await axios.get(
-        `${url}/admin/maintenance?communityId=${communityId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const res = await axios.get(`${url}/admin/maintenance`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        params: { communityId: communityId },
+      });
       setMaintenance(res.data.maintenance || []);
     } catch (error) {
       console.error("Error fetching maintenance:", error);

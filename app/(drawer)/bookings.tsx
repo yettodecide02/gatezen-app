@@ -16,6 +16,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Vibration,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -23,6 +24,8 @@ import axios from "axios";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { getToken, getUser } from "@/lib/auth";
+import { useToast } from "@/hooks/useToast";
+import Toast from "@/components/Toast";
 
 function fmtTime(dt: string | number | Date) {
   const d = new Date(dt);
@@ -35,22 +38,79 @@ function fmtTime(dt: string | number | Date) {
   }
 }
 
-function toISO(date: string, time: string) {
-  return new Date(`${date}T${time}:00`).toISOString();
-}
+function StatusChip({ status }: any) {
+  const theme = useColorScheme() ?? "light";
+  const statusConfig: any = {
+    confirmed: {
+      bg: theme === "dark" ? "#052e1f" : "#ecfdf5",
+      clr: theme === "dark" ? "#34d399" : "#065f46",
+      br: theme === "dark" ? "#1f2937" : "#d1fae5",
+      icon: (
+        <Feather
+          name="check-circle"
+          size={14}
+          color={theme === "dark" ? "#34d399" : "#065f46"}
+        />
+      ),
+      label: "Confirmed",
+    },
+    cancelled: {
+      bg: theme === "dark" ? "#2a0b0b" : "#fef2f2",
+      clr: theme === "dark" ? "#fca5a5" : "#991b1b",
+      br: theme === "dark" ? "#1f2937" : "#fecaca",
+      icon: (
+        <Feather
+          name="x-circle"
+          size={14}
+          color={theme === "dark" ? "#fca5a5" : "#991b1b"}
+        />
+      ),
+      label: "Cancelled",
+    },
+    pending: {
+      bg: theme === "dark" ? "#1e1b3a" : "#eff6ff",
+      clr: theme === "dark" ? "#60a5fa" : "#1e40af",
+      br: theme === "dark" ? "#1f2937" : "#bfdbfe",
+      icon: (
+        <Feather
+          name="clock"
+          size={14}
+          color={theme === "dark" ? "#60a5fa" : "#1e40af"}
+        />
+      ),
+      label: "Pending",
+    },
+  };
 
-function toHM(date: Date | string) {
-  const d = new Date(date);
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${hh}:${mm}`;
+  const config = statusConfig[status] || statusConfig.pending;
+
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 999,
+        borderWidth: 1,
+        backgroundColor: config.bg,
+        borderColor: config.br,
+      }}
+    >
+      {config.icon}
+      <Text style={{ color: config.clr, fontWeight: "700", fontSize: 12 }}>
+        {config.label}
+      </Text>
+    </View>
+  );
 }
 
 type Facility = {
   id: string;
   name?: string;
   facilityType?: string;
-  operatingHours?: string; // "HH:MM-HH:MM"
+  operatingHours?: string;
   slotMins?: number;
   capacity?: number;
 };
@@ -75,44 +135,57 @@ export default function BookingsScreen() {
   const card = theme === "dark" ? "#111111" : "#ffffff";
   const border = theme === "dark" ? "#262626" : "#E5E7EB";
 
-  // backend
+  // Backend
   const backendUrl =
     process.env.EXPO_PUBLIC_BACKEND_URL ||
     process.env.EXPO_BACKEND_URL ||
     "http://localhost:4000";
 
-  // auth/user
-  const [token, setTokenState] = useState<string | null>(null);
-  const [user, setUserState] = useState<any>(null);
+  // Toast system
+  const { showError, showSuccess, toast, hideToast } = useToast();
 
+  // Auth
+  const [user, setUserState] = useState<any>(null);
+  const [token, setTokenState] = useState<string | null>(null);
   useEffect(() => {
     (async () => {
       try {
         const [t, u] = await Promise.all([getToken(), getUser()]);
         setTokenState(t);
-        setUserState(
-          u || {
-            id: "u1",
-            name: "Admin",
-            communityId: "c1",
-          }
-        );
+        setUserState(u || { id: "u1", name: "Admin", communityId: "c1" });
       } catch {
         setUserState({ id: "u1", name: "Admin", communityId: "c1" });
       }
     })();
   }, []);
 
-  // toast-lite
-  const toastTimer = useRef<any>();
-  const [toast, setToast] = useState<string | null>(null);
-  const showToast = useCallback((msg: string) => {
-    clearTimeout(toastTimer.current);
-    setToast(msg);
-    toastTimer.current = setTimeout(() => setToast(null), 2200);
-  }, []);
+  // Check authentication and setup (only show errors if user and token loading is complete)
+  const [authChecked, setAuthChecked] = useState(false);
+  useEffect(() => {
+    // Wait a bit for auth to load
+    const timer = setTimeout(() => {
+      setAuthChecked(true);
+      if (!token) {
+        showError(
+          "Authentication Required",
+          "Please log in to access bookings"
+        );
+        return;
+      }
+      // Only show setup error for obvious fallback values, allow real community IDs
+      if (!user?.communityId) {
+        showError(
+          "Setup Required",
+          "Please complete your profile setup to access bookings"
+        );
+        return;
+      }
+    }, 1000);
 
-  // state
+    return () => clearTimeout(timer);
+  }, [token, user?.communityId, showError]);
+
+  // Data
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [facilityId, setFacilityId] = useState<string>("");
   const [date, setDate] = useState<string>(() =>
@@ -121,11 +194,20 @@ export default function BookingsScreen() {
   const [selectedSlot, setSelectedSlot] = useState<string>("");
   const [note, setNote] = useState<string>("");
   const [peopleCount, setPeopleCount] = useState<number>(1);
-  const [peopleInput, setPeopleInput] = useState<string>("1");
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [slots, setSlots] = useState<{ start: string; end: string }[]>([]);
   const [userBookingsToday, setUserBookingsToday] = useState<Booking[]>([]);
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+
+  // Modals
+  const [facilitiesOpen, setFacilitiesOpen] = useState(false);
+  const [slotsOpen, setSlotsOpen] = useState(false);
+
+  const authHeaders = useMemo(
+    () => (token ? { Authorization: `Bearer ${token}` } : undefined),
+    [token]
+  );
 
   const minsUsed = useMemo(() => {
     return (userBookingsToday || []).reduce((sum, b) => {
@@ -136,7 +218,7 @@ export default function BookingsScreen() {
   }, [userBookingsToday]);
   const minsLeft = Math.max(0, 180 - minsUsed);
 
-  // helpers
+  // Build slots for the day
   const buildSlots = useCallback((facility?: Facility | null, d?: string) => {
     if (!facility || !d) return [] as { start: string; end: string }[];
     if (
@@ -170,13 +252,17 @@ export default function BookingsScreen() {
     }
   }, []);
 
-  // load facilities
+  // Load facilities
   const loadFacilities = useCallback(async () => {
-    if (!user?.communityId) return;
+    if (!user?.communityId || !token) {
+      console.warn("Cannot load facilities: missing communityId or token");
+      return;
+    }
+
     try {
       const res = await axios.get(`${backendUrl}/resident/facilities`, {
         params: { communityId: user.communityId },
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        headers: authHeaders,
       });
       const f = Array.isArray(res.data?.data)
         ? res.data.data
@@ -185,106 +271,155 @@ export default function BookingsScreen() {
         : [];
       setFacilities(f);
       if (!facilityId && f[0]?.id) setFacilityId(f[0].id);
-    } catch (e) {
+    } catch (e: any) {
       console.warn("Failed to load facilities", e);
       setFacilities([]);
-      showToast("Failed to load facilities");
+      if (authChecked && e.response?.status === 401) {
+        showError("Authentication Error", "Please log in again");
+      } else if (authChecked && e.response?.status === 403) {
+        showError(
+          "Access Denied",
+          "You don't have permission to view facilities"
+        );
+      } else if (authChecked) {
+        showError("Error", "Failed to load facilities");
+      }
     }
-  }, [backendUrl, token, user?.communityId, facilityId, showToast]);
+  }, [
+    backendUrl,
+    user?.communityId,
+    authHeaders,
+    facilityId,
+    authChecked,
+    showError,
+  ]);
 
-  // load bookings
+  // Load bookings
   const loadBookings = useCallback(async () => {
-    if (!facilityId || !date) return;
+    if (!facilityId || !date || !token) {
+      console.warn("Cannot load bookings: missing facilityId, date, or token");
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await axios.get(`${backendUrl}/resident/bookings`, {
         params: { facilityId, date },
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        headers: authHeaders,
       });
       const list: Booking[] = Array.isArray(res.data) ? res.data : [];
-      setBookings(
-        list.sort((a, b) => +new Date(a.startsAt) - +new Date(b.startsAt))
+      const sortedList = list.sort(
+        (a, b) => +new Date(a.startsAt) - +new Date(b.startsAt)
       );
-    } catch (e) {
+      setBookings(sortedList);
+    } catch (e: any) {
       console.warn("Failed to load bookings", e);
       setBookings([]);
-      showToast("Failed to load bookings");
+      if (authChecked && e.response?.status === 401) {
+        showError("Authentication Error", "Please log in again");
+      } else if (authChecked && e.response?.status === 403) {
+        showError(
+          "Access Denied",
+          "You don't have permission to view bookings"
+        );
+      } else if (authChecked) {
+        showError("Error", "Failed to load bookings");
+      }
     } finally {
       setLoading(false);
     }
-  }, [backendUrl, token, facilityId, date, showToast]);
+  }, [
+    backendUrl,
+    token,
+    facilityId,
+    date,
+    authHeaders,
+    authChecked,
+    showError,
+  ]);
 
   const loadUserBookingsToday = useCallback(async () => {
     if (!user?.id || !date) return;
     try {
       const res = await axios.get(`${backendUrl}/resident/user-bookings`, {
         params: { userId: user.id, date },
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        headers: authHeaders,
       });
       setUserBookingsToday(Array.isArray(res.data) ? res.data : []);
     } catch (e) {
+      console.error("Error loading user bookings:", e);
       setUserBookingsToday([]);
+      showError("Error", "Failed to load your bookings");
     }
-  }, [backendUrl, token, user?.id, date]);
+  }, [backendUrl, user?.id, date, authHeaders, showError]);
 
-  // effects
+  // Effects
   useEffect(() => {
-    if (user) loadFacilities();
-  }, [user, loadFacilities]);
+    if (user && authChecked) loadFacilities();
+  }, [user, authChecked, loadFacilities]);
 
   useEffect(() => {
-    if (facilityId && date) {
+    if (facilityId && date && authChecked) {
       loadBookings();
       loadUserBookingsToday();
     }
-  }, [facilityId, date, loadBookings, loadUserBookingsToday]);
+  }, [facilityId, date, authChecked, loadBookings, loadUserBookingsToday]);
 
   useEffect(() => {
     const fac = facilities.find((f) => f.id === facilityId) || null;
     setSlots(buildSlots(fac, date));
     setSelectedSlot("");
+    setSelectedBooking(null); // Clear selected booking when facility/date changes
   }, [facilities, facilityId, date, buildSlots]);
 
+  // Update selected booking when bookings list changes (without triggering loadBookings)
   useEffect(() => {
-    // Clamp people count/input when capacity changes
-    const cap = facility?.capacity || 10;
-    const n = Math.max(1, Math.min(peopleCount, cap));
-    if (n !== peopleCount) {
-      setPeopleCount(n);
-      setPeopleInput(String(n));
+    if (selectedBooking && bookings.length > 0) {
+      const updated = bookings.find((b) => b.id === selectedBooking.id);
+      if (
+        updated &&
+        JSON.stringify(updated) !== JSON.stringify(selectedBooking)
+      ) {
+        setSelectedBooking(updated);
+      }
     }
-  }, [facility?.capacity]);
-
-  // polling (simple) for live updates
-  useEffect(() => {
-    const id = setInterval(() => {
-      loadBookings();
-      loadUserBookingsToday();
-    }, 5000);
-    return () => clearInterval(id);
-  }, [loadBookings, loadUserBookingsToday]);
+  }, [bookings]); // Only depend on bookings, not selectedBooking
 
   const shiftDay = (delta: number) => {
     const d = new Date(date);
     d.setDate(d.getDate() + delta);
-    setDate(d.toISOString().slice(0, 10));
+    const newDate = d.toISOString().slice(0, 10);
+    const today = new Date().toISOString().slice(0, 10);
+
+    if (newDate < today) {
+      showError("Invalid Date", "Cannot select a date in the past");
+      return;
+    }
+    setSelectedBooking(null);
+    setDate(newDate);
   };
 
   const facility = facilities.find((f) => f.id === facilityId) || null;
 
-  // booking create/cancel
+  // Create booking
   const createBooking = useCallback(async () => {
-    if (!facilityId || !selectedSlot) return;
+    if (!facilityId || !selectedSlot) {
+      showError("Validation Error", "Please select a facility and time slot");
+      return;
+    }
+
     const slot = slots.find((s) => s.start === selectedSlot);
-    if (!slot) return Alert.alert("Select a valid slot");
+    if (!slot) {
+      showError("Invalid Slot", "Please select a valid time slot");
+      return;
+    }
+
     if (new Date(slot.start) < new Date()) {
-      return Alert.alert("Invalid", "Cannot book a past slot");
+      showError("Invalid Time", "Cannot book a slot in the past");
+      return;
     }
 
     const cap = facility?.capacity || 10;
-    const nRaw = parseInt(peopleInput || String(peopleCount), 10);
-    const effectiveCount = isNaN(nRaw) ? 1 : Math.max(1, Math.min(nRaw, cap));
-
     const bookedCount = (bookings || [])
       .filter(
         (b) =>
@@ -293,8 +428,20 @@ export default function BookingsScreen() {
           b.status === "confirmed"
       )
       .reduce((sum, b) => sum + (b.peopleCount || 1), 0);
-    if (bookedCount + effectiveCount > cap) {
-      return Alert.alert("Full", "This slot is full");
+
+    if (bookedCount + peopleCount > cap) {
+      showError("Slot Full", "This time slot is already fully booked");
+      return;
+    }
+
+    if (minsLeft < (facility?.slotMins || 60)) {
+      showError(
+        "Time Limit",
+        `You have exceeded your daily booking limit. Only ${Math.floor(
+          minsLeft / 60
+        )}h ${minsLeft % 60}m remaining.`
+      );
+      return;
     }
 
     try {
@@ -303,38 +450,58 @@ export default function BookingsScreen() {
         facilityId,
         startsAt: slot.start,
         endsAt: slot.end,
-        note,
-        peopleCount: effectiveCount,
+        note: note.trim() || undefined,
+        peopleCount,
+        communityId: user?.communityId,
       };
-      await axios.post(`${backendUrl}/resident/bookings`, payload, {
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      const res = await axios.post(`${backendUrl}/resident/bookings`, payload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
       });
       setNote("");
       setSelectedSlot("");
-      setPeopleCount(effectiveCount);
-      setPeopleInput(String(effectiveCount));
-      showToast("Booked ✔");
-      loadBookings();
+      setPeopleCount(1);
+      showSuccess("Success", "Booking confirmed successfully");
+      setBookings((prev) =>
+        [res.data, ...prev].sort(
+          (a, b) => +new Date(a.startsAt) - +new Date(b.startsAt)
+        )
+      );
+      setSelectedBooking(res.data);
       loadUserBookingsToday();
     } catch (e: any) {
-      const msg = e?.response?.data?.error || "Failed to create booking";
-      Alert.alert("Error", msg);
+      console.error("Booking error:", e);
+      let errorMessage = "Booking failed. Please try again.";
+      if (e.response?.data?.error) {
+        errorMessage = e.response.data.error;
+      } else if (e.response?.status === 400) {
+        errorMessage = "Invalid booking data. Please check your inputs.";
+      } else if (e.response?.status === 403) {
+        errorMessage = "You don't have permission to make this booking.";
+      } else if (e.response?.status === 409) {
+        errorMessage = "This time slot conflicts with another booking.";
+      }
+      showError("Booking Failed", errorMessage);
     }
   }, [
     backendUrl,
     token,
     user?.id,
+    user?.communityId,
     facilityId,
     slots,
     selectedSlot,
     peopleCount,
-    peopleInput,
     note,
     bookings,
     facility?.capacity,
-    loadBookings,
+    facility?.slotMins,
+    minsLeft,
     loadUserBookingsToday,
-    showToast,
+    showError,
+    showSuccess,
   ]);
 
   const cancelBooking = useCallback(
@@ -343,48 +510,45 @@ export default function BookingsScreen() {
         await axios.patch(
           `${backendUrl}/resident/bookings/${id}/cancel`,
           {},
-          { headers: token ? { Authorization: `Bearer ${token}` } : undefined }
+          { headers: authHeaders }
         );
-        showToast("Cancelled");
-        loadBookings();
+        showSuccess("Success", "Booking cancelled successfully");
+        setBookings((prev) =>
+          prev.map((b) => (b.id === id ? { ...b, status: "cancelled" } : b))
+        );
+        // Update selected booking if it's the one being cancelled
+        setSelectedBooking((prev) =>
+          prev?.id === id ? { ...prev, status: "cancelled" } : prev
+        );
         loadUserBookingsToday();
       } catch (e) {
-        Alert.alert("Error", "Failed to cancel booking");
+        console.error("Error cancelling booking:", e);
+        showError("Error", "Failed to cancel booking");
       }
     },
-    [backendUrl, token, loadBookings, loadUserBookingsToday, showToast]
+    [backendUrl, authHeaders, loadUserBookingsToday, showError, showSuccess]
   );
-
-  // Simple Select modal UI
-  const [facilitiesOpen, setFacilitiesOpen] = useState(false);
-  const [slotsOpen, setSlotsOpen] = useState(false);
 
   return (
     <View style={{ flex: 1, backgroundColor: bg, paddingTop: insets.top + 8 }}>
-      {toast ? (
-        <View
-          style={{
-            position: "absolute",
-            top: insets.top + 8,
-            alignSelf: "center",
-            backgroundColor: theme === "dark" ? "#0B0B0B" : "#111827",
-            paddingHorizontal: 12,
-            paddingVertical: 8,
-            borderRadius: 8,
-            zIndex: 10,
-          }}
-        >
-          <Text style={{ color: "#fff" }}>{toast}</Text>
-        </View>
-      ) : null}
+      <Toast
+        message={toast.message}
+        type={toast.type}
+        visible={toast.visible}
+        onHide={hideToast}
+      />
 
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+      <ScrollView
+        contentContainerStyle={{ padding: 16, gap: 18 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
           <View
             style={{
-              height: 28,
-              width: 28,
-              borderRadius: 6,
+              height: 32,
+              width: 32,
+              borderRadius: 8,
               alignItems: "center",
               justifyContent: "center",
               borderWidth: 1,
@@ -392,9 +556,9 @@ export default function BookingsScreen() {
               backgroundColor: theme === "dark" ? "#0B0B0B" : "#F9FAFB",
             }}
           >
-            <Feather name="calendar" size={16} color={icon as any} />
+            <Feather name="calendar" size={18} color={icon as any} />
           </View>
-          <Text style={{ color: text, fontSize: 18, fontWeight: "800" }}>
+          <Text style={{ color: text, fontSize: 20, fontWeight: "800" }}>
             Facility Bookings
           </Text>
         </View>
@@ -405,7 +569,7 @@ export default function BookingsScreen() {
         >
           <Text style={[styles.cardTitle, { color: text }]}>New Booking</Text>
           <View style={{ gap: 10 }}>
-            {/* Facility select */}
+            {/* Facility */}
             <Text style={[styles.label, { color: icon as any }]}>Facility</Text>
             <TouchableOpacity
               onPress={() => setFacilitiesOpen(true)}
@@ -414,23 +578,35 @@ export default function BookingsScreen() {
                 {
                   borderColor: border,
                   backgroundColor: theme === "dark" ? "#0B0B0B" : "#F9FAFB",
+                  minHeight: 48, // Better touch target for mobile
                 },
               ]}
             >
-              <Text style={{ color: text }} numberOfLines={1}>
+              <Text style={{ color: text, fontSize: 16 }} numberOfLines={1}>
                 {facility?.facilityType || facility?.name || "Select facility"}
               </Text>
-              <Feather name="chevron-down" size={18} color={icon as any} />
+              <Feather name="chevron-down" size={20} color={icon as any} />
             </TouchableOpacity>
 
             {/* Date */}
             <Text style={[styles.label, { color: icon as any }]}>Date</Text>
-            <View style={{ flexDirection: "row", gap: 8 }}>
+            <View
+              style={{ flexDirection: "row", gap: 10, alignItems: "center" }}
+            >
               <TouchableOpacity
                 onPress={() => shiftDay(-1)}
-                style={[styles.btn, styles.btnOutline, { borderColor: border }]}
+                style={[
+                  styles.btn,
+                  styles.btnOutline,
+                  {
+                    borderColor: border,
+                    minHeight: 48,
+                    minWidth: 48,
+                    justifyContent: "center",
+                  },
+                ]}
               >
-                <Feather name="chevron-left" size={18} color={icon as any} />
+                <Feather name="chevron-left" size={20} color={icon as any} />
               </TouchableOpacity>
               <TextInput
                 value={date}
@@ -444,19 +620,51 @@ export default function BookingsScreen() {
                     color: text,
                     borderColor: border,
                     backgroundColor: theme === "dark" ? "#0B0B0B" : "#F9FAFB",
+                    minHeight: 48,
+                    fontSize: 16,
+                    textAlign: "center",
                   },
                 ]}
               />
               <TouchableOpacity
                 onPress={() => shiftDay(+1)}
-                style={[styles.btn, styles.btnOutline, { borderColor: border }]}
+                style={[
+                  styles.btn,
+                  styles.btnOutline,
+                  {
+                    borderColor: border,
+                    minHeight: 48,
+                    minWidth: 48,
+                    justifyContent: "center",
+                  },
+                ]}
               >
-                <Feather name="chevron-right" size={18} color={icon as any} />
+                <Feather name="chevron-right" size={20} color={icon as any} />
               </TouchableOpacity>
             </View>
+            <TouchableOpacity
+              onPress={() => setDate(new Date().toISOString().slice(0, 10))}
+              style={[
+                styles.btn,
+                styles.btnGhost,
+                {
+                  alignSelf: "flex-start",
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                },
+              ]}
+            >
+              <Text
+                style={{ color: icon as any, fontSize: 12, fontWeight: "600" }}
+              >
+                Today
+              </Text>
+            </TouchableOpacity>
 
             {/* Slot */}
-            <Text style={[styles.label, { color: icon as any }]}>Slot</Text>
+            <Text style={[styles.label, { color: icon as any }]}>
+              Time Slot
+            </Text>
             <TouchableOpacity
               onPress={() => setSlotsOpen(true)}
               style={[
@@ -467,42 +675,30 @@ export default function BookingsScreen() {
                 },
               ]}
             >
-              <Text style={{ color: text }} numberOfLines={1}>
+              <Text style={{ color: text, fontSize: 16 }} numberOfLines={1}>
                 {selectedSlot
                   ? `${fmtTime(selectedSlot)} – ${fmtTime(
                       (slots.find((s) => s.start === selectedSlot)
                         ?.end as any) || selectedSlot
                     )}`
-                  : "Select slot"}
+                  : "Select time slot"}
               </Text>
-              <Feather name="chevron-down" size={18} color={icon as any} />
+              <Feather name="chevron-down" size={20} color={icon as any} />
             </TouchableOpacity>
 
-            {/* People */}
+            {/* People Count */}
             <Text style={[styles.label, { color: icon as any }]}>
               How many people?
             </Text>
             <TextInput
               keyboardType="number-pad"
-              value={peopleInput}
+              value={String(peopleCount)}
               onChangeText={(v) => {
-                // Allow empty while typing; update numeric state lazily
-                const sanitized = v.replace(/[^0-9]/g, "");
-                setPeopleInput(sanitized);
-              }}
-              onBlur={() => {
+                const num = parseInt(v || "1", 10);
                 const cap = facility?.capacity || 10;
-                const nRaw = parseInt(peopleInput || "1", 10);
-                const n = isNaN(nRaw) ? 1 : Math.max(1, Math.min(nRaw, cap));
-                setPeopleCount(n);
-                setPeopleInput(String(n));
-              }}
-              onSubmitEditing={() => {
-                const cap = facility?.capacity || 10;
-                const nRaw = parseInt(peopleInput || "1", 10);
-                const n = isNaN(nRaw) ? 1 : Math.max(1, Math.min(nRaw, cap));
-                setPeopleCount(n);
-                setPeopleInput(String(n));
+                setPeopleCount(
+                  isNaN(num) ? 1 : Math.max(1, Math.min(num, cap))
+                );
               }}
               style={[
                 styles.input,
@@ -519,7 +715,7 @@ export default function BookingsScreen() {
               Note (optional)
             </Text>
             <TextInput
-              placeholder="Birthday, match, etc."
+              placeholder="Birthday party, team meeting, etc."
               placeholderTextColor={icon as any}
               value={note}
               onChangeText={setNote}
@@ -533,27 +729,36 @@ export default function BookingsScreen() {
               ]}
             />
 
-            <Text style={{ color: icon as any }}>
+            <Text style={{ color: icon as any, fontSize: 12 }}>
               You have {Math.floor(minsLeft / 60)}h {minsLeft % 60}m left to
               book today.
             </Text>
 
             <TouchableOpacity
               onPress={createBooking}
-              style={[styles.btn, styles.btnPrimary]}
+              disabled={!facilityId || !selectedSlot}
+              style={[
+                styles.btn,
+                styles.btnPrimary,
+                {
+                  opacity: !facilityId || !selectedSlot ? 0.6 : 1,
+                  minHeight: 52,
+                  justifyContent: "center",
+                },
+              ]}
             >
-              <Feather name="check-circle" size={16} color="#fff" />
-              <Text style={{ color: "#fff", fontWeight: "700" }}>
+              <Feather name="check-circle" size={18} color="#fff" />
+              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 16 }}>
                 Confirm Booking
               </Text>
             </TouchableOpacity>
 
-            {facility ? (
+            {facility && (
               <View
                 style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
               >
                 <Feather name="clock" size={14} color={icon as any} />
-                <Text style={{ color: icon as any }}>
+                <Text style={{ color: icon as any, fontSize: 12 }}>
                   {facility.operatingHours ? (
                     <>
                       Hours: {facility.operatingHours} • Slot:{" "}
@@ -564,11 +769,11 @@ export default function BookingsScreen() {
                   )}
                 </Text>
               </View>
-            ) : null}
+            )}
           </View>
         </View>
 
-        {/* Schedule */}
+        {/* My Bookings */}
         <View
           style={[styles.card, { backgroundColor: card, borderColor: border }]}
         >
@@ -577,125 +782,314 @@ export default function BookingsScreen() {
               flexDirection: "row",
               alignItems: "center",
               justifyContent: "space-between",
-              marginBottom: 8,
+              marginBottom: 12,
             }}
           >
-            <Text style={{ color: icon as any }}>
-              Schedule — {facility?.name || facility?.facilityType || "…"}
-            </Text>
+            <Text style={[styles.cardTitle, { color: text }]}>My Bookings</Text>
             <TouchableOpacity
               onPress={loadBookings}
-              style={[styles.btn, styles.btnGhost]}
+              style={[
+                styles.btn,
+                styles.btnOutline,
+                {
+                  borderColor: border,
+                  paddingVertical: 8,
+                  paddingHorizontal: 12,
+                  minHeight: 44,
+                },
+              ]}
+              disabled={loading}
             >
-              <Feather name="refresh-cw" size={16} color={icon as any} />
-              <Text style={{ color: icon as any, fontWeight: "600" }}>
-                Refresh
-              </Text>
+              {loading ? (
+                <ActivityIndicator size="small" />
+              ) : (
+                <>
+                  <Feather name="refresh-cw" size={16} color={icon as any} />
+                  <Text style={{ color: icon as any, fontWeight: "700" }}>
+                    Refresh
+                  </Text>
+                </>
+              )}
             </TouchableOpacity>
           </View>
 
+          <View style={{ marginBottom: 12 }}>
+            <Text style={{ color: text, fontSize: 14, fontWeight: "600" }}>
+              {facility?.name || facility?.facilityType || "Select a Facility"}
+            </Text>
+            <Text style={{ color: icon as any, fontSize: 12, marginTop: 2 }}>
+              {date
+                ? new Date(date).toLocaleDateString("en-US", {
+                    weekday: "long",
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  })
+                : "Select a date"}
+            </Text>
+          </View>
+
           {loading ? (
-            <View style={{ paddingVertical: 16 }}>
+            <View style={{ paddingVertical: 16, alignItems: "center" }}>
               <ActivityIndicator />
+              <Text style={{ color: icon as any, marginTop: 8 }}>
+                Loading schedule...
+              </Text>
             </View>
           ) : bookings.length === 0 ? (
-            <View style={styles.empty}>
-              <Text style={{ color: icon as any }}>
-                No bookings for this day.
+            <View
+              style={[
+                styles.empty,
+                {
+                  alignItems: "center",
+                  justifyContent: "center",
+                  paddingVertical: 32,
+                },
+              ]}
+            >
+              <Feather
+                name="calendar"
+                size={48}
+                color={icon as any}
+                style={{ opacity: 0.5, marginBottom: 16 }}
+              />
+              <Text
+                style={{
+                  color: text,
+                  fontWeight: "600",
+                  fontSize: 16,
+                  marginBottom: 4,
+                }}
+              >
+                No bookings scheduled
+              </Text>
+              <Text style={{ color: icon as any, textAlign: "center" }}>
+                This facility is available for the entire day
               </Text>
             </View>
           ) : (
-            <View style={{ gap: 10 }}>
-              {bookings.map((b) => (
-                <View
-                  key={b.id}
-                  style={[styles.listItem, { borderColor: border }]}
+            <View style={{ gap: 8 }}>
+              {bookings.map((b) => {
+                const isUserBooking = b.userId === user?.id;
+                const startTime = new Date(b.startsAt);
+                const endTime = new Date(b.endsAt);
+                const duration = Math.round(
+                  (endTime.getTime() - startTime.getTime()) / (1000 * 60)
+                );
+
+                return (
+                  <TouchableOpacity
+                    key={b.id}
+                    onPress={() => {
+                      // Prevent rapid clicks and ensure booking is valid
+                      if (selectedBooking?.id === b.id) {
+                        setSelectedBooking(null);
+                      } else if (b && b.id) {
+                        setSelectedBooking({ ...b });
+                      }
+                    }}
+                    style={[
+                      styles.listItem,
+                      {
+                        borderColor:
+                          selectedBooking?.id === b.id ? "#c7d2fe" : border,
+                        backgroundColor:
+                          selectedBooking?.id === b.id
+                            ? theme === "dark"
+                              ? "#0b1220"
+                              : "#eef2ff"
+                            : isUserBooking
+                            ? theme === "dark"
+                              ? "#1a1a2e"
+                              : "#f0f4ff"
+                            : "transparent",
+                      },
+                    ]}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 8,
+                          marginBottom: 4,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: text,
+                            fontWeight: "700",
+                            fontSize: 16,
+                          }}
+                        >
+                          {fmtTime(b.startsAt)} – {fmtTime(b.endsAt)}
+                        </Text>
+                        <Text style={{ color: icon as any, fontSize: 12 }}>
+                          {duration} min
+                        </Text>
+                      </View>
+                      <Text
+                        style={{
+                          color: icon as any,
+                          marginBottom: 4,
+                          fontSize: 14,
+                        }}
+                      >
+                        {b.note || "No description"}
+                      </Text>
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 12,
+                        }}
+                      >
+                        {b.peopleCount && (
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              gap: 4,
+                            }}
+                          >
+                            <Feather
+                              name="user"
+                              size={10}
+                              color={icon as any}
+                            />
+                            <Text style={{ color: icon as any, fontSize: 10 }}>
+                              {b.peopleCount} people
+                            </Text>
+                          </View>
+                        )}
+                        {isUserBooking && (
+                          <Text
+                            style={{
+                              color: theme === "dark" ? "#60a5fa" : "#2563eb",
+                              fontSize: 10,
+                              fontWeight: "600",
+                            }}
+                          >
+                            Your booking
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                    <StatusChip status={b.status} />
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+        </View>
+
+        {/* Booking Details */}
+        <View
+          style={[styles.card, { backgroundColor: card, borderColor: border }]}
+        >
+          {!selectedBooking ? (
+            <Text style={{ color: icon as any }}>
+              Select a booking to view details.
+            </Text>
+          ) : (
+            <View style={{ gap: 12 }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <View>
+                  <Text
+                    style={{ color: text, fontWeight: "700", fontSize: 16 }}
+                  >
+                    {fmtTime(selectedBooking.startsAt)} –{" "}
+                    {fmtTime(selectedBooking.endsAt)}
+                  </Text>
+                  <Text
+                    style={{ color: icon as any, fontSize: 12, marginTop: 2 }}
+                  >
+                    {facility?.facilityType || "Facility"} •{" "}
+                    {Math.round(
+                      (new Date(selectedBooking.endsAt).getTime() -
+                        new Date(selectedBooking.startsAt).getTime()) /
+                        (1000 * 60)
+                    )}{" "}
+                    minutes
+                  </Text>
+                </View>
+                <StatusChip status={selectedBooking.status} />
+              </View>
+
+              <View>
+                <Text
+                  style={{ color: text, fontWeight: "700", marginBottom: 6 }}
                 >
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: text, fontWeight: "700" }}>
-                      {fmtTime(b.startsAt)} – {fmtTime(b.endsAt)}
-                    </Text>
-                    <Text style={{ color: icon as any }}>{b.note || "—"}</Text>
-                  </View>
+                  Description
+                </Text>
+                <Text style={{ color: icon as any }}>
+                  {selectedBooking.note || "No description provided"}
+                </Text>
+              </View>
+
+              {selectedBooking.peopleCount && (
+                <View>
+                  <Text
+                    style={{ color: text, fontWeight: "700", marginBottom: 6 }}
+                  >
+                    People Count
+                  </Text>
                   <View
                     style={{
                       flexDirection: "row",
                       alignItems: "center",
                       gap: 6,
-                      paddingHorizontal: 10,
-                      paddingVertical: 6,
-                      borderRadius: 999,
-                      borderWidth: 1,
-                      borderColor:
-                        b.status === "confirmed"
-                          ? theme === "dark"
-                            ? "#1f2937"
-                            : "#D1FAE5"
-                          : theme === "dark"
-                          ? "#1f2937"
-                          : "#FECACA",
-                      backgroundColor:
-                        b.status === "confirmed"
-                          ? theme === "dark"
-                            ? "#052e1f"
-                            : "#ECFDF5"
-                          : theme === "dark"
-                          ? "#2a0b0b"
-                          : "#FEF2F2",
                     }}
                   >
-                    {b.status === "confirmed" ? (
-                      <Feather
-                        name="calendar"
-                        size={14}
-                        color={theme === "dark" ? "#34D399" : "#065F46"}
-                      />
-                    ) : (
-                      <Feather
-                        name="x-circle"
-                        size={14}
-                        color={theme === "dark" ? "#FCA5A5" : "#991B1B"}
-                      />
-                    )}
-                    <Text
-                      style={{
-                        color:
-                          b.status === "confirmed"
-                            ? theme === "dark"
-                              ? "#A7F3D0"
-                              : "#065F46"
-                            : theme === "dark"
-                            ? "#FCA5A5"
-                            : "#991B1B",
-                        fontWeight: "700",
-                      }}
-                    >
-                      {b.status === "confirmed" ? "Confirmed" : "Cancelled"}
+                    <Feather name="users" size={16} color={icon as any} />
+                    <Text style={{ color: text }}>
+                      {selectedBooking.peopleCount} people
                     </Text>
                   </View>
-                  {b.userId === user?.id && b.status !== "cancelled" ? (
+                </View>
+              )}
+
+              {selectedBooking.userId === user?.id &&
+                selectedBooking.status !== "cancelled" && (
+                  <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
                     <TouchableOpacity
-                      onPress={() => cancelBooking(b.id)}
+                      onPress={() => cancelBooking(selectedBooking.id)}
                       style={[
                         styles.btn,
                         styles.btnOutline,
-                        { borderColor: border },
+                        {
+                          borderColor: "#dc2626",
+                          flex: 1,
+                          backgroundColor:
+                            theme === "dark" ? "#1f1f1f" : "#fff",
+                        },
                       ]}
                     >
-                      <Feather name="x-circle" size={16} color={icon as any} />
-                      <Text style={{ color: icon as any, fontWeight: "700" }}>
-                        Cancel
+                      <Feather name="x-circle" size={16} color="#dc2626" />
+                      <Text
+                        style={{
+                          color: "#dc2626",
+                          fontWeight: "700",
+                          fontSize: 16,
+                        }}
+                      >
+                        Cancel Booking
                       </Text>
                     </TouchableOpacity>
-                  ) : null}
-                </View>
-              ))}
+                  </View>
+                )}
             </View>
           )}
         </View>
       </ScrollView>
 
-      {/* Facilities modal */}
+      {/* Facilities Modal */}
       <Modal visible={facilitiesOpen} animationType="fade" transparent>
         <View style={styles.modalBackdrop}>
           <View
@@ -705,7 +1099,7 @@ export default function BookingsScreen() {
             ]}
           >
             <Text style={[styles.cardTitle, { color: text, marginBottom: 8 }]}>
-              Select facility
+              Select Facility
             </Text>
             <ScrollView style={{ maxHeight: 320 }}>
               {facilities.map((f) => (
@@ -720,14 +1114,29 @@ export default function BookingsScreen() {
                   <Text style={{ color: text }}>
                     {f.facilityType || f.name || f.id}
                   </Text>
+                  {f.operatingHours && (
+                    <Text style={{ color: icon as any, fontSize: 12 }}>
+                      {f.operatingHours}
+                    </Text>
+                  )}
                 </TouchableOpacity>
               ))}
             </ScrollView>
             <TouchableOpacity
               onPress={() => setFacilitiesOpen(false)}
-              style={[styles.btn, styles.btnGhost, { marginTop: 10 }]}
+              style={[
+                styles.btn,
+                styles.btnGhost,
+                {
+                  marginTop: 16,
+                  borderWidth: 1,
+                  borderColor: border,
+                },
+              ]}
             >
-              <Text style={{ color: icon as any, fontWeight: "700" }}>
+              <Text
+                style={{ color: icon as any, fontWeight: "700", fontSize: 16 }}
+              >
                 Close
               </Text>
             </TouchableOpacity>
@@ -735,7 +1144,7 @@ export default function BookingsScreen() {
         </View>
       </Modal>
 
-      {/* Slots modal */}
+      {/* Slots Modal */}
       <Modal visible={slotsOpen} animationType="fade" transparent>
         <View style={styles.modalBackdrop}>
           <View
@@ -745,7 +1154,7 @@ export default function BookingsScreen() {
             ]}
           >
             <Text style={[styles.cardTitle, { color: text, marginBottom: 8 }]}>
-              Select slot
+              Select Time Slot
             </Text>
             <ScrollView style={{ maxHeight: 360 }}>
               {slots.map((s, idx) => {
@@ -775,8 +1184,10 @@ export default function BookingsScreen() {
                     ]}
                   >
                     <Text style={{ color: text }}>
-                      {fmtTime(s.start)} – {fmtTime(s.end)} ({bookedCount}/{cap}{" "}
-                      booked)
+                      {fmtTime(s.start)} – {fmtTime(s.end)}
+                    </Text>
+                    <Text style={{ color: icon as any, fontSize: 12 }}>
+                      {bookedCount}/{cap} booked
                     </Text>
                   </TouchableOpacity>
                 );
@@ -784,9 +1195,19 @@ export default function BookingsScreen() {
             </ScrollView>
             <TouchableOpacity
               onPress={() => setSlotsOpen(false)}
-              style={[styles.btn, styles.btnGhost, { marginTop: 10 }]}
+              style={[
+                styles.btn,
+                styles.btnGhost,
+                {
+                  marginTop: 16,
+                  borderWidth: 1,
+                  borderColor: border,
+                },
+              ]}
             >
-              <Text style={{ color: icon as any, fontWeight: "700" }}>
+              <Text
+                style={{ color: icon as any, fontWeight: "700", fontSize: 16 }}
+              >
                 Close
               </Text>
             </TouchableOpacity>
@@ -800,43 +1221,59 @@ export default function BookingsScreen() {
 const styles = StyleSheet.create({
   card: {
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 14,
-    gap: 10,
+    borderRadius: 16,
+    padding: 16,
+    gap: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   cardTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "800",
+    marginBottom: 4,
   },
   label: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: "700",
+    marginBottom: 4,
   },
   input: {
     borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
   },
   select: {
     borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    minHeight: 48,
   },
   btn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    minHeight: 48,
+    justifyContent: "center",
   },
   btnPrimary: {
     backgroundColor: "#2563EB",
+    shadowColor: "#2563EB",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
   },
   btnOutline: {
     backgroundColor: "transparent",
@@ -848,34 +1285,43 @@ const styles = StyleSheet.create({
   empty: {
     borderWidth: 1,
     borderStyle: "dashed",
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 24,
     alignItems: "center",
     justifyContent: "center",
   },
   listItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 12,
     borderWidth: 1,
-    borderRadius: 10,
-    padding: 10,
+    borderRadius: 12,
+    padding: 16,
+    minHeight: 80,
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
+    backgroundColor: "rgba(0,0,0,0.5)",
     alignItems: "center",
     justifyContent: "center",
     padding: 20,
   },
   modalCard: {
     width: "100%",
+    maxWidth: 400,
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
   rowItem: {
-    paddingVertical: 12,
+    paddingVertical: 16,
     borderBottomWidth: 1,
+    minHeight: 56,
+    justifyContent: "center",
   },
 });

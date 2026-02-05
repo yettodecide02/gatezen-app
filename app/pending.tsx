@@ -1,14 +1,22 @@
 // @ts-nocheck
-import React from "react";
-import { StyleSheet, Text, View, TouchableOpacity } from "react-native";
+import React, { useEffect, useState } from "react";
+import {
+  StyleSheet,
+  Text,
+  View,
+  TouchableOpacity,
+  ScrollView,
+} from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
-import { logout } from "@/lib/auth";
+import { logout, getUser } from "@/lib/auth";
 
 export default function PendingScreen() {
+  const [user, setUser] = useState(null);
+
   const theme = useColorScheme() ?? "light";
   const bg = useThemeColor({}, "background");
   const textColor = useThemeColor({}, "text");
@@ -20,6 +28,15 @@ export default function PendingScreen() {
   const muted = iconColor;
   const buttonBg = tint;
   const buttonText = theme === "dark" ? "#11181C" : "#ffffff";
+  const successColor = "#10b981";
+
+  useEffect(() => {
+    const loadUser = async () => {
+      const userData = await getUser();
+      setUser(userData);
+    };
+    loadUser();
+  }, []);
 
   const handleLogout = async () => {
     await logout();
@@ -27,7 +44,11 @@ export default function PendingScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: bg }]}>
+    <ScrollView
+      style={[styles.container, { backgroundColor: bg }]}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
+    >
       <View
         style={[
           styles.card,
@@ -42,11 +63,66 @@ export default function PendingScreen() {
           Account Pending Approval
         </Text>
 
-        <Text style={[styles.message, { color: muted }]}>
-          Your account is currently pending approval from an administrator.
-          You'll receive an email notification once your account has been
-          approved.
-        </Text>
+        <View style={styles.content}>
+          <Text style={[styles.greeting, { color: textColor }]}>
+            Hello{" "}
+            <Text style={[styles.username, { color: tint }]}>
+              {user?.name || "User"}
+            </Text>
+            ,
+          </Text>
+
+          <Text style={[styles.description, { color: muted }]}>
+            Your registration request is currently under review. Please consult
+            your community head for approval of your account.
+          </Text>
+
+          <View style={styles.infoSection}>
+            <View style={[styles.infoItem, { borderColor: borderCol }]}>
+              <Feather
+                name="mail"
+                size={18}
+                color={iconColor}
+                style={styles.infoIcon}
+              />
+              <Text style={[styles.infoText, { color: textColor }]}>
+                Email: {user?.email || "Not available"}
+              </Text>
+            </View>
+
+            <View style={[styles.infoItem, { borderColor: borderCol }]}>
+              <Feather
+                name="user-check"
+                size={18}
+                color={successColor}
+                style={styles.infoIcon}
+              />
+              <Text style={[styles.infoText, { color: textColor }]}>
+                Status: Pending Approval
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.stepsSection}>
+            <Text style={[styles.stepsTitle, { color: textColor }]}>
+              What's next?
+            </Text>
+            <View style={styles.stepsList}>
+              <Text style={[styles.stepItem, { color: muted }]}>
+                • Contact your community head or building administrator
+              </Text>
+              <Text style={[styles.stepItem, { color: muted }]}>
+                • Provide necessary documentation if required
+              </Text>
+              <Text style={[styles.stepItem, { color: muted }]}>
+                • Wait for approval notification
+              </Text>
+              <Text style={[styles.stepItem, { color: muted }]}>
+                • You'll receive access once approved
+              </Text>
+            </View>
+          </View>
+        </View>
 
         <TouchableOpacity
           style={[styles.button, { backgroundColor: buttonBg }]}
@@ -54,17 +130,20 @@ export default function PendingScreen() {
         >
           <Feather name="log-out" size={18} color={buttonText} />
           <Text style={[styles.buttonText, { color: buttonText }]}>
-            Sign Out
+            Logout & Try Different Account
           </Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
     alignItems: "center",
     justifyContent: "center",
     padding: 16,
@@ -72,25 +151,73 @@ const styles = StyleSheet.create({
   card: {
     width: "100%",
     maxWidth: 420,
-    padding: 32,
+    padding: 24,
     borderRadius: 16,
     borderWidth: 1,
     alignItems: "center",
   },
   iconContainer: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   title: {
     fontSize: 24,
     fontWeight: "700",
     textAlign: "center",
-    marginBottom: 16,
+    marginBottom: 20,
   },
-  message: {
+  content: {
+    width: "100%",
+    marginBottom: 24,
+  },
+  greeting: {
     fontSize: 16,
-    lineHeight: 24,
     textAlign: "center",
-    marginBottom: 32,
+    marginBottom: 12,
+  },
+  username: {
+    fontWeight: "700",
+  },
+  description: {
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  infoSection: {
+    width: "100%",
+    marginBottom: 20,
+  },
+  infoItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  infoIcon: {
+    marginRight: 8,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 14,
+  },
+  stepsSection: {
+    width: "100%",
+  },
+  stepsTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 12,
+  },
+  stepsList: {
+    gap: 8,
+  },
+  stepItem: {
+    fontSize: 14,
+    lineHeight: 18,
+    paddingLeft: 8,
   },
   button: {
     borderRadius: 10,
@@ -100,7 +227,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     gap: 8,
-    minWidth: 120,
+    minWidth: 200,
   },
   buttonText: {
     fontWeight: "700",

@@ -3,78 +3,95 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import axios from "axios";
 import { router } from "expo-router";
-
 import supabase from "@/lib/supabase";
 import { setToken, setUser } from "@/lib/auth";
+import Toast from "@/components/Toast";
 import { useThemeColor } from "@/hooks/useThemeColor";
+import { useToast } from "@/hooks/useToast";
 
 export default function AuthCallback() {
   const [message, setMessage] = useState("Finishing sign-in…");
   const bg = useThemeColor({}, "background");
   const text = useThemeColor({}, "text");
+  const { toast, showError, hideToast } = useToast();
 
   useEffect(() => {
     (async () => {
       try {
-        // Let Supabase finalize the session from the redirect
-        const sessionRes = await supabase.auth.getSession();
-        const session = sessionRes?.data?.session;
+        // Wait for Supabase to persist session
+        await new Promise((resolve) => setTimeout(resolve, 800));
+
+        const { data: sessionData } = await supabase.auth.getSession();
+        const session = sessionData?.session;
+
         if (!session) {
-          setMessage("No session returned. Going back to login…");
-          setTimeout(() => router.replace("/login"), 800);
+          showError("Authentication session not found");
+          setMessage("No session found. Redirecting to login…");
+          setTimeout(() => router.replace("/login"), 1500);
           return;
         }
 
-        // Get user details
-        const userRes = await supabase.auth.getUser();
-        const email = userRes?.data?.user?.email;
-        if (!email) {
-          setMessage("No user email found. Going back to login…");
-          setTimeout(() => router.replace("/login"), 800);
-          return;
-        }
+        const email = session.user.email;
 
         const backendUrl =
           process.env.EXPO_PUBLIC_BACKEND_URL ||
           process.env.EXPO_BACKEND_URL ||
           "http://localhost:3000";
 
-        // Check if user exists in our backend; if not, create it
-        const exists = await axios
-          .get(`${backendUrl}/auth/existing-user`, { params: { email } })
-          .then((r) => r.data)
-          .catch(() => ({ exists: false }));
+        const response = await axios.get(`${backendUrl}/auth/existing-user`, {
+          params: { email },
+        });
 
-        let apiUser = exists?.user;
-        let apiToken = exists?.jwttoken;
+        if (response.data?.exists) {
+          if (response.data.jwttoken) await setToken(response.data.jwttoken);
+          if (response.data.user) await setUser(response.data.user);
 
-        if (!exists?.exists) {
-          const name =
-            userRes?.data?.user?.user_metadata?.full_name || "Google User";
-          const signup = await axios.post(`${backendUrl}/auth/signup`, {
-            name,
-            email,
-            password: "google-oauth",
-          });
-          apiUser = signup?.data?.user;
-          apiToken = signup?.data?.jwttoken;
+          if (response.data.user.role === "ADMIN") router.replace("/admin");
+          else if (response.data.user.role === "GATEKEEPER")
+            router.replace("/gatekeeper");
+          else router.replace("/(drawer)/dashboard");
+
+          return;
+        } else {
+          router.replace("/auth/residentform")
         }
 
-        if (apiToken) await setToken(apiToken);
-        if (apiUser) await setUser(apiUser);
+        // Register new user
+        // const name =
+        //   session.user.user_metadata?.full_name ||
+        //   session.user.user_metadata?.name ||
+        //   "Google User";
 
-        router.replace("/(drawer)/dashboard");
-      } catch {
-        setMessage("OAuth flow failed. Returning to login…");
-        setTimeout(() => router.replace("/login"), 800);
+        // const signup = await axios.post(`${backendUrl}/auth/signup`, {
+        //   name,
+        //   email,
+        //   password: "google-oauth-" + Date.now(),
+        // });
+
+        // if (signup?.data?.jwttoken) await setToken(signup.data.jwttoken);
+        // if (signup?.data?.user) await setUser(signup.data.user);
+
+        // router.replace("/(drawer)/dashboard");
+      } catch (error) {
+        console.error("OAuth callback error:", error);
+        setMessage("Authentication failed. Returning to login…");
+        showError("Authentication failed. Please try again.");
+        setTimeout(() => router.replace("/login"), 1500);
       }
     })();
   }, []);
 
   return (
     <View style={[styles.container, { backgroundColor: bg }]}>
-      <ActivityIndicator />
+      <ActivityIndicator size="large" color="#2563EB" />
       <Text style={[styles.text, { color: text }]}>{message}</Text>
+
+      <Toast
+        visible={toast.visible}
+        message={toast.message}
+        type={toast.type}
+        onHide={hideToast}
+      />
     </View>
   );
 }
@@ -85,6 +102,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 12,
+    padding: 20,
   },
-  text: { fontWeight: "600" },
+  text: {
+    fontWeight: "600",
+    textAlign: "center",
+  },
 });

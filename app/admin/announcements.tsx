@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
-import { getToken, getCommunityId } from "@/lib/auth";
+import { getToken, getCommunityId, getUser } from "@/lib/auth";
 
 interface Announcement {
   id: string;
@@ -310,16 +310,17 @@ export default function AdminAnnouncements() {
   const [success, setSuccess] = useState("");
 
   const url = process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:3000";
-
+  
+  
   useEffect(() => {
     fetchAnnouncements();
   }, []);
-
+  
   const fetchAnnouncements = async () => {
     try {
       const token = await getToken();
       const communityId = await getCommunityId();
-
+      
       if (!communityId) {
         Alert.alert(
           "Error",
@@ -328,14 +329,13 @@ export default function AdminAnnouncements() {
         return;
       }
 
-      const res = await axios.get(
-        `${url}/admin/announcements?communityId=${communityId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+
+      const res = await axios.get(`${url}/admin/announcements`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        params: { communityId: communityId },
+      });
       setAnnouncements(res.data.announcements || []);
     } catch (error) {
       console.error("Error fetching announcements:", error);
@@ -364,9 +364,15 @@ export default function AdminAnnouncements() {
         return;
       }
 
+      const data = {
+        title: announcementData.title,
+        content: announcementData.content,
+        communityId: communityId,
+      };
+
       const response = await axios.post(
-        `${url}/admin/create-announcement?communityId=${communityId}`,
-        announcementData,
+        `${url}/admin/create-announcement`,
+        data,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -393,14 +399,12 @@ export default function AdminAnnouncements() {
       const token = await getToken();
       const communityId = await getCommunityId();
 
-      await axios.delete(
-        `${url}/admin/announcements/${id}?communityId=${communityId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      await axios.delete(`${url}/admin/announcements/${id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        params: { communityId: communityId },
+      });
 
       // Remove the announcement from the list
       setAnnouncements((prev) => prev.filter((ann) => ann.id !== id));

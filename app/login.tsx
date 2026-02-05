@@ -15,8 +15,10 @@ import { router } from "expo-router";
 
 import { isAuthed, setToken, setUser } from "@/lib/auth";
 import GoogleSignin from "@/components/GoogleSignin";
+import Toast from "@/components/Toast";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
+import { useToast } from "@/hooks/useToast";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -24,6 +26,8 @@ export default function LoginScreen() {
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
+
+  const { toast, showError, showSuccess, hideToast } = useToast();
 
   const theme = useColorScheme() ?? "light";
   const bg = useThemeColor({}, "background");
@@ -53,17 +57,20 @@ export default function LoginScreen() {
         process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:3000";
 
       try {
+        
         const res = await axios.post(`${backendUrl}/auth/login`, {
           email,
           password,
         });
         if (!res?.data?.jwttoken) {
-          setErr("Login succeeded, but backend did not return a token.");
+          showError("Login succeeded, but backend did not return a token.");
           return;
         }
 
         await setToken(res.data.jwttoken);
         if (res.data.user) await setUser(res.data.user);
+
+        showSuccess("Welcome back! Login successful.");
 
         // Check user status
         if (res.data.user.status === "PENDING") {
@@ -79,22 +86,22 @@ export default function LoginScreen() {
         const status = errAny?.response?.status;
         const code = errAny?.code;
         if (status === 401 || status === 400) {
-          setErr("Invalid email or password");
+          showError("Invalid email or password");
         } else if (code === "ERR_NETWORK") {
-          setErr(
+          showError(
             `Cannot reach backend from device. Ensure EXPO_BACKEND_URL points to your computer's LAN IP (e.g., http://192.168.x.x:PORT).`
           );
         } else {
-          setErr(errAny.response?.data?.error || "Login failed");
+          showError(errAny.response?.data?.error || "Login failed");
         }
         return;
       }
     } catch {
-      setErr("Invalid email or password");
+      showError("Invalid email or password");
     } finally {
       setLoading(false);
     }
-  }, [email, password]);
+  }, [email, password, showError, showSuccess]);
 
   return (
     <KeyboardAvoidingView
@@ -214,8 +221,6 @@ export default function LoginScreen() {
 
           <GoogleSignin />
 
-          {err ? <Text style={[styles.error]}>{err}</Text> : null}
-
           <View style={styles.foot}>
             <Text style={[styles.muted, { color: muted }]}>
               New here?{" "}
@@ -229,6 +234,13 @@ export default function LoginScreen() {
           </View>
         </View>
       </View>
+
+      <Toast
+        visible={toast.visible}
+        message={toast.message}
+        type={toast.type}
+        onHide={hideToast}
+      />
     </KeyboardAvoidingView>
   );
 }

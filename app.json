@@ -46,6 +46,20 @@
         {
           "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera for barcode scanning."
         }
+      ],
+      "expo-font",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
+            "minSdkVersion": 24
+          },
+          "ios": {
+            "deploymentTarget": "15.1"
+          }
+        }
       ]
     ],
     "experiments": {

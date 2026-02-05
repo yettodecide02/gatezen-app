@@ -198,14 +198,12 @@ export default function AdminResidents() {
         return;
       }
 
-      const res = await axios.get(
-        `${url}/admin/residents?communityId=${communityId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const res = await axios.get(url + "/admin/residents", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        params: { communityId: communityId },
+      });
       setResidents(res.data.residents || []);
     } catch (error) {
       console.error("Error fetching residents:", error);
@@ -230,8 +228,8 @@ export default function AdminResidents() {
           : "/admin/reject-resident";
 
       await axios.post(
-        `${url}${endpoint}`,
-        { userId },
+        url + endpoint,
+        { userId, communityId: getCommunityId() },
         {
           headers: {
             Authorization: `Bearer ${token}`,

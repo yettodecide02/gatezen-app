@@ -84,12 +84,12 @@ export default function DrawerLayout() {
           }}
         />
         <Drawer.Screen
-          name="help"
+          name="mypackages"
           options={{
-            drawerLabel: "Help",
-            title: "Help",
+            drawerLabel: "My Packages",
+            title: "My Packages",
             drawerIcon: ({ color }) => (
-              <Feather name="help-circle" size={20} color={color} />
+              <Feather name="box" size={20} color={color} />
             ),
           }}
         />
@@ -100,6 +100,16 @@ export default function DrawerLayout() {
             title: "Profile",
             drawerIcon: ({ color }) => (
               <Feather name="user" size={20} color={color} />
+            ),
+          }}
+        />
+        <Drawer.Screen
+          name="help"
+          options={{
+            drawerLabel: "Help",
+            title: "Help",
+            drawerIcon: ({ color }) => (
+              <Feather name="help-circle" size={20} color={color} />
             ),
           }}
         />

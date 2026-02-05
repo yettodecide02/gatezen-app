@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useEffect, useState } from "react";
 import {
   Image,
@@ -8,7 +7,6 @@ import {
   Text,
   View,
   ActivityIndicator,
-  Dimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -16,6 +14,7 @@ import { router } from "expo-router";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { getUser } from "@/lib/auth";
+import { Platform, Screen, Styling } from "@/constants/Platform";
 
 type StatCardProps = {
   icon: keyof typeof Feather.glyphMap;
@@ -31,53 +30,191 @@ function StatCard({ icon, title, value, hint, color, loading }: StatCardProps) {
   const text = useThemeColor({}, "text");
   const cardBg = theme === "dark" ? "#1F1F1F" : "#ffffff";
   const borderCol =
-    theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
+    theme === "dark" ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)";
+
+  // Responsive card width
+  const getCardWidth = () => {
+    if (Screen.width > 1200) return "23%"; // 4 columns on very large screens
+    if (Screen.width > 768) return "31%"; // 2 columns on medium
+    return "48%"; // 2 columns on mobile
+  };
 
   return (
     <View
       style={[
         styles.statCard,
-        { backgroundColor: cardBg, borderColor: borderCol },
+        {
+          backgroundColor: cardBg,
+          borderColor: borderCol,
+          width: getCardWidth(),
+          ...Styling.shadow,
+        },
       ]}
     >
-      <View style={styles.statTop}>
+      <View style={styles.statHeader}>
         <View
           style={[
-            styles.statIcon,
-            { backgroundColor: `${color}22`, borderColor: `${color}44` },
+            styles.statIconContainer,
+            {
+              backgroundColor: `${color}15`,
+              borderColor: `${color}30`,
+              borderRadius: Styling.borderRadius.sm,
+            },
           ]}
         >
-          <Feather name={icon} size={20} color={color} />
+          <Feather name={icon} size={Screen.isTablet ? 24 : 20} color={color} />
         </View>
-        <Text style={[styles.statTitle, { color: text }]}>{title}</Text>
       </View>
-      <Text style={[styles.statValue, { color: text }]}>
-        {loading ? "…" : value}
-      </Text>
-      {hint && (
-        <Text style={[styles.statHint, { color: text, opacity: 0.6 }]}>
-          {hint}
+
+      <View style={styles.statContent}>
+        {loading ? (
+          <ActivityIndicator size="small" color={color} />
+        ) : (
+          <Text
+            style={[
+              styles.statValue,
+              {
+                color: text,
+                fontSize: Screen.isTablet ? 32 : Screen.isSmall ? 22 : 26,
+                fontWeight: Styling.fontWeight.bold,
+              },
+            ]}
+          >
+            {value}
+          </Text>
+        )}
+        <Text
+          style={[
+            styles.statTitle,
+            {
+              color: text,
+              opacity: 0.7,
+              fontSize: Screen.isTablet ? 15 : 13,
+              fontWeight: Styling.fontWeight.medium,
+            },
+          ]}
+        >
+          {title}
         </Text>
-      )}
+        {hint && (
+          <Text
+            style={[
+              styles.statHint,
+              {
+                color: text,
+                opacity: 0.5,
+                fontSize: Screen.isTablet ? 13 : 11,
+              },
+            ]}
+          >
+            {hint}
+          </Text>
+        )}
+      </View>
     </View>
   );
 }
 
-type QuickLink = {
-  key: string;
-  title: string;
-  subtitle?: string;
-  icon: keyof typeof Feather.glyphMap;
-  href: string;
-  color: string;
+type QuickLinkCardProps = {
+  item: {
+    title: string;
+    subtitle?: string;
+    icon: keyof typeof Feather.glyphMap;
+    href: string;
+    color: string;
+  };
 };
 
-const QUICK_LINKS: QuickLink[] = [
+function QuickLinkCard({ item }: QuickLinkCardProps) {
+  const theme = useColorScheme() ?? "light";
+  const text = useThemeColor({}, "text");
+  const sub = useThemeColor({}, "icon");
+  const cardBg = theme === "dark" ? "#1F1F1F" : "#ffffff";
+  const borderCol =
+    theme === "dark" ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)";
+
+  const getCardWidth = () => {
+    if (Screen.width > 1200) return "23%";
+    if (Screen.width > 768) return "31%";
+    if (Screen.width > 600) return "48%";
+    return "48%";
+  };
+
+  return (
+    <Pressable
+      onPress={() => router.push(item.href as any)}
+      style={({ pressed }) => [
+        styles.quickLinkCard,
+        {
+          backgroundColor: cardBg,
+          borderColor: borderCol,
+          width: getCardWidth(),
+          opacity: pressed ? 0.7 : 1,
+          ...Styling.shadow,
+        },
+      ]}
+    >
+      <View
+        style={[
+          styles.quickLinkIcon,
+          {
+            backgroundColor: `${item.color}15`,
+            borderColor: `${item.color}30`,
+            borderRadius: Styling.borderRadius.md,
+          },
+        ]}
+      >
+        <Feather
+          name={item.icon}
+          size={Screen.isTablet ? 26 : 22}
+          color={item.color}
+        />
+      </View>
+      <View style={styles.quickLinkContent}>
+        <Text
+          style={[
+            styles.quickLinkTitle,
+            {
+              color: text,
+              fontSize: Screen.isTablet ? 17 : 15,
+              fontWeight: Styling.fontWeight.semibold,
+            },
+          ]}
+          numberOfLines={1}
+        >
+          {item.title}
+        </Text>
+        {item.subtitle && (
+          <Text
+            style={[
+              styles.quickLinkSubtitle,
+              {
+                color: sub,
+                fontSize: Screen.isTablet ? 14 : 12,
+              },
+            ]}
+            numberOfLines={1}
+          >
+            {item.subtitle}
+          </Text>
+        )}
+      </View>
+      <Feather
+        name="chevron-right"
+        size={18}
+        color={sub}
+        style={{ opacity: 0.5 }}
+      />
+    </Pressable>
+  );
+}
+
+const QUICK_LINKS = [
   {
     key: "payments",
     title: "Payments",
     subtitle: "Pay your bills",
-    icon: "credit-card",
+    icon: "credit-card" as const,
     href: "/payments",
     color: "#F59E0B",
   },
@@ -85,7 +222,7 @@ const QUICK_LINKS: QuickLink[] = [
     key: "maintenance",
     title: "Maintenance",
     subtitle: "Repair & upkeep",
-    icon: "tool",
+    icon: "tool" as const,
     href: "/maintenance",
     color: "#8B5CF6",
   },
@@ -93,7 +230,7 @@ const QUICK_LINKS: QuickLink[] = [
     key: "visitors",
     title: "Visitors",
     subtitle: "Manage visitors",
-    icon: "users",
+    icon: "users" as const,
     href: "/visitors",
     color: "#06B6D4",
   },
@@ -101,7 +238,7 @@ const QUICK_LINKS: QuickLink[] = [
     key: "bookings",
     title: "Bookings",
     subtitle: "Amenities & events",
-    icon: "calendar",
+    icon: "calendar" as const,
     href: "/bookings",
     color: "#14B8A6",
   },
@@ -109,7 +246,7 @@ const QUICK_LINKS: QuickLink[] = [
     key: "documents",
     title: "Documents",
     subtitle: "Policies & forms",
-    icon: "file-text",
+    icon: "file-text" as const,
     href: "/documents",
     color: "#6366F1",
   },
@@ -117,7 +254,7 @@ const QUICK_LINKS: QuickLink[] = [
     key: "help",
     title: "Help",
     subtitle: "Support & FAQs",
-    icon: "help-circle",
+    icon: "help-circle" as const,
     href: "/help",
     color: "#10B981",
   },
@@ -131,6 +268,7 @@ export default function Dashboard() {
   const insets = useSafeAreaInsets();
 
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<any>(null);
   const [stats, setStats] = useState({
     announcements: 0,
     maintenanceOpen: 0,
@@ -139,238 +277,299 @@ export default function Dashboard() {
   });
 
   useEffect(() => {
-    // Check if user is admin and redirect to admin dashboard
-    const checkUserRole = async () => {
+    const initialize = async () => {
       try {
-        const user = await getUser();
-        if (user && user.role === "ADMIN") {
+        const userData = await getUser();
+        if (userData && (userData as any).role === "ADMIN") {
           router.replace("/admin");
+          return;
         }
-      } catch (error) {
-        console.error("Error checking user role:", error);
-      }
-    };
+        setUser(userData);
 
-    const loadDashboardData = async () => {
-      try {
-        setLoading(true);
-        // TODO: Replace with actual API call
-        // const response = await fetch('/api/dashboard/stats');
-        // const data = await response.json();
-        // setStats(data);
-        setStats({
-          announcements: 0,
-          maintenanceOpen: 0,
-          paymentsOverdue: 0,
-          upcomingBookings: 0,
-        });
+        
       } catch (error) {
-        console.error("Error loading dashboard data:", error);
+        console.error("Dashboard initialization error:", error);
       } finally {
         setLoading(false);
       }
     };
 
-    checkUserRole();
-    loadDashboardData();
+    initialize();
   }, []);
 
-  const cardBg = theme === "dark" ? "#1F1F1F" : "#ffffff";
-  const borderCol =
-    theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
+  // Responsive padding
+  const contentPadding = Screen.isTablet ? 24 : Styling.spacing.md;
 
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: bg }}
-      contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
+      contentContainerStyle={[
+        styles.container,
+        {
+          paddingTop: insets.top + Styling.spacing.lg,
+          paddingBottom: Platform.isIOS ? 100 : 80,
+          paddingHorizontal: contentPadding,
+        },
+      ]}
+      showsVerticalScrollIndicator={false}
     >
-      <View style={styles.brandRow}>
-        <Image
-          source={require("@/assets/images/icon.png")}
-          style={styles.brandLogo}
-          resizeMode="contain"
-        />
-        <Text style={[styles.brandName, { color: text }]}>Gatezen</Text>
-      </View>
-
-      {/* Statistics Cards */}
-      <Text style={[styles.subtitle, { color: sub }]}>Overview</Text>
-      <View style={styles.statsGrid}>
-        <StatCard
-          icon="bell"
-          title="Announcements"
-          value={stats.announcements}
-          hint="New updates"
-          color="#F59E0B"
-          loading={loading}
-        />
-        <StatCard
-          icon="tool"
-          title="Maintenance"
-          value={stats.maintenanceOpen}
-          hint="Open tickets"
-          color="#EF4444"
-          loading={loading}
-        />
-        <StatCard
-          icon="credit-card"
-          title="Payments"
-          value={stats.paymentsOverdue}
-          hint="Overdue"
-          color="#8B5CF6"
-          loading={loading}
-        />
-        <StatCard
-          icon="calendar"
-          title="Bookings"
-          value={stats.upcomingBookings}
-          hint="Upcoming"
-          color="#10B981"
-          loading={loading}
-        />
-      </View>
-
-      <View style={styles.quickLinksHeader}>
-        <Text style={[styles.subtitle, { color: sub }]}>Quick Links</Text>
-        <Pressable
-          onPress={() => router.push("/quick-links")}
-          style={styles.viewAllButton}
-        >
-          <Text style={[styles.viewAllText, { color: "#6366F1" }]}>
-            View All
-          </Text>
-          <Feather name="arrow-right" size={14} color="#6366F1" />
-        </Pressable>
-      </View>
-
-      <View style={styles.grid}>
-        {QUICK_LINKS.map((item) => (
-          <Pressable
-            key={item.key}
-            onPress={() => router.push(item.href)}
-            android_ripple={{ color: `${item.color}22` }}
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.brandRow}>
+          <Image
+            source={require("@/assets/images/icon.png")}
             style={[
-              styles.card,
-              { backgroundColor: cardBg, borderColor: borderCol },
+              styles.brandLogo,
+              {
+                width: Screen.isTablet ? 48 : 40,
+                height: Screen.isTablet ? 48 : 40,
+                borderRadius: Styling.borderRadius.md,
+              },
             ]}
-          >
-            <View
+            resizeMode="contain"
+          />
+          <View>
+            <Text
               style={[
-                styles.iconBadge,
+                styles.brandName,
                 {
-                  backgroundColor: `${item.color}22`,
-                  borderColor: `${item.color}44`,
+                  color: text,
+                  fontSize: Screen.isTablet ? 32 : Screen.isSmall ? 24 : 28,
+                  fontWeight: Styling.fontWeight.bold,
                 },
               ]}
             >
-              <Feather name={item.icon} size={20} color={item.color as any} />
-            </View>
-            <Text style={[styles.cardTitle, { color: text }]} numberOfLines={1}>
-              {item.title}
+              Gatezen
             </Text>
-            {!!item.subtitle && (
-              <Text style={[styles.cardSub, { color: sub }]} numberOfLines={1}>
-                {item.subtitle}
+            {user && (
+              <Text
+                style={[
+                  styles.welcomeText,
+                  {
+                    color: sub,
+                    fontSize: Screen.isTablet ? 15 : 13,
+                  },
+                ]}
+              >
+                Welcome back!
               </Text>
             )}
+          </View>
+        </View>
+      </View>
+
+      {/* Statistics Section */}
+      <View style={[styles.section, { marginTop: Styling.spacing.xl }]}>
+        <Text
+          style={[
+            styles.sectionTitle,
+            {
+              color: text,
+              fontSize: Screen.isTablet ? 20 : 18,
+              fontWeight: Styling.fontWeight.semibold,
+            },
+          ]}
+        >
+          Overview
+        </Text>
+        <View style={[styles.statsContainer, { gap: Styling.spacing.md }]}>
+          <StatCard
+            icon="bell"
+            title="Announcements"
+            value={stats.announcements}
+            hint="New updates"
+            color="#F59E0B"
+            loading={loading}
+          />
+          <StatCard
+            icon="tool"
+            title="Maintenance"
+            value={stats.maintenanceOpen}
+            hint="Open tickets"
+            color="#EF4444"
+            loading={loading}
+          />
+          <StatCard
+            icon="credit-card"
+            title="Payments"
+            value={stats.paymentsOverdue}
+            hint="Overdue"
+            color="#8B5CF6"
+            loading={loading}
+          />
+          <StatCard
+            icon="calendar"
+            title="Bookings"
+            value={stats.upcomingBookings}
+            hint="Upcoming"
+            color="#10B981"
+            loading={loading}
+          />
+        </View>
+      </View>
+
+      {/* Quick Links Section */}
+      <View style={[styles.section, { marginTop: Styling.spacing.xl }]}>
+        <View style={styles.sectionHeader}>
+          <Text
+            style={[
+              styles.sectionTitle,
+              {
+                color: text,
+                fontSize: Screen.isTablet ? 20 : 18,
+                fontWeight: Styling.fontWeight.semibold,
+              },
+            ]}
+          >
+            Quick Actions
+          </Text>
+          <Pressable
+            onPress={() => router.push("/quick-links" as any)}
+            style={({ pressed }) => [
+              styles.viewAllButton,
+              { opacity: pressed ? 0.6 : 1 },
+            ]}
+          >
+            <Text
+              style={[
+                styles.viewAllText,
+                {
+                  fontSize: Screen.isTablet ? 15 : 13,
+                  fontWeight: Styling.fontWeight.medium,
+                },
+              ]}
+            >
+              View All
+            </Text>
+            <Feather name="arrow-right" size={16} color="#6366F1" />
           </Pressable>
-        ))}
+        </View>
+
+        <View style={[styles.quickLinksContainer, { gap: Styling.spacing.md }]}>
+          {QUICK_LINKS.map((item) => (
+            <QuickLinkCard key={item.key} item={item} />
+          ))}
+        </View>
       </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 16, gap: 16 },
-  brandRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  brandLogo: { width: 36, height: 36, borderRadius: 8 },
-  brandName: { fontSize: 30, fontWeight: "800", letterSpacing: 0.3 },
-  subtitle: { fontSize: 13, marginTop: 8 },
-  quickLinksHeader: {
+  container: {
+    flexGrow: 1,
+  },
+  header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 8,
+  },
+  brandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  brandLogo: {
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  brandName: {
+    letterSpacing: -0.5,
+  },
+  welcomeText: {
+    marginTop: 2,
+  },
+  profileButton: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  section: {
+    gap: 16,
+  },
+  sectionTitle: {
+    letterSpacing: -0.3,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   viewAllButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   viewAllText: {
-    fontSize: 13,
-    fontWeight: "600",
+    color: "#6366F1",
   },
-
-  statsGrid: {
+  statsContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 12,
-    marginBottom: 8,
   },
   statCard: {
-    width: "47%",
     borderWidth: 1,
-    borderRadius: 14,
-    padding: 14,
-    gap: 8,
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 1,
+    borderRadius: 16,
+    padding: 16,
+    gap: 12,
   },
-  statTop: {
+  statHeader: {
     flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    gap: 8,
   },
-  statIcon: {
-    height: 32,
-    width: 32,
-    borderRadius: 8,
+  statIconContainer: {
+    width: 44,
+    height: 44,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
   },
-  statTitle: {
-    fontSize: 13,
-    fontWeight: "600",
-    flex: 1,
+  statContent: {
+    gap: 4,
   },
   statValue: {
-    fontSize: 24,
-    fontWeight: "800",
-    marginTop: 4,
+    letterSpacing: -0.5,
+  },
+  statTitle: {
+    letterSpacing: 0.2,
   },
   statHint: {
-    fontSize: 11,
     marginTop: 2,
   },
-
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
-  card: {
-    width: "47%",
+  quickLinksContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+  },
+  quickLinkCard: {
+    flexDirection: "row",
+    alignItems: "center",
     borderWidth: 1,
     borderRadius: 14,
     padding: 14,
-    gap: 8,
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 1,
+    gap: 12,
   },
-  iconBadge: {
-    height: 36,
-    width: 36,
-    borderRadius: 10,
+  quickLinkIcon: {
+    width: 48,
+    height: 48,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
   },
-  cardTitle: { fontSize: 16, fontWeight: "700" },
-  cardSub: { fontSize: 12 },
+  quickLinkContent: {
+    flex: 1,
+    gap: 2,
+  },
+  quickLinkTitle: {
+    letterSpacing: -0.2,
+  },
+  quickLinkSubtitle: {
+    opacity: 0.7,
+  },
 });

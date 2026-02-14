@@ -22,6 +22,7 @@ import Toast from "@/components/Toast";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useToast } from "@/hooks/useToast";
+import { config } from "@/lib/config";
 
 export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState("");
@@ -48,10 +49,7 @@ export default function ForgotPasswordScreen() {
   const buttonText = theme === "dark" ? "#11181C" : "#ffffff";
 
   const submit = async () => {
-    const backendUrl =
-      process.env.EXPO_PUBLIC_BACKEND_URL ||
-      process.env.EXPO_BACKEND_URL ||
-      "http://localhost:3000";
+    const backendUrl = config.backendUrl;
 
     try {
       if (stage === "email_verification") {

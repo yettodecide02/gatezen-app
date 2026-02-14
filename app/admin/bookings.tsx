@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { getToken, getCommunityId } from "@/lib/auth";
+import { config } from "@/lib/config";
 
 // Booking Card Component
 function BookingCard({ booking, theme, textColor, muted }) {
@@ -178,7 +179,7 @@ export default function AdminBookings() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
 
-  const url = process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:3000";
+  const url = config.backendUrl;
 
   useEffect(() => {
     fetchBookings();
@@ -192,7 +193,7 @@ export default function AdminBookings() {
       if (!communityId) {
         Alert.alert(
           "Error",
-          "Community information not found. Please login again."
+          "Community information not found. Please login again.",
         );
         return;
       }
@@ -276,204 +277,229 @@ export default function AdminBookings() {
   }
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: bg }]}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-      }
-    >
-      <View style={[styles.content, { paddingTop: Math.max(insets.top, 16) }]}>
-        {/* Header */}
+    <View style={[styles.container, { backgroundColor: bg }]}>
+      {/* Fixed Header */}
+      <View
+        style={[
+          styles.headerContainer,
+          {
+            paddingTop: Math.max(insets.top, 16),
+            backgroundColor: bg,
+            borderBottomColor:
+              theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)",
+          },
+        ]}
+      >
         <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backButton}
-          >
-            <Feather name="arrow-left" size={20} color={tint} />
-          </TouchableOpacity>
-          <View style={styles.headerContent}>
-            <Text style={[styles.title, { color: textColor }]}>
-              Facility Bookings
-            </Text>
+          <View style={styles.headerLeft}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={styles.backButton}
+            >
+              <Feather name="arrow-left" size={24} color={tint} />
+            </TouchableOpacity>
+            <View>
+              <Text style={[styles.title, { color: textColor }]}>Bookings</Text>
+              <Text style={[styles.subtitle, { color: muted }]}>
+                Manage facility bookings
+              </Text>
+            </View>
           </View>
         </View>
+      </View>
 
-        {/* Stats Cards */}
-        <View style={styles.statsGrid}>
-          <StatCard
-            icon="calendar"
-            title="Total Bookings"
-            value={stats.total}
-            color="#6366f1"
-            theme={theme}
-            textColor={textColor}
-            muted={muted}
-          />
-          <StatCard
-            icon="clock"
-            title="Pending"
-            value={stats.pending}
-            color="#f59e0b"
-            theme={theme}
-            textColor={textColor}
-            muted={muted}
-          />
-          <StatCard
-            icon="check-circle"
-            title="Confirmed"
-            value={stats.confirmed}
-            color="#10b981"
-            theme={theme}
-            textColor={textColor}
-            muted={muted}
-          />
-          <StatCard
-            icon="dollar-sign"
-            title="Revenue"
-            value={`₹${stats.totalRevenue.toLocaleString()}`}
-            color="#8b5cf6"
-            theme={theme}
-            textColor={textColor}
-            muted={muted}
-          />
-        </View>
+      <ScrollView
+        style={styles.scrollView}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        }
+      >
+        <View style={styles.content}>
+          {/* Stats Cards */}
+          <View style={styles.statsGrid}>
+            <StatCard
+              icon="calendar"
+              title="Total Bookings"
+              value={stats.total}
+              color="#6366f1"
+              theme={theme}
+              textColor={textColor}
+              muted={muted}
+            />
+            <StatCard
+              icon="clock"
+              title="Pending"
+              value={stats.pending}
+              color="#f59e0b"
+              theme={theme}
+              textColor={textColor}
+              muted={muted}
+            />
+            <StatCard
+              icon="check-circle"
+              title="Confirmed"
+              value={stats.confirmed}
+              color="#10b981"
+              theme={theme}
+              textColor={textColor}
+              muted={muted}
+            />
+            <StatCard
+              icon="dollar-sign"
+              title="Revenue"
+              value={`₹${stats.totalRevenue.toLocaleString()}`}
+              color="#8b5cf6"
+              theme={theme}
+              textColor={textColor}
+              muted={muted}
+            />
+          </View>
 
-        {/* Filter Tabs */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.tabsContainer}
-        >
-          <View style={styles.tabs}>
-            {tabs.map((tab) => (
-              <TouchableOpacity
-                key={tab.key}
-                style={[
-                  styles.tab,
-                  {
-                    backgroundColor:
-                      activeTab === tab.key ? tint : "transparent",
-                    borderColor:
-                      activeTab === tab.key
-                        ? tint
-                        : theme === "dark"
-                        ? "rgba(255,255,255,0.2)"
-                        : "rgba(0,0,0,0.2)",
-                  },
-                ]}
-                onPress={() => setActiveTab(tab.key)}
-              >
-                <Text
+          {/* Filter Tabs */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.tabsContainer}
+          >
+            <View style={styles.tabs}>
+              {tabs.map((tab) => (
+                <TouchableOpacity
+                  key={tab.key}
                   style={[
-                    styles.tabText,
+                    styles.tab,
                     {
-                      color:
+                      backgroundColor:
+                        activeTab === tab.key ? tint : "transparent",
+                      borderColor:
                         activeTab === tab.key
-                          ? theme === "dark"
-                            ? "#11181C"
-                            : "#ffffff"
-                          : textColor,
+                          ? tint
+                          : theme === "dark"
+                            ? "rgba(255,255,255,0.2)"
+                            : "rgba(0,0,0,0.2)",
                     },
                   ]}
+                  onPress={() => setActiveTab(tab.key)}
                 >
-                  {tab.label}
-                </Text>
-                {tab.count > 0 && (
-                  <View
+                  <Text
                     style={[
-                      styles.tabBadge,
+                      styles.tabText,
                       {
-                        backgroundColor:
+                        color:
                           activeTab === tab.key
                             ? theme === "dark"
-                              ? "#11181C33"
-                              : "#ffffff33"
-                            : tint,
+                              ? "#11181C"
+                              : "#ffffff"
+                            : textColor,
                       },
                     ]}
                   >
-                    <Text
+                    {tab.label}
+                  </Text>
+                  {tab.count > 0 && (
+                    <View
                       style={[
-                        styles.tabBadgeText,
+                        styles.tabBadge,
                         {
-                          color:
+                          backgroundColor:
                             activeTab === tab.key
                               ? theme === "dark"
-                                ? "#11181C"
-                                : "#ffffff"
-                              : "#ffffff",
+                                ? "#11181C33"
+                                : "#ffffff33"
+                              : tint,
                         },
                       ]}
                     >
-                      {tab.count}
-                    </Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </ScrollView>
-
-        {/* Bookings List */}
-        <View
-          style={[
-            styles.card,
-            {
-              backgroundColor: theme === "dark" ? "#1F1F1F" : "#ffffff",
-              borderColor:
-                theme === "dark"
-                  ? "rgba(255,255,255,0.08)"
-                  : "rgba(0,0,0,0.08)",
-            },
-          ]}
-        >
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionLeft}>
-              <Feather name="calendar" size={20} color={tint} />
-              <Text style={[styles.sectionTitle, { color: textColor }]}>
-                {activeTab === "all" && "All Bookings"}
-                {activeTab === "pending" && "Pending Bookings"}
-                {activeTab === "confirmed" && "Confirmed Bookings"}
-                {activeTab === "cancelled" && "Cancelled Bookings"}
-              </Text>
-            </View>
-            <Text style={[styles.countText, { color: muted }]}>
-              {filteredBookings.length} booking
-              {filteredBookings.length !== 1 ? "s" : ""}
-            </Text>
-          </View>
-
-          {filteredBookings.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Feather name="calendar" size={48} color={muted} />
-              <Text style={[styles.emptyText, { color: muted }]}>
-                {activeTab === "all" && "No bookings found."}
-                {activeTab === "pending" && "No pending bookings."}
-                {activeTab === "confirmed" && "No confirmed bookings."}
-                {activeTab === "cancelled" && "No cancelled bookings."}
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.bookingsList}>
-              {filteredBookings.map((booking) => (
-                <BookingCard
-                  key={booking.id}
-                  booking={booking}
-                  theme={theme}
-                  textColor={textColor}
-                  muted={muted}
-                />
+                      <Text
+                        style={[
+                          styles.tabBadgeText,
+                          {
+                            color:
+                              activeTab === tab.key
+                                ? theme === "dark"
+                                  ? "#11181C"
+                                  : "#ffffff"
+                                : "#ffffff",
+                          },
+                        ]}
+                      >
+                        {tab.count}
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
               ))}
             </View>
-          )}
+          </ScrollView>
+
+          {/* Bookings List */}
+          <View
+            style={[
+              styles.card,
+              {
+                backgroundColor: theme === "dark" ? "#1F1F1F" : "#ffffff",
+                borderColor:
+                  theme === "dark"
+                    ? "rgba(255,255,255,0.08)"
+                    : "rgba(0,0,0,0.08)",
+              },
+            ]}
+          >
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionLeft}>
+                <Feather name="calendar" size={20} color={tint} />
+                <Text style={[styles.sectionTitle, { color: textColor }]}>
+                  {activeTab === "all" && "All Bookings"}
+                  {activeTab === "pending" && "Pending Bookings"}
+                  {activeTab === "confirmed" && "Confirmed Bookings"}
+                  {activeTab === "cancelled" && "Cancelled Bookings"}
+                </Text>
+              </View>
+              <Text style={[styles.countText, { color: muted }]}>
+                {filteredBookings.length} booking
+                {filteredBookings.length !== 1 ? "s" : ""}
+              </Text>
+            </View>
+
+            {filteredBookings.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Feather name="calendar" size={48} color={muted} />
+                <Text style={[styles.emptyText, { color: muted }]}>
+                  {activeTab === "all" && "No bookings found."}
+                  {activeTab === "pending" && "No pending bookings."}
+                  {activeTab === "confirmed" && "No confirmed bookings."}
+                  {activeTab === "cancelled" && "No cancelled bookings."}
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.bookingsList}>
+                {filteredBookings.map((booking) => (
+                  <BookingCard
+                    key={booking.id}
+                    booking={booking}
+                    theme={theme}
+                    textColor={textColor}
+                    muted={muted}
+                  />
+                ))}
+              </View>
+            )}
+          </View>
         </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  headerContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+  },
+  scrollView: {
     flex: 1,
   },
   centerContent: {
@@ -482,6 +508,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 16,
+    paddingTop: 16,
     paddingBottom: 16,
   },
   loadingText: {
@@ -491,18 +518,24 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 24,
+    justifyContent: "space-between",
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
   },
   backButton: {
     padding: 8,
-    marginRight: 8,
-  },
-  headerContent: {
-    flex: 1,
   },
   title: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: "700",
+  },
+  subtitle: {
+    fontSize: 12,
+    marginTop: 2,
   },
   statsGrid: {
     flexDirection: "row",

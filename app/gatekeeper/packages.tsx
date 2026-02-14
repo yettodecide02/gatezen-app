@@ -20,6 +20,7 @@ import axios from "axios";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { getToken, getUser } from "@/lib/auth";
+import { config } from "@/lib/config";
 
 export default function GatekeeperPackagesScreen() {
   const insets = useSafeAreaInsets();
@@ -30,10 +31,7 @@ export default function GatekeeperPackagesScreen() {
   const card = theme === "dark" ? "#111111" : "#ffffff";
   const border = theme === "dark" ? "#262626" : "#E5E7EB";
 
-  const backendUrl =
-    process.env.EXPO_PUBLIC_BACKEND_URL ||
-    process.env.EXPO_BACKEND_URL ||
-    "http://localhost:3000";
+  const backendUrl = config.backendUrl;
 
   const [packages, setPackages] = useState([]);
   const [allPackages, setAllPackages] = useState([]);
@@ -154,7 +152,7 @@ export default function GatekeeperPackagesScreen() {
           image: newPackage.image,
           name: newPackage.name,
         },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { Authorization: `Bearer ${token}` } },
       );
       setShowCreateModal(false);
       setNewPackage({ userId: "", image: "", name: "" });
@@ -172,7 +170,7 @@ export default function GatekeeperPackagesScreen() {
       await axios.put(
         `${backendUrl}/gatekeeper/packages/${pkgId}`,
         { status: newStatus },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { Authorization: `Bearer ${token}` } },
       );
       await loadPackages();
     } catch (err) {
@@ -197,11 +195,11 @@ export default function GatekeeperPackagesScreen() {
   useEffect(() => {
     if (selectedBlock) {
       const blockPackages = allPackages.filter(
-        (p) => p.user?.unit?.block?.name === selectedBlock
+        (p) => p.user?.unit?.block?.name === selectedBlock,
       );
       const uniqueUnits = [
         ...new Set(
-          blockPackages.map((p) => p.user?.unit?.number).filter(Boolean)
+          blockPackages.map((p) => p.user?.unit?.number).filter(Boolean),
         ),
       ];
       setUnits(uniqueUnits.map((number) => ({ number })));
@@ -216,7 +214,7 @@ export default function GatekeeperPackagesScreen() {
 
     if (selectedBlock) {
       filtered = filtered.filter(
-        (p) => p.user?.unit?.block?.name === selectedBlock
+        (p) => p.user?.unit?.block?.name === selectedBlock,
       );
     }
 
@@ -549,15 +547,15 @@ export default function GatekeeperPackagesScreen() {
                           pkg.status === "PENDING"
                             ? "#FEF3C7"
                             : pkg.status === "PICKED"
-                            ? "#D1FAE5"
-                            : "#F3F4F6",
+                              ? "#D1FAE5"
+                              : "#F3F4F6",
                         borderWidth: 1,
                         borderColor:
                           pkg.status === "PENDING"
                             ? "#FCD34D"
                             : pkg.status === "PICKED"
-                            ? "#6EE7B7"
-                            : "#E5E7EB",
+                              ? "#6EE7B7"
+                              : "#E5E7EB",
                         flexDirection: "row",
                         alignItems: "center",
                         gap: 4,
@@ -573,8 +571,8 @@ export default function GatekeeperPackagesScreen() {
                           pkg.status === "PENDING"
                             ? "#B45309"
                             : pkg.status === "PICKED"
-                            ? "#059669"
-                            : "#6B7280"
+                              ? "#059669"
+                              : "#6B7280"
                         }
                       />
                       <Text
@@ -585,8 +583,8 @@ export default function GatekeeperPackagesScreen() {
                             pkg.status === "PENDING"
                               ? "#B45309"
                               : pkg.status === "PICKED"
-                              ? "#059669"
-                              : "#6B7280",
+                                ? "#059669"
+                                : "#6B7280",
                         }}
                       >
                         {pkg.status}
@@ -769,7 +767,7 @@ export default function GatekeeperPackagesScreen() {
                             onPress: () =>
                               setNewPackage({ ...newPackage, userId: r.id }),
                           })),
-                          { cancelable: true }
+                          { cancelable: true },
                         );
                       }}
                     >
@@ -961,7 +959,7 @@ export default function GatekeeperPackagesScreen() {
                     }}
                   >
                     <TouchableOpacity
-                      style={{ padding: 10}}
+                      style={{ padding: 10 }}
                       onPress={() => {
                         const options = [
                           {

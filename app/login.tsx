@@ -19,6 +19,7 @@ import Toast from "@/components/Toast";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useToast } from "@/hooks/useToast";
+import { config } from "@/lib/config";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -53,12 +54,8 @@ export default function LoginScreen() {
     if (!email || !password) return;
     setLoading(true);
     try {
-      const backendUrl =
-        process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:3000";
-
       try {
-        
-        const res = await axios.post(`${backendUrl}/auth/login`, {
+        const res = await axios.post(`${config.backendUrl}/auth/login`, {
           email,
           password,
         });
@@ -89,7 +86,7 @@ export default function LoginScreen() {
           showError("Invalid email or password");
         } else if (code === "ERR_NETWORK") {
           showError(
-            `Cannot reach backend from device. Ensure EXPO_BACKEND_URL points to your computer's LAN IP (e.g., http://192.168.x.x:PORT).`
+            `Cannot reach backend from device. Ensure EXPO_BACKEND_URL points to your computer's LAN IP (e.g., http://192.168.x.x:PORT).`,
           );
         } else {
           showError(errAny.response?.data?.error || "Login failed");

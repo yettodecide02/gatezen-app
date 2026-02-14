@@ -1,1 +1,1 @@
-export { default } from "./(drawer)/mypackages";
+export { default } from "./(tabs)/mypackages";

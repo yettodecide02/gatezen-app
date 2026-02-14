@@ -18,6 +18,7 @@ import { router } from "expo-router";
 import { useToast } from "@/hooks/useToast";
 import supabase from "@/lib/supabase";
 import { isAuthed, setToken, setUser } from "@/lib/auth";
+import { config } from "@/lib/config";
 
 export default function RegisterScreen() {
   const { showError, showSuccess } = useToast();
@@ -56,7 +57,7 @@ export default function RegisterScreen() {
         if (data?.user) {
           setName(data.user.user_metadata.full_name);
           setEmail(data.user.email);
-          setPassword(process.env.EXPO_PUBLIC_GOOGLE_SIGNUP_PASSWORD);
+          setPassword(config.googleSignupPassword);
         }
       } catch (err) {
         console.error(err);
@@ -74,9 +75,7 @@ export default function RegisterScreen() {
   const fetchCommunities = async () => {
     setLoadingCommunities(true);
     try {
-      const res = await axios.get(
-        process.env.EXPO_PUBLIC_BACKEND_URL + "/auth/communities"
-      );
+      const res = await axios.get(config.backendUrl + "/auth/communities");
       if (res.data.success) {
         setCommunities(res.data.data);
         showSuccess("Communities loaded");
@@ -96,7 +95,7 @@ export default function RegisterScreen() {
     setLoadingBlocks(true);
     try {
       const res = await axios.get(
-        `${process.env.EXPO_PUBLIC_BACKEND_URL}/auth/communities/${communityId}/blocks`
+        `${config.backendUrl}/auth/communities/${communityId}/blocks`,
       );
       if (res.data.success) {
         setBlocks(res.data.data);
@@ -116,7 +115,7 @@ export default function RegisterScreen() {
     setLoadingUnits(true);
     try {
       const res = await axios.get(
-        `${process.env.EXPO_PUBLIC_BACKEND_URL}/auth/blocks/${blockId}/units`
+        `${config.backendUrl}/auth/blocks/${blockId}/units`,
       );
       if (res.data.success) {
         setUnits(res.data.data);
@@ -159,10 +158,10 @@ export default function RegisterScreen() {
 
     setLoading(true);
     try {
-      const res = await axios.post(
-        process.env.EXPO_PUBLIC_BACKEND_URL + "/auth/check-otp",
-        { email, otp }
-      );
+      const res = await axios.post(config.backendUrl + "/auth/check-otp", {
+        email,
+        otp,
+      });
       if (res.data.success) {
         setCurrentStep(2);
         showSuccess("OTP verified successfully");
@@ -180,10 +179,10 @@ export default function RegisterScreen() {
   const handleResendOTP = async () => {
     setLoading(true);
     try {
-      const res = await axios.post(
-        process.env.EXPO_PUBLIC_BACKEND_URL + "/auth/send-otp",
-        { email, operation: "Sign-up" }
-      );
+      const res = await axios.post(config.backendUrl + "/auth/send-otp", {
+        email,
+        operation: "Sign-up",
+      });
       if (res.data.success) showSuccess("OTP resent successfully");
       else showError("Failed to resend OTP");
     } catch (err) {
@@ -209,10 +208,7 @@ export default function RegisterScreen() {
         unitId: selectedUnit || null,
       };
 
-      const res = await axios.post(
-        process.env.EXPO_PUBLIC_BACKEND_URL + "/auth/signup",
-        req
-      );
+      const res = await axios.post(config.backendUrl + "/auth/signup", req);
 
       if (res.status === 201) {
         setToken(res.data.jwttoken);
@@ -238,7 +234,7 @@ export default function RegisterScreen() {
     items: any[],
     onSelect: (id: string) => void,
     labelKey: string,
-    title: string
+    title: string,
   ) => (
     <Modal
       visible={visible}
@@ -342,8 +338,8 @@ export default function RegisterScreen() {
                 {loadingCommunities
                   ? "Loading communities..."
                   : selectedCommunity
-                  ? communities.find((c) => c.id === selectedCommunity)?.name
-                  : "Select Community"}
+                    ? communities.find((c) => c.id === selectedCommunity)?.name
+                    : "Select Community"}
               </Text>
             </TouchableOpacity>
 
@@ -358,11 +354,11 @@ export default function RegisterScreen() {
                   {loadingBlocks
                     ? "Loading blocks..."
                     : selectedBlock
-                    ? "Block " +
-                      blocks.find((b) => b.id === selectedBlock)?.name
-                    : blocks.length === 0
-                    ? "No blocks available"
-                    : "Select Block (optional)"}
+                      ? "Block " +
+                        blocks.find((b) => b.id === selectedBlock)?.name
+                      : blocks.length === 0
+                        ? "No blocks available"
+                        : "Select Block (optional)"}
                 </Text>
               </TouchableOpacity>
             )}
@@ -378,10 +374,11 @@ export default function RegisterScreen() {
                   {loadingUnits
                     ? "Loading units..."
                     : selectedUnit
-                    ? "Unit " + units.find((u) => u.id === selectedUnit)?.number
-                    : units.length === 0
-                    ? "No units available"
-                    : "Select Unit (optional)"}
+                      ? "Unit " +
+                        units.find((u) => u.id === selectedUnit)?.number
+                      : units.length === 0
+                        ? "No units available"
+                        : "Select Unit (optional)"}
                 </Text>
               </TouchableOpacity>
             )}
@@ -408,7 +405,7 @@ export default function RegisterScreen() {
         communities,
         handleSelectCommunity,
         "name",
-        "Select Community"
+        "Select Community",
       )}
       {renderPickerModal(
         showBlockModal,
@@ -416,7 +413,7 @@ export default function RegisterScreen() {
         blocks,
         handleSelectBlock,
         "name",
-        "Select Block"
+        "Select Block",
       )}
       {renderPickerModal(
         showUnitModal,
@@ -424,7 +421,7 @@ export default function RegisterScreen() {
         units,
         handleSelectUnit,
         "number",
-        "Select Unit"
+        "Select Unit",
       )}
     </KeyboardAvoidingView>
   );

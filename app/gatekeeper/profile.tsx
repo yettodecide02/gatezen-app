@@ -18,6 +18,7 @@ import { router } from "expo-router";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { getToken, getUser } from "@/lib/auth";
+import { config } from "@/lib/config";
 
 export default function GatekeeperProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -29,10 +30,7 @@ export default function GatekeeperProfileScreen() {
   const border = theme === "dark" ? "#262626" : "#E5E7EB";
 
   // Backend
-  const backendUrl =
-    process.env.EXPO_PUBLIC_BACKEND_URL ||
-    process.env.EXPO_BACKEND_URL ||
-    "http://localhost:3000";
+  const backendUrl = config.backendUrl;
 
   // Auth
   const [user, setUserState] = useState<any>(null);

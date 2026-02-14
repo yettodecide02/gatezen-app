@@ -16,6 +16,7 @@ import axios from "axios";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { getToken, getUser } from "@/lib/auth";
+import { config } from "@/lib/config";
 
 export default function GatekeeperScannerScreen() {
   const insets = useSafeAreaInsets();
@@ -27,10 +28,7 @@ export default function GatekeeperScannerScreen() {
   const border = theme === "dark" ? "#262626" : "#E5E7EB";
 
   // Backend
-  const backendUrl =
-    process.env.EXPO_PUBLIC_BACKEND_URL ||
-    process.env.EXPO_BACKEND_URL ||
-    "http://localhost:3000";
+  const backendUrl = config.backendUrl;
 
   // Auth
   const [user, setUserState] = useState<any>(null);
@@ -131,7 +129,7 @@ export default function GatekeeperScannerScreen() {
         setLoading(false);
       }
     },
-    [scanning, lastScan, backendUrl, token, user?.communityId]
+    [scanning, lastScan, backendUrl, token, user?.communityId],
   );
 
   const resetScan = useCallback(() => {
@@ -150,7 +148,7 @@ export default function GatekeeperScannerScreen() {
           { id: visitor.id, status: newStatus },
           {
             headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-          }
+          },
         );
 
         Alert.alert("Success", `Visitor ${newStatus} successfully`, [
@@ -160,7 +158,7 @@ export default function GatekeeperScannerScreen() {
         Alert.alert("Error", e?.response?.data?.error || "Failed to update");
       }
     },
-    [visitor, backendUrl, token, resetScan]
+    [visitor, backendUrl, token, resetScan],
   );
 
   if (hasPermission === null) {
@@ -285,8 +283,8 @@ export default function GatekeeperScannerScreen() {
                         visitor.status === "checked_in"
                           ? "#10B981"
                           : visitor.status === "cancelled"
-                          ? "#EF4444"
-                          : "#F59E0B",
+                            ? "#EF4444"
+                            : "#F59E0B",
                     }}
                   >
                     {visitor.status?.toUpperCase() || "PENDING"}

@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { getToken, getCommunityId, getUser } from "@/lib/auth";
+import { config } from "@/lib/config";
 
 interface Announcement {
   id: string;
@@ -70,7 +71,7 @@ function AnnouncementCard({
           style: "destructive",
           onPress: () => onDelete(announcement.id),
         },
-      ]
+      ],
     );
   };
 
@@ -309,26 +310,24 @@ export default function AdminAnnouncements() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const url = process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:3000";
-  
-  
+  const url = config.backendUrl;
+
   useEffect(() => {
     fetchAnnouncements();
   }, []);
-  
+
   const fetchAnnouncements = async () => {
     try {
       const token = await getToken();
       const communityId = await getCommunityId();
-      
+
       if (!communityId) {
         Alert.alert(
           "Error",
-          "Community information not found. Please login again."
+          "Community information not found. Please login again.",
         );
         return;
       }
-
 
       const res = await axios.get(`${url}/admin/announcements`, {
         headers: {
@@ -359,7 +358,7 @@ export default function AdminAnnouncements() {
       if (!communityId) {
         Alert.alert(
           "Error",
-          "Community information not found. Please login again."
+          "Community information not found. Please login again.",
         );
         return;
       }
@@ -377,7 +376,7 @@ export default function AdminAnnouncements() {
           headers: {
             Authorization: `Bearer ${token}`,
           },
-        }
+        },
       );
 
       // Add the new announcement to the list
@@ -436,81 +435,81 @@ export default function AdminAnnouncements() {
   }
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: bg }]}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-      }
-    >
-      <View style={[styles.content, { paddingTop: Math.max(insets.top, 16) }]}>
-        {/* Header */}
+    <View style={[styles.container, { backgroundColor: bg }]}>
+      {/* Fixed Header */}
+      <View
+        style={[
+          styles.headerContainer,
+          {
+            paddingTop: Math.max(insets.top, 16),
+            backgroundColor: bg,
+            borderBottomColor:
+              theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)",
+          },
+        ]}
+      >
         <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backButton}
-          >
-            <Feather name="arrow-left" size={24} color={textColor} />
-          </TouchableOpacity>
-          <View style={styles.headerContent}>
-            <View style={styles.headerLeft}>
-              <View style={[styles.headerIcon, { backgroundColor: tint }]}>
-                <Feather name="message-square" size={20} color="#ffffff" />
-              </View>
-              <View style={styles.headerText}>
-                <Text style={[styles.headerTitle, { color: textColor }]}>
-                  Announcements
-                </Text>
-                <Text style={[styles.headerSubtitle, { color: muted }]}>
-                  Manage community announcements
-                </Text>
-              </View>
-            </View>
+          <View style={styles.headerLeft}>
             <TouchableOpacity
-              onPress={() => setShowCreateModal(true)}
-              style={[styles.createButton, { backgroundColor: tint }]}
+              onPress={() => router.back()}
+              style={styles.backButton}
             >
-              <Feather name="plus" size={18} color="#ffffff" />
-              <Text style={styles.createButtonText}>Create</Text>
+              <Feather name="arrow-left" size={24} color={tint} />
             </TouchableOpacity>
+            <View>
+              <Text style={[styles.title, { color: textColor }]}>
+                Announcements
+              </Text>
+              <Text style={[styles.subtitle, { color: muted }]}>
+                Manage community announcements
+              </Text>
+            </View>
           </View>
+          <TouchableOpacity
+            onPress={() => setShowCreateModal(true)}
+            style={[styles.createButton, { backgroundColor: tint }]}
+          >
+            <Feather
+              name="plus"
+              size={16}
+              color={theme === "dark" ? "#11181C" : "#ffffff"}
+            />
+            <Text
+              style={[
+                styles.createButtonText,
+                { color: theme === "dark" ? "#11181C" : "#ffffff" },
+              ]}
+            >
+              Create
+            </Text>
+          </TouchableOpacity>
         </View>
+      </View>
 
-        {/* Error/Success Messages */}
-        {error && (
-          <View style={styles.messageContainer}>
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        )}
+      <ScrollView
+        style={styles.scrollView}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        }
+      >
+        <View style={styles.content}>
+          {/* Error/Success Messages */}
+          {error && (
+            <View style={styles.messageContainer}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
 
-        {success && (
-          <View style={[styles.messageContainer, styles.successMessage]}>
-            <Text style={styles.successText}>{success}</Text>
-          </View>
-        )}
+          {success && (
+            <View style={[styles.messageContainer, styles.successMessage]}>
+              <Text style={styles.successText}>{success}</Text>
+            </View>
+          )}
 
-        {/* Stats */}
-        <View
-          style={[
-            styles.statsCard,
-            {
-              backgroundColor: theme === "dark" ? "#1F1F1F" : "#ffffff",
-              borderColor:
-                theme === "dark"
-                  ? "rgba(255,255,255,0.08)"
-                  : "rgba(0,0,0,0.08)",
-            },
-          ]}
-        >
-          <Text style={[styles.statsTitle, { color: textColor }]}>
-            All Announcements ({announcements.length})
-          </Text>
-        </View>
-
-        {/* Announcements List */}
-        {announcements.length === 0 ? (
+          {/* Stats */}
           <View
             style={[
-              styles.emptyState,
+              styles.statsCard,
               {
                 backgroundColor: theme === "dark" ? "#1F1F1F" : "#ffffff",
                 borderColor:
@@ -520,54 +519,82 @@ export default function AdminAnnouncements() {
               },
             ]}
           >
-            <Feather
-              name="message-square"
-              size={48}
-              color={muted}
-              style={{ opacity: 0.3 }}
-            />
-            <Text style={[styles.emptyTitle, { color: textColor }]}>
-              No announcements found
-            </Text>
-            <Text style={[styles.emptySubtitle, { color: muted }]}>
-              Create your first announcement to get started
+            <Text style={[styles.statsTitle, { color: textColor }]}>
+              All Announcements ({announcements.length})
             </Text>
           </View>
-        ) : (
-          <View style={styles.announcementsList}>
-            {announcements.map((announcement) => (
-              <AnnouncementCard
-                key={announcement.id}
-                announcement={announcement}
-                theme={theme}
-                textColor={textColor}
-                muted={muted}
-                onDelete={handleDeleteAnnouncement}
-                tint={tint}
-              />
-            ))}
-          </View>
-        )}
 
-        {/* Create Announcement Modal */}
-        <CreateAnnouncementModal
-          visible={showCreateModal}
-          onClose={() => setShowCreateModal(false)}
-          onSubmit={handleCreateAnnouncement}
-          theme={theme}
-          textColor={textColor}
-          tint={tint}
-          error={error}
-          setError={setError}
-          muted={muted}
-        />
-      </View>
-    </ScrollView>
+          {/* Announcements List */}
+          {announcements.length === 0 ? (
+            <View
+              style={[
+                styles.emptyState,
+                {
+                  backgroundColor: theme === "dark" ? "#1F1F1F" : "#ffffff",
+                  borderColor:
+                    theme === "dark"
+                      ? "rgba(255,255,255,0.08)"
+                      : "rgba(0,0,0,0.08)",
+                },
+              ]}
+            >
+              <Feather
+                name="message-square"
+                size={48}
+                color={muted}
+                style={{ opacity: 0.3 }}
+              />
+              <Text style={[styles.emptyTitle, { color: textColor }]}>
+                No announcements found
+              </Text>
+              <Text style={[styles.emptySubtitle, { color: muted }]}>
+                Create your first announcement to get started
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.announcementsList}>
+              {announcements.map((announcement) => (
+                <AnnouncementCard
+                  key={announcement.id}
+                  announcement={announcement}
+                  theme={theme}
+                  textColor={textColor}
+                  muted={muted}
+                  onDelete={handleDeleteAnnouncement}
+                  tint={tint}
+                />
+              ))}
+            </View>
+          )}
+
+          {/* Create Announcement Modal */}
+          <CreateAnnouncementModal
+            visible={showCreateModal}
+            onClose={() => setShowCreateModal(false)}
+            onSubmit={handleCreateAnnouncement}
+            theme={theme}
+            textColor={textColor}
+            tint={tint}
+            error={error}
+            setError={setError}
+            muted={muted}
+          />
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  headerContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+  },
+  scrollView: {
     flex: 1,
   },
   centerContent: {
@@ -582,40 +609,26 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   header: {
-    marginBottom: 24,
-  },
-  backButton: {
-    padding: 8,
-    marginBottom: 16,
-  },
-  headerContent: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    justifyContent: "space-between",
   },
   headerLeft: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 12,
     flex: 1,
   },
-  headerIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
+  backButton: {
+    padding: 8,
   },
-  headerText: {
-    flex: 1,
+  title: {
+    fontSize: 20,
+    fontWeight: "700",
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    marginBottom: 2,
-  },
-  headerSubtitle: {
-    fontSize: 14,
+  subtitle: {
+    fontSize: 12,
+    marginTop: 2,
   },
   createButton: {
     flexDirection: "row",
@@ -626,7 +639,6 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   createButtonText: {
-    color: "#ffffff",
     fontWeight: "600",
     fontSize: 14,
   },

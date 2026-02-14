@@ -23,6 +23,7 @@ import Toast from "@/components/Toast";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useToast } from "@/hooks/useToast";
+import { config } from "@/lib/config";
 
 export default function RegisterScreen() {
   const [name, setName] = useState("");
@@ -74,12 +75,7 @@ export default function RegisterScreen() {
     setLoadingCommunities(true);
 
     try {
-      const backendUrl =
-        process.env.EXPO_PUBLIC_BACKEND_URL ||
-        process.env.EXPO_BACKEND_URL ||
-        "http://localhost:3000";
-
-      const response = await axios.get(`${backendUrl}/auth/communities`);
+      const response = await axios.get(`${config.backendUrl}/auth/communities`);
 
       if (response.data.success) {
         setCommunities(response.data.data);
@@ -107,13 +103,8 @@ export default function RegisterScreen() {
     setSelectedUnit("");
 
     try {
-      const backendUrl =
-        process.env.EXPO_PUBLIC_BACKEND_URL ||
-        process.env.EXPO_BACKEND_URL ||
-        "http://localhost:3000";
-
       const response = await axios.get(
-        `${backendUrl}/auth/communities/${communityId}/blocks`
+        `${config.backendUrl}/auth/communities/${communityId}/blocks`,
       );
 
       if (response.data.success) {
@@ -137,13 +128,8 @@ export default function RegisterScreen() {
     setSelectedUnit("");
 
     try {
-      const backendUrl =
-        process.env.EXPO_PUBLIC_BACKEND_URL ||
-        process.env.EXPO_BACKEND_URL ||
-        "http://localhost:3000";
-
       const response = await axios.get(
-        `${backendUrl}/auth/blocks/${blockId}/units`
+        `${config.backendUrl}/auth/blocks/${blockId}/units`,
       );
 
       if (response.data.success) {
@@ -213,18 +199,13 @@ export default function RegisterScreen() {
 
     setLoading(true);
     try {
-      const backendUrl =
-        process.env.EXPO_PUBLIC_BACKEND_URL ||
-        process.env.EXPO_BACKEND_URL ||
-        "http://localhost:3000";
-
       // Check existing user
       try {
         const existingUser = await axios.get(
-          `${backendUrl}/auth/existing-user`,
+          `${config.backendUrl}/auth/existing-user`,
           {
             params: { email },
-          }
+          },
         );
 
         if (existingUser.data.exists) {
@@ -234,7 +215,7 @@ export default function RegisterScreen() {
       } catch (existingCheckError) {
         // If the check fails for network reasons, continue with registration
         console.log(
-          "Could not check existing user, proceeding with registration"
+          "Could not check existing user, proceeding with registration",
         );
       }
 
@@ -247,7 +228,10 @@ export default function RegisterScreen() {
         unitId: selectedUnit || null,
       };
 
-      const res = await axios.post(`${backendUrl}/auth/signup`, requestData);
+      const res = await axios.post(
+        `${config.backendUrl}/auth/signup`,
+        requestData,
+      );
 
       if (res.status !== 201) {
         showError("User registration failed");
@@ -268,7 +252,7 @@ export default function RegisterScreen() {
       }
     } catch (e) {
       showError(
-        e?.response?.data?.error || e?.message || "Registration failed"
+        e?.response?.data?.error || e?.message || "Registration failed",
       );
     } finally {
       setLoading(false);
@@ -402,8 +386,8 @@ export default function RegisterScreen() {
                 {loadingCommunities
                   ? "Loading communities..."
                   : communities.length === 0
-                  ? "No communities available"
-                  : selectedCommunityName || "Select your community"}
+                    ? "No communities available"
+                    : selectedCommunityName || "Select your community"}
               </Text>
               <Feather name="chevron-down" size={18} color={iconColor} />
             </TouchableOpacity>
@@ -443,8 +427,8 @@ export default function RegisterScreen() {
                   {loadingBlocks
                     ? "Loading blocks..."
                     : blocks.length === 0
-                    ? "No blocks available"
-                    : selectedBlockName || "Select your block "}
+                      ? "No blocks available"
+                      : selectedBlockName || "Select your block "}
                 </Text>
                 <Feather name="chevron-down" size={18} color={iconColor} />
               </TouchableOpacity>
@@ -485,8 +469,8 @@ export default function RegisterScreen() {
                   {loadingUnits
                     ? "Loading units..."
                     : units.length === 0
-                    ? "No units available"
-                    : selectedUnitName || "Select your unit"}
+                      ? "No units available"
+                      : selectedUnitName || "Select your unit"}
                 </Text>
                 <Feather name="chevron-down" size={18} color={iconColor} />
               </TouchableOpacity>
@@ -597,7 +581,7 @@ export default function RegisterScreen() {
                         item.id,
                         `${item.name}${
                           item.address ? ` - ${item.address}` : ""
-                        }`
+                        }`,
                       )
                     }
                   >

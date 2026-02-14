@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { getToken, getCommunityId } from "@/lib/auth";
+import { config } from "@/lib/config";
 
 // Resident Card Component
 function ResidentCard({
@@ -60,8 +61,8 @@ function ResidentCard({
           {statusUpper === "APPROVED"
             ? "Approved"
             : statusUpper === "PENDING"
-            ? "Pending"
-            : "Rejected"}
+              ? "Pending"
+              : "Rejected"}
         </Text>
       </View>
     );
@@ -179,7 +180,7 @@ export default function AdminResidents() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
 
-  const url = process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:3000";
+  const url = config.backendUrl;
 
   useEffect(() => {
     fetchResidents();
@@ -193,7 +194,7 @@ export default function AdminResidents() {
       if (!communityId) {
         Alert.alert(
           "Error",
-          "Community information not found. Please login again."
+          "Community information not found. Please login again.",
         );
         return;
       }
@@ -234,14 +235,14 @@ export default function AdminResidents() {
           headers: {
             Authorization: `Bearer ${token}`,
           },
-        }
+        },
       );
 
       Alert.alert(
         "Success",
         `Resident has been ${
           action === "approve" ? "approved" : "rejected"
-        } successfully.`
+        } successfully.`,
       );
       fetchResidents();
     } catch (error) {
@@ -298,211 +299,238 @@ export default function AdminResidents() {
   }
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: bg }]}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-      }
-    >
-      <View style={[styles.content, { paddingTop: Math.max(insets.top, 16) }]}>
-        {/* Header */}
+    <View style={[styles.container, { backgroundColor: bg }]}>
+      {/* Fixed Header */}
+      <View
+        style={[
+          styles.headerContainer,
+          {
+            paddingTop: Math.max(insets.top, 16),
+            backgroundColor: bg,
+            borderBottomColor:
+              theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)",
+          },
+        ]}
+      >
         <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backButton}
-          >
-            <Feather name="arrow-left" size={20} color={tint} />
-          </TouchableOpacity>
-          <View style={styles.headerContent}>
-            <Text style={[styles.title, { color: textColor }]}>
-              Residents Management
-            </Text>
+          <View style={styles.headerLeft}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={styles.backButton}
+            >
+              <Feather name="arrow-left" size={24} color={tint} />
+            </TouchableOpacity>
+            <View>
+              <Text style={[styles.title, { color: textColor }]}>
+                Residents
+              </Text>
+              <Text style={[styles.subtitle, { color: muted }]}>
+                Manage community residents
+              </Text>
+            </View>
           </View>
         </View>
+      </View>
 
-        {/* Stats Cards */}
-        <View style={styles.statsGrid}>
-          <StatCard
-            icon="users"
-            title="Total Residents"
-            value={stats.total}
-            color="#6366f1"
-            theme={theme}
-            textColor={textColor}
-            muted={muted}
-          />
-          <StatCard
-            icon="clock"
-            title="Pending Approval"
-            value={stats.pending}
-            color="#f59e0b"
-            theme={theme}
-            textColor={textColor}
-            muted={muted}
-          />
-          <StatCard
-            icon="user-check"
-            title="Approved"
-            value={stats.approved}
-            color="#10b981"
-            theme={theme}
-            textColor={textColor}
-            muted={muted}
-          />
-          <StatCard
-            icon="user-x"
-            title="Rejected"
-            value={stats.rejected}
-            color="#ef4444"
-            theme={theme}
-            textColor={textColor}
-            muted={muted}
-          />
-        </View>
+      <ScrollView
+        style={styles.scrollView}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        }
+      >
+        <View style={styles.content}>
+          {/* Stats Cards */}
+          <View style={styles.statsGrid}>
+            <StatCard
+              icon="users"
+              title="Total Residents"
+              value={stats.total}
+              color="#6366f1"
+              theme={theme}
+              textColor={textColor}
+              muted={muted}
+            />
+            <StatCard
+              icon="clock"
+              title="Pending Approval"
+              value={stats.pending}
+              color="#f59e0b"
+              theme={theme}
+              textColor={textColor}
+              muted={muted}
+            />
+            <StatCard
+              icon="user-check"
+              title="Approved"
+              value={stats.approved}
+              color="#10b981"
+              theme={theme}
+              textColor={textColor}
+              muted={muted}
+            />
+            <StatCard
+              icon="user-x"
+              title="Rejected"
+              value={stats.rejected}
+              color="#ef4444"
+              theme={theme}
+              textColor={textColor}
+              muted={muted}
+            />
+          </View>
 
-        {/* Filter Tabs */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.tabsContainer}
-        >
-          <View style={styles.tabs}>
-            {tabs.map((tab) => (
-              <TouchableOpacity
-                key={tab.key}
-                style={[
-                  styles.tab,
-                  {
-                    backgroundColor:
-                      activeTab === tab.key ? tint : "transparent",
-                    borderColor:
-                      activeTab === tab.key
-                        ? tint
-                        : theme === "dark"
-                        ? "rgba(255,255,255,0.2)"
-                        : "rgba(0,0,0,0.2)",
-                  },
-                ]}
-                onPress={() => setActiveTab(tab.key)}
-              >
-                <Text
+          {/* Filter Tabs */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.tabsContainer}
+          >
+            <View style={styles.tabs}>
+              {tabs.map((tab) => (
+                <TouchableOpacity
+                  key={tab.key}
                   style={[
-                    styles.tabText,
+                    styles.tab,
                     {
-                      color:
+                      backgroundColor:
+                        activeTab === tab.key ? tint : "transparent",
+                      borderColor:
                         activeTab === tab.key
-                          ? theme === "dark"
-                            ? "#11181C"
-                            : "#ffffff"
-                          : textColor,
+                          ? tint
+                          : theme === "dark"
+                            ? "rgba(255,255,255,0.2)"
+                            : "rgba(0,0,0,0.2)",
                     },
                   ]}
+                  onPress={() => setActiveTab(tab.key)}
                 >
-                  {tab.label}
-                </Text>
-                {tab.count > 0 && (
-                  <View
+                  <Text
                     style={[
-                      styles.tabBadge,
+                      styles.tabText,
                       {
-                        backgroundColor:
+                        color:
                           activeTab === tab.key
                             ? theme === "dark"
-                              ? "#11181C33"
-                              : "#ffffff33"
-                            : tint,
+                              ? "#11181C"
+                              : "#ffffff"
+                            : textColor,
                       },
                     ]}
                   >
-                    <Text
+                    {tab.label}
+                  </Text>
+                  {tab.count > 0 && (
+                    <View
                       style={[
-                        styles.tabBadgeText,
+                        styles.tabBadge,
                         {
-                          color:
+                          backgroundColor:
                             activeTab === tab.key
                               ? theme === "dark"
-                                ? "#11181C"
-                                : "#ffffff"
-                              : "#ffffff",
+                                ? "#11181C33"
+                                : "#ffffff33"
+                              : tint,
                         },
                       ]}
                     >
-                      {tab.count}
-                    </Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </ScrollView>
-
-        {/* Residents List */}
-        <View
-          style={[
-            styles.card,
-            {
-              backgroundColor: theme === "dark" ? "#1F1F1F" : "#ffffff",
-              borderColor:
-                theme === "dark"
-                  ? "rgba(255,255,255,0.08)"
-                  : "rgba(0,0,0,0.08)",
-            },
-          ]}
-        >
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionLeft}>
-              <Feather name="users" size={20} color={tint} />
-              <Text style={[styles.sectionTitle, { color: textColor }]}>
-                {activeTab === "all" && "All Residents"}
-                {activeTab === "pending" && "Pending Approvals"}
-                {activeTab === "approved" && "Approved Residents"}
-                {activeTab === "rejected" && "Rejected Applications"}
-              </Text>
-            </View>
-            <Text style={[styles.countText, { color: muted }]}>
-              {filteredResidents.length} resident
-              {filteredResidents.length !== 1 ? "s" : ""}
-            </Text>
-          </View>
-
-          {filteredResidents.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Feather name="users" size={48} color={muted} />
-              <Text style={[styles.emptyText, { color: muted }]}>
-                {activeTab === "all" && "No residents found."}
-                {activeTab === "pending" && "No pending approvals."}
-                {activeTab === "approved" && "No approved residents."}
-                {activeTab === "rejected" && "No rejected applications."}
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.residentsList}>
-              {filteredResidents.map((resident) => (
-                <ResidentCard
-                  key={resident.id}
-                  resident={resident}
-                  onAction={handleResidentAction}
-                  showActions={
-                    activeTab === "pending" ||
-                    activeTab === "all" ||
-                    activeTab === "rejected"
-                  }
-                  theme={theme}
-                  textColor={textColor}
-                  muted={muted}
-                  tint={tint}
-                />
+                      <Text
+                        style={[
+                          styles.tabBadgeText,
+                          {
+                            color:
+                              activeTab === tab.key
+                                ? theme === "dark"
+                                  ? "#11181C"
+                                  : "#ffffff"
+                                : "#ffffff",
+                          },
+                        ]}
+                      >
+                        {tab.count}
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
               ))}
             </View>
-          )}
+          </ScrollView>
+
+          {/* Residents List */}
+          <View
+            style={[
+              styles.card,
+              {
+                backgroundColor: theme === "dark" ? "#1F1F1F" : "#ffffff",
+                borderColor:
+                  theme === "dark"
+                    ? "rgba(255,255,255,0.08)"
+                    : "rgba(0,0,0,0.08)",
+              },
+            ]}
+          >
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionLeft}>
+                <Feather name="users" size={20} color={tint} />
+                <Text style={[styles.sectionTitle, { color: textColor }]}>
+                  {activeTab === "all" && "All Residents"}
+                  {activeTab === "pending" && "Pending Approvals"}
+                  {activeTab === "approved" && "Approved Residents"}
+                  {activeTab === "rejected" && "Rejected Applications"}
+                </Text>
+              </View>
+              <Text style={[styles.countText, { color: muted }]}>
+                {filteredResidents.length} resident
+                {filteredResidents.length !== 1 ? "s" : ""}
+              </Text>
+            </View>
+
+            {filteredResidents.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Feather name="users" size={48} color={muted} />
+                <Text style={[styles.emptyText, { color: muted }]}>
+                  {activeTab === "all" && "No residents found."}
+                  {activeTab === "pending" && "No pending approvals."}
+                  {activeTab === "approved" && "No approved residents."}
+                  {activeTab === "rejected" && "No rejected applications."}
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.residentsList}>
+                {filteredResidents.map((resident) => (
+                  <ResidentCard
+                    key={resident.id}
+                    resident={resident}
+                    onAction={handleResidentAction}
+                    showActions={
+                      activeTab === "pending" ||
+                      activeTab === "all" ||
+                      activeTab === "rejected"
+                    }
+                    theme={theme}
+                    textColor={textColor}
+                    muted={muted}
+                    tint={tint}
+                  />
+                ))}
+              </View>
+            )}
+          </View>
         </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  headerContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+  },
+  scrollView: {
     flex: 1,
   },
   centerContent: {
@@ -511,6 +539,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 16,
+    paddingTop: 16,
     paddingBottom: 16,
   },
   loadingText: {
@@ -520,18 +549,24 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 24,
+    justifyContent: "space-between",
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
   },
   backButton: {
     padding: 8,
-    marginRight: 8,
-  },
-  headerContent: {
-    flex: 1,
   },
   title: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: "700",
+  },
+  subtitle: {
+    fontSize: 12,
+    marginTop: 2,
   },
   statsGrid: {
     flexDirection: "row",

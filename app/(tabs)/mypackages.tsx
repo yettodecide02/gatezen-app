@@ -20,6 +20,7 @@ import axios from "axios";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { getToken, getUser } from "@/lib/auth";
+import { config } from "@/lib/config";
 
 export default function ResidentPackagesScreen() {
   const insets = useSafeAreaInsets();
@@ -30,10 +31,7 @@ export default function ResidentPackagesScreen() {
   const card = theme === "dark" ? "#111111" : "#ffffff";
   const border = theme === "dark" ? "#262626" : "#E5E7EB";
 
-  const backendUrl =
-    process.env.EXPO_PUBLIC_BACKEND_URL ||
-    process.env.EXPO_BACKEND_URL ||
-    "http://localhost:3000";
+  const backendUrl = config.backendUrl;
 
   const [packages, setPackages] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -115,10 +113,10 @@ export default function ResidentPackagesScreen() {
       total: packages.length,
       pending: packages.filter((p) => p.status === "PENDING").length,
       collected: packages.filter(
-        (p) => p.status === "PICKED" || p.status === "COLLECTED"
+        (p) => p.status === "PICKED" || p.status === "COLLECTED",
       ).length,
     }),
-    [packages]
+    [packages],
   );
 
   return (

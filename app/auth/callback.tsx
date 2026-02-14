@@ -8,6 +8,7 @@ import { setToken, setUser } from "@/lib/auth";
 import Toast from "@/components/Toast";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useToast } from "@/hooks/useToast";
+import { config } from "@/lib/config";
 
 export default function AuthCallback() {
   const [message, setMessage] = useState("Finishing sign-in…");
@@ -33,10 +34,7 @@ export default function AuthCallback() {
 
         const email = session.user.email;
 
-        const backendUrl =
-          process.env.EXPO_PUBLIC_BACKEND_URL ||
-          process.env.EXPO_BACKEND_URL ||
-          "http://localhost:3000";
+        const backendUrl = config.backendUrl;
 
         const response = await axios.get(`${backendUrl}/auth/existing-user`, {
           params: { email },

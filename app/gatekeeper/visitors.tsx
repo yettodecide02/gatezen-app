@@ -16,6 +16,7 @@ import axios from "axios";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { getToken, getUser } from "@/lib/auth";
+import { config } from "@/lib/config";
 
 const STATUS_LABEL: any = {
   pending: "Pending",
@@ -85,10 +86,7 @@ export default function GatekeeperVisitorsScreen() {
   const border = theme === "dark" ? "#262626" : "#E5E7EB";
 
   // Backend
-  const backendUrl =
-    process.env.EXPO_PUBLIC_BACKEND_URL ||
-    process.env.EXPO_BACKEND_URL ||
-    "http://localhost:3000";
+  const backendUrl = config.backendUrl;
 
   // Auth
   const [user, setUserState] = useState<any>(null);
@@ -143,18 +141,18 @@ export default function GatekeeperVisitorsScreen() {
           { id: visitorId, status: newStatus },
           {
             headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-          }
+          },
         );
         const updated = res.data;
         setVisitors((prev) =>
-          prev.map((v) => (v.id === visitorId ? updated : v))
+          prev.map((v) => (v.id === visitorId ? updated : v)),
         );
         showToast(`Visitor ${newStatus}`);
       } catch (e: any) {
         Alert.alert("Error", e?.response?.data?.error || "Failed to update");
       }
     },
-    [backendUrl, token, showToast]
+    [backendUrl, token, showToast],
   );
 
   return (
@@ -371,7 +369,7 @@ export default function GatekeeperVisitorsScreen() {
                         </Text>
                         <Text style={[styles.detailValue, { color: text }]}>
                           {new Date(
-                            visitor.visitDate || visitor.createdAt
+                            visitor.visitDate || visitor.createdAt,
                           ).toLocaleString()}
                         </Text>
                       </View>

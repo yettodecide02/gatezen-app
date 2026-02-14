@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { logout, getToken, getCommunityId } from "@/lib/auth";
+import { config } from "@/lib/config";
 
 // Stat Card Component
 function StatCard({
@@ -69,10 +70,10 @@ function AnnouncementModal({
 
   const handleSubmit = async () => {
     if (!title.trim() || !content.trim()) return;
-
+    const communityId = await getCommunityId();
     setIsSubmitting(true);
     try {
-      await onSubmit({ title: title.trim(), content: content.trim() });
+      await onSubmit({ title: title.trim(), content: content.trim(), communityId: communityId });
       setTitle("");
       setContent("");
       onClose();
@@ -201,7 +202,7 @@ export default function AdminDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const url = process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:3000";
+  const url = config.backendUrl;
 
   useEffect(() => {
     fetchAdminData();
@@ -215,7 +216,7 @@ export default function AdminDashboard() {
       if (!communityId) {
         Alert.alert(
           "Error",
-          "Community information not found. Please login again."
+          "Community information not found. Please login again.",
         );
         return;
       }
@@ -226,7 +227,7 @@ export default function AdminDashboard() {
           headers: {
             Authorization: `Bearer ${token}`,
           },
-        }
+        },
       );
       const data = res.data;
       setPayments(data.payments || []);
@@ -264,14 +265,14 @@ export default function AdminDashboard() {
           headers: {
             Authorization: `Bearer ${token}`,
           },
-        }
+        },
       );
 
       Alert.alert(
         "Success",
         `Resident has been ${
           action === "approve" ? "approved" : "rejected"
-        } successfully.`
+        } successfully.`,
       );
       fetchAdminData();
     } catch (error) {
@@ -318,7 +319,7 @@ export default function AdminDashboard() {
       .reduce((a, b) => a + (b.amount || 0), 0);
     const openMaint = maintenance.filter((m) => m.status !== "RESOLVED").length;
     const pendingBookings = bookings.filter(
-      (b) => b.status !== "CONFIRMED"
+      (b) => b.status !== "CONFIRMED",
     ).length;
     return { totalDue, openMaint, pendingBookings };
   }, [payments, maintenance, bookings]);
@@ -341,14 +342,18 @@ export default function AdminDashboard() {
   }
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: bg }]}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-      }
-    >
-      <View style={[styles.content, { paddingTop: Math.max(insets.top, 16) }]}>
-        {/* Header */}
+    <View style={[styles.container, { backgroundColor: bg }]}>
+      {/* Fixed Header */}
+      <View
+        style={[
+          styles.headerContainer,
+          {
+            paddingTop: Math.max(insets.top, 16),
+            backgroundColor: bg,
+            borderBottomColor: borderCol,
+          },
+        ]}
+      >
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <View style={[styles.adminBadge, { backgroundColor: tint }]}>
@@ -371,275 +376,399 @@ export default function AdminDashboard() {
             <Feather name="log-out" size={20} color={muted} />
           </TouchableOpacity>
         </View>
+      </View>
 
-        {/* Stats Grid */}
-        <View style={styles.statsGrid}>
-          <StatCard
-            icon="dollar-sign"
-            title="Outstanding Dues"
-            value={`₹ ${kpis.totalDue.toLocaleString()}`}
-            hint="Across all users"
-            accentColor="#6366f1"
-            theme={theme}
-            textColor={textColor}
-            muted={muted}
-          />
-          <StatCard
-            icon="tool"
-            title="Open Maintenance"
-            value={kpis.openMaint}
-            hint="Awaiting action"
-            accentColor="#f59e0b"
-            theme={theme}
-            textColor={textColor}
-            muted={muted}
-          />
-          <StatCard
-            icon="calendar"
-            title="Pending Bookings"
-            value={kpis.pendingBookings}
-            hint="To review"
-            accentColor="#06b6d4"
-            theme={theme}
-            textColor={textColor}
-            muted={muted}
-          />
-          <StatCard
-            icon="user-plus"
-            title="Pending Requests"
-            value={pendingRequests.length}
-            hint="New residents"
-            accentColor="#8b5cf6"
-            theme={theme}
-            textColor={textColor}
-            muted={muted}
-          />
-        </View>
-
-        {/* Announcements Section */}
-        <View
-          style={[
-            styles.card,
-            { backgroundColor: cardBg, borderColor: borderCol },
-          ]}
-        >
-          <View style={styles.sectionHeader}>
-            <TouchableOpacity
-              style={styles.sectionLeft}
-              onPress={() => router.push("/admin/announcements")}
-            >
-              <Feather name="bell" size={20} color={tint} />
-              <Text style={[styles.sectionTitle, { color: textColor }]}>
-                Latest Announcements
-              </Text>
-              <Feather name="chevron-right" size={16} color={muted} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.addButton, { backgroundColor: tint }]}
-              onPress={() => setShowAnnouncementModal(true)}
-            >
-              <Feather
-                name="plus"
-                size={16}
-                color={theme === "dark" ? "#11181C" : "#ffffff"}
-              />
-            </TouchableOpacity>
+      <ScrollView
+        style={styles.scrollView}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        }
+      >
+        <View style={styles.content}>
+          {/* Stats Grid */}
+          <View style={styles.statsGrid}>
+            <StatCard
+              icon="dollar-sign"
+              title="Outstanding Dues"
+              value={`₹ ${kpis.totalDue.toLocaleString()}`}
+              hint="Across all users"
+              accentColor="#6366f1"
+              theme={theme}
+              textColor={textColor}
+              muted={muted}
+            />
+            <StatCard
+              icon="tool"
+              title="Open Maintenance"
+              value={kpis.openMaint}
+              hint="Awaiting action"
+              accentColor="#f59e0b"
+              theme={theme}
+              textColor={textColor}
+              muted={muted}
+            />
+            <StatCard
+              icon="calendar"
+              title="Pending Bookings"
+              value={kpis.pendingBookings}
+              hint="To review"
+              accentColor="#06b6d4"
+              theme={theme}
+              textColor={textColor}
+              muted={muted}
+            />
+            <StatCard
+              icon="user-plus"
+              title="Pending Requests"
+              value={pendingRequests.length}
+              hint="New residents"
+              accentColor="#8b5cf6"
+              theme={theme}
+              textColor={textColor}
+              muted={muted}
+            />
           </View>
 
-          {announcements.length === 0 ? (
-            <Text style={[styles.emptyText, { color: muted }]}>
-              No announcements yet.
-            </Text>
-          ) : (
-            announcements.slice(0, 3).map((announcement) => (
-              <View key={announcement.id} style={styles.listItem}>
-                <Text style={[styles.listTitle, { color: textColor }]}>
-                  {announcement.title}
+          {/* Quick Actions */}
+          <View
+            style={[
+              styles.card,
+              { backgroundColor: cardBg, borderColor: borderCol },
+            ]}
+          >
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionLeft}>
+                <Feather name="zap" size={20} color={tint} />
+                <Text style={[styles.sectionTitle, { color: textColor }]}>
+                  Quick Actions
                 </Text>
-                <Text style={[styles.listSub, { color: muted }]}>
-                  {new Date(announcement.createdAt).toLocaleDateString()}
-                </Text>
-                <Text
-                  style={[styles.listBody, { color: textColor }]}
-                  numberOfLines={2}
+              </View>
+            </View>
+
+            <View style={styles.quickActionsRow}>
+              <TouchableOpacity
+                style={[
+                  styles.quickActionCard,
+                  { backgroundColor: theme === "dark" ? "#181818" : "#f9fafb" },
+                ]}
+                onPress={() => router.push("/admin/communityConfig")}
+              >
+                <View
+                  style={[
+                    styles.quickActionIcon,
+                    { backgroundColor: "#6366f1" },
+                  ]}
                 >
-                  {announcement.content}
+                  <Feather name="home" size={24} color="#ffffff" />
+                </View>
+                <Text style={[styles.quickActionTitle, { color: textColor }]}>
+                  Community
                 </Text>
-              </View>
-            ))
-          )}
-        </View>
+                <Text style={[styles.quickActionDesc, { color: muted }]}>
+                  Facilities config
+                </Text>
+              </TouchableOpacity>
 
-        {/* Resident Requests Section */}
-        <View
-          style={[
-            styles.card,
-            { backgroundColor: cardBg, borderColor: borderCol },
-          ]}
-        >
-          <View style={styles.sectionHeader}>
-            <TouchableOpacity
-              style={styles.sectionLeft}
-              onPress={() => router.push("/admin/residents")}
-            >
-              <Feather name="user-plus" size={20} color={tint} />
-              <Text style={[styles.sectionTitle, { color: textColor }]}>
-                Resident Requests
-              </Text>
-              <Feather name="chevron-right" size={16} color={muted} />
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.quickActionCard,
+                  { backgroundColor: theme === "dark" ? "#181818" : "#f9fafb" },
+                ]}
+                onPress={() => router.push("/admin/blocksandunits")}
+              >
+                <View
+                  style={[
+                    styles.quickActionIcon,
+                    { backgroundColor: "#06b6d4" },
+                  ]}
+                >
+                  <Feather name="grid" size={24} color="#ffffff" />
+                </View>
+                <Text style={[styles.quickActionTitle, { color: textColor }]}>
+                  Blocks & Units
+                </Text>
+                <Text style={[styles.quickActionDesc, { color: muted }]}>
+                  Manage structure
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.quickActionsRow}>
+              <TouchableOpacity
+                style={[
+                  styles.quickActionCard,
+                  { backgroundColor: theme === "dark" ? "#181818" : "#f9fafb" },
+                ]}
+                onPress={() => router.push("/admin/staffmanagement")}
+              >
+                <View
+                  style={[
+                    styles.quickActionIcon,
+                    { backgroundColor: "#8b5cf6" },
+                  ]}
+                >
+                  <Feather name="shield" size={24} color="#ffffff" />
+                </View>
+                <Text style={[styles.quickActionTitle, { color: textColor }]}>
+                  Staff
+                </Text>
+                <Text style={[styles.quickActionDesc, { color: muted }]}>
+                  Manage gatekeepers
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.quickActionCard,
+                  { backgroundColor: theme === "dark" ? "#181818" : "#f9fafb" },
+                ]}
+                onPress={() => router.push("/admin/visitorlog")}
+              >
+                <View
+                  style={[
+                    styles.quickActionIcon,
+                    { backgroundColor: "#f59e0b" },
+                  ]}
+                >
+                  <Feather name="users" size={24} color="#ffffff" />
+                </View>
+                <Text style={[styles.quickActionTitle, { color: textColor }]}>
+                  Visitor Log
+                </Text>
+                <Text style={[styles.quickActionDesc, { color: muted }]}>
+                  Track visitors
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
-          {pendingRequests.length === 0 ? (
-            <Text style={[styles.emptyText, { color: muted }]}>
-              No pending requests.
-            </Text>
-          ) : (
-            pendingRequests.slice(0, 5).map((request) => (
-              <View key={request.id} style={styles.requestItem}>
-                <View style={styles.requestInfo}>
+          {/* Announcements Section */}
+          <View
+            style={[
+              styles.card,
+              { backgroundColor: cardBg, borderColor: borderCol },
+            ]}
+          >
+            <View style={styles.sectionHeader}>
+              <TouchableOpacity
+                style={styles.sectionLeft}
+                onPress={() => router.push("/admin/announcements")}
+              >
+                <Feather name="bell" size={20} color={tint} />
+                <Text style={[styles.sectionTitle, { color: textColor }]}>
+                  Latest Announcements
+                </Text>
+                <Feather name="chevron-right" size={16} color={muted} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.addButton, { backgroundColor: tint }]}
+                onPress={() => setShowAnnouncementModal(true)}
+              >
+                <Feather
+                  name="plus"
+                  size={16}
+                  color={theme === "dark" ? "#11181C" : "#ffffff"}
+                />
+              </TouchableOpacity>
+            </View>
+
+            {announcements.length === 0 ? (
+              <Text style={[styles.emptyText, { color: muted }]}>
+                No announcements yet.
+              </Text>
+            ) : (
+              announcements.slice(0, 3).map((announcement) => (
+                <View key={announcement.id} style={styles.listItem}>
                   <Text style={[styles.listTitle, { color: textColor }]}>
-                    {request.name}
+                    {announcement.title}
                   </Text>
                   <Text style={[styles.listSub, { color: muted }]}>
-                    {request.email}
+                    {new Date(announcement.createdAt).toLocaleDateString()}
                   </Text>
-                  <Text style={[styles.listSub, { color: muted }]}>
-                    {new Date(request.createdAt).toLocaleDateString()}
+                  <Text
+                    style={[styles.listBody, { color: textColor }]}
+                    numberOfLines={2}
+                  >
+                    {announcement.content}
                   </Text>
                 </View>
-                <View style={styles.requestActions}>
-                  <TouchableOpacity
-                    style={[
-                      styles.actionButton,
-                      { backgroundColor: "#22c55e" },
-                    ]}
-                    onPress={() => handleResidentAction(request.id, "approve")}
-                  >
-                    <Feather name="check" size={16} color="#ffffff" />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.actionButton,
-                      { backgroundColor: "#ef4444" },
-                    ]}
-                    onPress={() => handleResidentAction(request.id, "reject")}
-                  >
-                    <Feather name="x" size={16} color="#ffffff" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))
-          )}
-        </View>
-
-        {/* Maintenance Section */}
-        <View
-          style={[
-            styles.card,
-            { backgroundColor: cardBg, borderColor: borderCol },
-          ]}
-        >
-          <View style={styles.sectionHeader}>
-            <TouchableOpacity
-              style={styles.sectionLeft}
-              onPress={() => router.push("/admin/maintenance")}
-            >
-              <Feather name="tool" size={20} color={tint} />
-              <Text style={[styles.sectionTitle, { color: textColor }]}>
-                Open Maintenance
-              </Text>
-              <Feather name="chevron-right" size={16} color={muted} />
-            </TouchableOpacity>
+              ))
+            )}
           </View>
 
-          {maintenance.filter((m) => m.status !== "RESOLVED").length === 0 ? (
-            <Text style={[styles.emptyText, { color: muted }]}>
-              All maintenance requests resolved.
-            </Text>
-          ) : (
-            maintenance
-              .filter((m) => m.status !== "RESOLVED")
-              .slice(0, 5)
-              .map((item) => (
-                <View key={item.id} style={styles.listItem}>
+          {/* Resident Requests Section */}
+          <View
+            style={[
+              styles.card,
+              { backgroundColor: cardBg, borderColor: borderCol },
+            ]}
+          >
+            <View style={styles.sectionHeader}>
+              <TouchableOpacity
+                style={styles.sectionLeft}
+                onPress={() => router.push("/admin/residents")}
+              >
+                <Feather name="user-plus" size={20} color={tint} />
+                <Text style={[styles.sectionTitle, { color: textColor }]}>
+                  Resident Requests
+                </Text>
+                <Feather name="chevron-right" size={16} color={muted} />
+              </TouchableOpacity>
+            </View>
+
+            {pendingRequests.length === 0 ? (
+              <Text style={[styles.emptyText, { color: muted }]}>
+                No pending requests.
+              </Text>
+            ) : (
+              pendingRequests.slice(0, 5).map((request) => (
+                <View key={request.id} style={styles.requestItem}>
+                  <View style={styles.requestInfo}>
+                    <Text style={[styles.listTitle, { color: textColor }]}>
+                      {request.name}
+                    </Text>
+                    <Text style={[styles.listSub, { color: muted }]}>
+                      {request.email}
+                    </Text>
+                    <Text style={[styles.listSub, { color: muted }]}>
+                      {new Date(request.createdAt).toLocaleDateString()}
+                    </Text>
+                  </View>
+                  <View style={styles.requestActions}>
+                    <TouchableOpacity
+                      style={[
+                        styles.actionButton,
+                        { backgroundColor: "#22c55e" },
+                      ]}
+                      onPress={() =>
+                        handleResidentAction(request.id, "approve")
+                      }
+                    >
+                      <Feather name="check" size={16} color="#ffffff" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.actionButton,
+                        { backgroundColor: "#ef4444" },
+                      ]}
+                      onPress={() => handleResidentAction(request.id, "reject")}
+                    >
+                      <Feather name="x" size={16} color="#ffffff" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))
+            )}
+          </View>
+
+          {/* Maintenance Section */}
+          <View
+            style={[
+              styles.card,
+              { backgroundColor: cardBg, borderColor: borderCol },
+            ]}
+          >
+            <View style={styles.sectionHeader}>
+              <TouchableOpacity
+                style={styles.sectionLeft}
+                onPress={() => router.push("/admin/maintenance")}
+              >
+                <Feather name="tool" size={20} color={tint} />
+                <Text style={[styles.sectionTitle, { color: textColor }]}>
+                  Open Maintenance
+                </Text>
+                <Feather name="chevron-right" size={16} color={muted} />
+              </TouchableOpacity>
+            </View>
+
+            {maintenance.filter((m) => m.status !== "RESOLVED").length === 0 ? (
+              <Text style={[styles.emptyText, { color: muted }]}>
+                All maintenance requests resolved.
+              </Text>
+            ) : (
+              maintenance
+                .filter((m) => m.status !== "RESOLVED")
+                .slice(0, 5)
+                .map((item) => (
+                  <View key={item.id} style={styles.listItem}>
+                    <View style={styles.listItemRow}>
+                      <View style={styles.listItemInfo}>
+                        <Text style={[styles.listTitle, { color: textColor }]}>
+                          {item.title || "Maintenance Request"}
+                        </Text>
+                        <Text style={[styles.listSub, { color: muted }]}>
+                          {item.category || "General"} •{" "}
+                          {new Date(item.createdAt).toLocaleDateString()}
+                        </Text>
+                      </View>
+                      <View
+                        style={[styles.badge, { backgroundColor: "#f59e0b" }]}
+                      >
+                        <Text style={styles.badgeText}>{item.status}</Text>
+                      </View>
+                    </View>
+                  </View>
+                ))
+            )}
+          </View>
+
+          {/* Recent Bookings Section */}
+          <View
+            style={[
+              styles.card,
+              { backgroundColor: cardBg, borderColor: borderCol },
+            ]}
+          >
+            <View style={styles.sectionHeader}>
+              <TouchableOpacity
+                style={styles.sectionLeft}
+                onPress={() => router.push("/admin/bookings")}
+              >
+                <Feather name="calendar" size={20} color={tint} />
+                <Text style={[styles.sectionTitle, { color: textColor }]}>
+                  Recent Bookings
+                </Text>
+                <Feather name="chevron-right" size={16} color={muted} />
+              </TouchableOpacity>
+            </View>
+
+            {bookings.length === 0 ? (
+              <Text style={[styles.emptyText, { color: muted }]}>
+                No bookings yet.
+              </Text>
+            ) : (
+              bookings.slice(0, 5).map((booking) => (
+                <View key={booking.id} style={styles.listItem}>
                   <View style={styles.listItemRow}>
                     <View style={styles.listItemInfo}>
                       <Text style={[styles.listTitle, { color: textColor }]}>
-                        {item.title || "Maintenance Request"}
+                        {booking.facility?.name || "Amenity"}
                       </Text>
                       <Text style={[styles.listSub, { color: muted }]}>
-                        {item.category || "General"} •{" "}
-                        {new Date(item.createdAt).toLocaleDateString()}
+                        {booking.user?.name} •{" "}
+                        {new Date(booking.startsAt).toLocaleDateString()}
                       </Text>
                     </View>
                     <View
-                      style={[styles.badge, { backgroundColor: "#f59e0b" }]}
+                      style={[
+                        styles.badge,
+                        {
+                          backgroundColor:
+                            booking.status === "CONFIRMED"
+                              ? "#22c55e"
+                              : "#06b6d4",
+                        },
+                      ]}
                     >
-                      <Text style={styles.badgeText}>{item.status}</Text>
+                      <Text style={styles.badgeText}>{booking.status}</Text>
                     </View>
                   </View>
                 </View>
               ))
-          )}
-        </View>
-
-        {/* Recent Bookings Section */}
-        <View
-          style={[
-            styles.card,
-            { backgroundColor: cardBg, borderColor: borderCol },
-          ]}
-        >
-          <View style={styles.sectionHeader}>
-            <TouchableOpacity
-              style={styles.sectionLeft}
-              onPress={() => router.push("/admin/bookings")}
-            >
-              <Feather name="calendar" size={20} color={tint} />
-              <Text style={[styles.sectionTitle, { color: textColor }]}>
-                Recent Bookings
-              </Text>
-              <Feather name="chevron-right" size={16} color={muted} />
-            </TouchableOpacity>
+            )}
           </View>
-
-          {bookings.length === 0 ? (
-            <Text style={[styles.emptyText, { color: muted }]}>
-              No bookings yet.
-            </Text>
-          ) : (
-            bookings.slice(0, 5).map((booking) => (
-              <View key={booking.id} style={styles.listItem}>
-                <View style={styles.listItemRow}>
-                  <View style={styles.listItemInfo}>
-                    <Text style={[styles.listTitle, { color: textColor }]}>
-                      {booking.facility?.name || "Amenity"}
-                    </Text>
-                    <Text style={[styles.listSub, { color: muted }]}>
-                      {booking.user?.name} •{" "}
-                      {new Date(booking.startsAt).toLocaleDateString()}
-                    </Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.badge,
-                      {
-                        backgroundColor:
-                          booking.status === "CONFIRMED"
-                            ? "#22c55e"
-                            : "#06b6d4",
-                      },
-                    ]}
-                  >
-                    <Text style={styles.badgeText}>{booking.status}</Text>
-                  </View>
-                </View>
-              </View>
-            ))
-          )}
         </View>
-      </View>
+      </ScrollView>
 
       <AnnouncementModal
         visible={showAnnouncementModal}
@@ -649,7 +778,7 @@ export default function AdminDashboard() {
         textColor={textColor}
         tint={tint}
       />
-    </ScrollView>
+    </View>
   );
 }
 
@@ -661,8 +790,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  headerContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
   content: {
     paddingHorizontal: 16,
+    paddingTop: 16,
     paddingBottom: 16,
   },
   loadingText: {
@@ -673,7 +811,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 24,
   },
   headerLeft: {
     flexDirection: "row",
@@ -828,6 +965,35 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 10,
     fontWeight: "600",
+  },
+  quickActionsRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 12,
+  },
+  quickActionCard: {
+    flex: 1,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: "center",
+  },
+  quickActionIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+  quickActionTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 4,
+    textAlign: "center",
+  },
+  quickActionDesc: {
+    fontSize: 11,
+    textAlign: "center",
   },
   // Modal Styles
   modalOverlay: {

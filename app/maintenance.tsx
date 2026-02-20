@@ -23,13 +23,13 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import { router } from "expo-router";
 import axios from "axios";
-import * as ImagePicker from "expo-image-picker";
-import * as FileSystem from "expo-file-system";
 
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { getToken, getUser } from "@/lib/auth";
+import { config } from "@/lib/config";
 
 const STATUS_LABEL: any = {
   submitted: "Submitted",
@@ -95,6 +95,8 @@ export default function MaintenanceScreen() {
   const bg = useThemeColor({}, "background");
   const text = useThemeColor({}, "text");
   const icon = useThemeColor({}, "icon");
+  const tint = useThemeColor({}, "tint");
+  const muted = useThemeColor({}, "icon");
   const card = theme === "dark" ? "#111111" : "#ffffff";
   const border = theme === "dark" ? "#262626" : "#E5E7EB";
 
@@ -109,10 +111,7 @@ export default function MaintenanceScreen() {
   }, []);
 
   // Backend
-  const backendUrl =
-    process.env.EXPO_PUBLIC_BACKEND_URL ||
-    process.env.EXPO_BACKEND_URL ||
-    "http://localhost:4000";
+  const backendUrl = config.backendUrl;
 
   // Auth
   const [user, setUserState] = useState<any>(null);
@@ -133,13 +132,12 @@ export default function MaintenanceScreen() {
   const [tickets, setTickets] = useState<any[]>([]);
   const [selected, setSelected] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+  const [submittingTicket, setSubmittingTicket] = useState(false);
 
   // New ticket
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("General");
   const [desc, setDesc] = useState("");
-  const [newImages, setNewImages] = useState<string[]>([]);
-  const MAX_IMAGES = 5;
 
   // Category picker
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
@@ -152,8 +150,35 @@ export default function MaintenanceScreen() {
     "Security",
   ];
 
+  // New Request Collapse
+  const [newRequestExpanded, setNewRequestExpanded] = useState(false);
+
   // Comments
   const [message, setMessage] = useState("");
+  const scrollViewRef = useRef<ScrollView>(null);
+  const commentInputRef = useRef<TextInput>(null);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const showListener = require("react-native").Keyboard.addListener(
+      "keyboardDidShow",
+      () => setKeyboardVisible(true),
+    );
+    const hideListener = require("react-native").Keyboard.addListener(
+      "keyboardDidHide",
+      () => setKeyboardVisible(false),
+    );
+    return () => {
+      showListener.remove();
+      hideListener.remove();
+    };
+  }, []);
+
+  const scrollToCommentInput = useCallback(() => {
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+  }, []);
 
   // Toast
   const toastTimer = useRef<any>();
@@ -196,41 +221,10 @@ export default function MaintenanceScreen() {
     if (user) load();
   }, [user, load]);
 
-  const pickImage = useCallback(async () => {
-    try {
-      if (newImages.length >= MAX_IMAGES) {
-        Alert.alert("Limit", `You can attach up to ${MAX_IMAGES} images.`);
-        return;
-      }
-      const { status } =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== "granted") return;
-      const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.7,
-      });
-      if (res.canceled || !res.assets?.length) return;
-      const a = res.assets[0];
-      const mime = a.mimeType || "image/jpeg";
-      const b64 = await FileSystem.readAsStringAsync(a.uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-      const dataUrl = `data:${mime};base64,${b64}`;
-      setNewImages((prev) =>
-        prev.length < MAX_IMAGES ? [...prev, dataUrl] : prev,
-      );
-    } catch (e) {
-      console.warn("Image pick failed", e);
-    }
-  }, [newImages.length]);
-
-  const removeNewImage = (idx: number) => {
-    setNewImages((prev) => prev.filter((_, i) => i !== idx));
-  };
-
   const submitTicket = useCallback(async () => {
     if (!title.trim()) return;
     if (!user?.id || !user?.communityId) return;
+    setSubmittingTicket(true);
     try {
       const payload = {
         userId: user.id,
@@ -238,7 +232,6 @@ export default function MaintenanceScreen() {
         title: title.trim(),
         category: category.trim() || "General",
         description: desc.trim(),
-        images: newImages,
       };
       const res = await axios.post(
         `${backendUrl}/resident/maintenance`,
@@ -251,12 +244,13 @@ export default function MaintenanceScreen() {
       setTitle("");
       setCategory("General");
       setDesc("");
-      setNewImages([]);
       setTickets((prev) => [t, ...prev]);
       setSelected(t);
       showToast("Ticket created");
     } catch (e: any) {
       Alert.alert("Error", e?.response?.data?.error || "Failed to submit");
+    } finally {
+      setSubmittingTicket(false);
     }
   }, [
     backendUrl,
@@ -266,7 +260,6 @@ export default function MaintenanceScreen() {
     title,
     category,
     desc,
-    newImages,
     showToast,
   ]);
 
@@ -296,63 +289,11 @@ export default function MaintenanceScreen() {
     }
   }, [backendUrl, authHeaders, selected, user?.id, user?.name, message]);
 
-  const changeStatus = useCallback(
-    async (next: "submitted" | "in_progress" | "cancelled") => {
-      if (!selected || !user?.communityId) return;
-      try {
-        const res = await axios.patch(
-          `${backendUrl}/resident/maintenance/${selected.id}/status`,
-          { status: next, communityId: user.communityId },
-          { headers: authHeaders },
-        );
-        const updated = res.data;
-        setTickets((prev) =>
-          prev.map((t) => (t.id === updated.id ? updated : t)),
-        );
-        setSelected(updated);
-      } catch (e) {
-        Alert.alert("Error", "Failed to change status");
-      }
-    },
-    [backendUrl, authHeaders, selected, user?.communityId],
-  );
-
-  const attachImageToSelected = useCallback(async () => {
-    if (!selected) return;
-    if (newImages.length === 0) return;
-    const imageUrl = newImages[0];
-    try {
-      await axios.post(
-        `${backendUrl}/resident/maintenance/${selected.id}/images`,
-        { imageUrl },
-        { headers: authHeaders },
-      );
-      setSelected((s: any) => ({
-        ...s,
-        images: [...(s?.images || []), imageUrl],
-      }));
-      setTickets((prev) =>
-        prev.map((t) =>
-          t.id === selected.id
-            ? { ...t, images: [...(t.images || []), imageUrl] }
-            : t,
-        ),
-      );
-      setNewImages((prev) => prev.slice(1));
-      showToast("Image attached");
-    } catch (e) {
-      Alert.alert("Error", "Failed to attach image");
-    }
-  }, [backendUrl, authHeaders, selected, newImages, showToast]);
-
   // Responsive values
   const isSmallScreen = dimensions.width < 380;
   const padding = isSmallScreen ? 12 : 16;
   const cardPadding = isSmallScreen ? 12 : 14;
   const fontSize = isSmallScreen ? 16 : 18;
-  const imageSize = isSmallScreen ? 60 : 72;
-  const largeImageWidth = isSmallScreen ? 100 : 120;
-  const largeImageHeight = isSmallScreen ? 80 : 100;
 
   return (
     <KeyboardAvoidingView
@@ -361,6 +302,35 @@ export default function MaintenanceScreen() {
       keyboardVerticalOffset={insets.top}
     >
       <View style={{ flex: 1, backgroundColor: bg }}>
+        {/* Fixed Header */}
+        <View
+          style={[
+            styles.headerContainer,
+            {
+              paddingTop: Math.max(insets.top, 16),
+              backgroundColor: bg,
+              borderBottomColor: border,
+            },
+          ]}
+        >
+          <View style={styles.header}>
+            <View style={styles.headerLeft}>
+              <TouchableOpacity
+                onPress={() => router.back()}
+                style={styles.backButton}
+              >
+                <Feather name="arrow-left" size={24} color={tint} />
+              </TouchableOpacity>
+              <View>
+                <Text style={[styles.title, { color: text }]}>Maintenance</Text>
+                <Text style={[styles.subtitle, { color: muted }]}>
+                  Submit and track requests
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
         {/* Toast */}
         {toast ? (
           <View
@@ -384,34 +354,12 @@ export default function MaintenanceScreen() {
           contentContainerStyle={{
             padding: padding,
             gap: padding,
-            paddingTop: insets.top + 8,
+            paddingBottom: keyboardVisible ? 400 : padding,
           }}
           showsVerticalScrollIndicator={false}
+          ref={scrollViewRef}
+          keyboardShouldPersistTaps="handled"
         >
-          {/* Header */}
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <View
-              style={{
-                height: 28,
-                width: 28,
-                borderRadius: 6,
-                alignItems: "center",
-                justifyContent: "center",
-                borderWidth: 1,
-                borderColor: border,
-                backgroundColor: theme === "dark" ? "#0B0B0B" : "#F9FAFB",
-              }}
-            >
-              <Feather name="tool" size={16} color={icon as any} />
-            </View>
-            <Text
-              style={{ color: text, fontSize: fontSize, fontWeight: "800" }}
-            >
-              Maintenance
-            </Text>
-          </View>
-
-          {/* New Request */}
           <View
             style={[
               styles.card,
@@ -422,166 +370,143 @@ export default function MaintenanceScreen() {
               },
             ]}
           >
-            <Text style={[styles.cardTitle, { color: text }]}>New Request</Text>
-            <View style={{ gap: 10 }}>
-              <TextInput
-                placeholder="Title (e.g., Leaking tap)"
-                placeholderTextColor={icon as any}
-                value={title}
-                onChangeText={setTitle}
-                style={[
-                  styles.input,
-                  {
-                    color: text,
-                    borderColor: border,
-                    backgroundColor: theme === "dark" ? "#0B0B0B" : "#F9FAFB",
-                  },
-                ]}
+            <TouchableOpacity
+              onPress={() => setNewRequestExpanded(!newRequestExpanded)}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <Text style={[styles.cardTitle, { color: text }]}>
+                New Request
+              </Text>
+              <Feather
+                name={newRequestExpanded ? "chevron-up" : "chevron-down"}
+                size={20}
+                color={icon as any}
               />
-
-              {/* Category Picker Button */}
-              <TouchableOpacity
-                onPress={() => setCategoryPickerOpen(true)}
-                style={[
-                  styles.input,
-                  {
-                    borderColor: border,
-                    backgroundColor: theme === "dark" ? "#0B0B0B" : "#F9FAFB",
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                  },
-                ]}
-                activeOpacity={0.7}
-              >
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 10,
-                    flex: 1,
-                  }}
-                >
-                  <Feather
-                    name={
-                      category === "Electrical"
-                        ? "zap"
-                        : category === "Plumbing"
-                          ? "droplet"
-                          : category === "Carpentry"
-                            ? "tool"
-                            : category === "Cleaning"
-                              ? "refresh-cw"
-                              : category === "Security"
-                                ? "shield"
-                                : "settings"
-                    }
-                    size={16}
-                    color={icon as any}
-                  />
-                  <Text
-                    style={{
+            </TouchableOpacity>
+            {newRequestExpanded && (
+              <View style={{ gap: 10 }}>
+                <TextInput
+                  placeholder="Title (e.g., Leaking tap)"
+                  placeholderTextColor={icon as any}
+                  value={title}
+                  onChangeText={setTitle}
+                  style={[
+                    styles.input,
+                    {
                       color: text,
-                      fontSize: 16,
+                      borderColor: border,
+                      backgroundColor: theme === "dark" ? "#0B0B0B" : "#F9FAFB",
+                    },
+                  ]}
+                />
+
+                {/* Category Picker Button */}
+                <TouchableOpacity
+                  onPress={() => setCategoryPickerOpen(true)}
+                  style={[
+                    styles.input,
+                    {
+                      borderColor: border,
+                      backgroundColor: theme === "dark" ? "#0B0B0B" : "#F9FAFB",
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    },
+                  ]}
+                  activeOpacity={0.7}
+                >
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 10,
                       flex: 1,
                     }}
                   >
-                    {category}
-                  </Text>
-                </View>
-                <Feather name="chevron-down" size={16} color={icon as any} />
-              </TouchableOpacity>
+                    <Feather
+                      name={
+                        category === "Electrical"
+                          ? "zap"
+                          : category === "Plumbing"
+                            ? "droplet"
+                            : category === "Carpentry"
+                              ? "tool"
+                              : category === "Cleaning"
+                                ? "refresh-cw"
+                                : category === "Security"
+                                  ? "shield"
+                                  : "settings"
+                      }
+                      size={16}
+                      color={icon as any}
+                    />
+                    <Text
+                      style={{
+                        color: text,
+                        fontSize: 16,
+                        flex: 1,
+                      }}
+                    >
+                      {category}
+                    </Text>
+                  </View>
+                  <Feather name="chevron-down" size={16} color={icon as any} />
+                </TouchableOpacity>
 
-              <TextInput
-                placeholder="Describe the issue in detail…"
-                placeholderTextColor={icon as any}
-                value={desc}
-                onChangeText={setDesc}
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-                style={[
-                  styles.textarea,
-                  {
-                    color: text,
-                    borderColor: border,
-                    backgroundColor: theme === "dark" ? "#0B0B0B" : "#F9FAFB",
-                  },
-                ]}
-              />
-
-              {/* Staged images */}
-              {newImages.length > 0 ? (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ gap: 8 }}
-                >
-                  {newImages.map((u, i) => (
-                    <View key={i} style={{ alignItems: "center" }}>
-                      <Image
-                        source={{ uri: u }}
-                        style={{
-                          width: imageSize,
-                          height: imageSize,
-                          borderRadius: 8,
-                          borderWidth: 1,
-                          borderColor: border,
-                        }}
-                      />
-                      <TouchableOpacity onPress={() => removeNewImage(i)}>
-                        <Text
-                          style={{
-                            color: icon as any,
-                            marginTop: 4,
-                            fontSize: 12,
-                          }}
-                        >
-                          Remove
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </ScrollView>
-              ) : null}
-
-              <View
-                style={{
-                  flexDirection: isSmallScreen ? "column" : "row",
-                  gap: 8,
-                }}
-              >
-                <TouchableOpacity
-                  onPress={pickImage}
+                <TextInput
+                  placeholder="Describe the issue in detail…"
+                  placeholderTextColor={icon as any}
+                  value={desc}
+                  onChangeText={setDesc}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
                   style={[
-                    styles.btn,
-                    styles.btnOutline,
+                    styles.textarea,
                     {
+                      color: text,
                       borderColor: border,
-                      flex: isSmallScreen ? undefined : 1,
+                      backgroundColor: theme === "dark" ? "#0B0B0B" : "#F9FAFB",
                     },
                   ]}
+                />
+
+                <View
+                  style={{
+                    flexDirection: isSmallScreen ? "column" : "row",
+                    gap: 8,
+                  }}
                 >
-                  <Feather name="image" size={16} color={icon as any} />
-                  <Text style={{ color: icon as any, fontWeight: "700" }}>
-                    Add Image
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={submitTicket}
-                  style={[
-                    styles.btn,
-                    styles.btnPrimary,
-                    { flex: isSmallScreen ? undefined : 1 },
-                  ]}
-                >
-                  <Feather name="plus" size={16} color="#fff" />
-                  <Text style={{ color: "#fff", fontWeight: "700" }}>
-                    Submit Request
-                  </Text>
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={submitTicket}
+                    disabled={submittingTicket}
+                    style={[
+                      styles.btn,
+                      styles.btnPrimary,
+                      {
+                        flex: isSmallScreen ? undefined : 1,
+                        opacity: submittingTicket ? 0.7 : 1,
+                      },
+                    ]}
+                  >
+                    {submittingTicket ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <>
+                        <Feather name="plus" size={16} color="#fff" />
+                        <Text style={{ color: "#fff", fontWeight: "700" }}>
+                          Submit Request
+                        </Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
-            </View>
+            )}
           </View>
 
           {/* My Tickets */}
@@ -644,57 +569,68 @@ export default function MaintenanceScreen() {
             ) : tickets.length === 0 ? (
               <Text style={{ color: icon as any }}>No requests yet.</Text>
             ) : (
-              <View style={{ gap: 8 }}>
-                {tickets.map((t) => (
-                  <TouchableOpacity
-                    key={t.id}
-                    onPress={() => setSelected(t)}
-                    style={[
-                      styles.listItem,
-                      {
-                        borderColor: selected?.id === t.id ? "#c7d2fe" : border,
-                        backgroundColor:
-                          selected?.id === t.id
-                            ? theme === "dark"
-                              ? "#0b1220"
-                              : "#eef2ff"
-                            : "transparent",
-                        flexDirection: isSmallScreen ? "column" : "row",
-                        alignItems: isSmallScreen ? "flex-start" : "center",
-                        gap: isSmallScreen ? 8 : 10,
-                      },
-                    ]}
-                  >
-                    <View
-                      style={{ flex: 1, minWidth: isSmallScreen ? "100%" : 0 }}
+              <ScrollView
+                style={{ maxHeight: 380 }}
+                scrollEnabled={tickets.length > 5}
+                nestedScrollEnabled={true}
+                showsVerticalScrollIndicator={true}
+              >
+                <View style={{ gap: 8 }}>
+                  {tickets.map((t) => (
+                    <TouchableOpacity
+                      key={t.id}
+                      onPress={() => setSelected(t)}
+                      style={[
+                        styles.listItem,
+                        {
+                          borderColor:
+                            selected?.id === t.id ? "#c7d2fe" : border,
+                          backgroundColor:
+                            selected?.id === t.id
+                              ? theme === "dark"
+                                ? "#0b1220"
+                                : "#eef2ff"
+                              : "transparent",
+                          flexDirection: isSmallScreen ? "column" : "row",
+                          alignItems: isSmallScreen ? "flex-start" : "center",
+                          gap: isSmallScreen ? 8 : 10,
+                        },
+                      ]}
                     >
-                      <Text
+                      <View
                         style={{
-                          color: text,
-                          fontWeight: "700",
-                          fontSize: isSmallScreen ? 14 : 15,
+                          flex: 1,
+                          minWidth: isSmallScreen ? "100%" : 0,
                         }}
                       >
-                        {t.title}
-                      </Text>
-                      <Text
-                        style={{
-                          color: icon as any,
-                          fontSize: isSmallScreen ? 12 : 13,
-                        }}
-                      >
-                        {t.category} •{" "}
-                        {new Date(
-                          t.createdAt || t.created_at || Date.now(),
-                        ).toLocaleDateString()}
-                      </Text>
-                    </View>
-                    <StatusChip
-                      status={(t.status || "submitted").toLowerCase()}
-                    />
-                  </TouchableOpacity>
-                ))}
-              </View>
+                        <Text
+                          style={{
+                            color: text,
+                            fontWeight: "700",
+                            fontSize: isSmallScreen ? 14 : 15,
+                          }}
+                        >
+                          {t.title}
+                        </Text>
+                        <Text
+                          style={{
+                            color: icon as any,
+                            fontSize: isSmallScreen ? 12 : 13,
+                          }}
+                        >
+                          {t.category} •{" "}
+                          {new Date(
+                            t.createdAt || t.created_at || Date.now(),
+                          ).toLocaleDateString()}
+                        </Text>
+                      </View>
+                      <StatusChip
+                        status={(t.status || "submitted").toLowerCase()}
+                      />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
             )}
           </View>
 
@@ -756,137 +692,6 @@ export default function MaintenanceScreen() {
                 </View>
 
                 {/* Images */}
-                <View>
-                  <Text
-                    style={{ color: text, fontWeight: "700", marginBottom: 6 }}
-                  >
-                    Images
-                  </Text>
-                  {selected.images?.length ? (
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={{ gap: 10 }}
-                    >
-                      {(selected.images || []).map((src: string, i: number) => (
-                        <Image
-                          key={i}
-                          source={{ uri: src }}
-                          style={{
-                            width: largeImageWidth,
-                            height: largeImageHeight,
-                            borderRadius: 10,
-                            borderWidth: 1,
-                            borderColor: border,
-                          }}
-                        />
-                      ))}
-                    </ScrollView>
-                  ) : (
-                    <Text style={{ color: icon as any, fontSize: 14 }}>
-                      No images
-                    </Text>
-                  )}
-
-                  {newImages.length > 0 ? (
-                    <View style={{ marginTop: 8, gap: 8 }}>
-                      <Text style={{ color: icon as any, fontSize: 14 }}>
-                        Staged to attach:
-                      </Text>
-                      <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={{ gap: 8 }}
-                      >
-                        {newImages.map((u, i) => (
-                          <Image
-                            key={i}
-                            source={{ uri: u }}
-                            style={{
-                              width: imageSize,
-                              height: imageSize,
-                              borderRadius: 8,
-                              borderWidth: 1,
-                              borderColor: border,
-                            }}
-                          />
-                        ))}
-                      </ScrollView>
-                      <View
-                        style={{
-                          flexDirection: isSmallScreen ? "column" : "row",
-                          gap: 8,
-                        }}
-                      >
-                        <TouchableOpacity
-                          onPress={pickImage}
-                          style={[
-                            styles.btn,
-                            styles.btnOutline,
-                            {
-                              borderColor: border,
-                              flex: isSmallScreen ? undefined : 1,
-                            },
-                          ]}
-                        >
-                          <Feather name="image" size={16} color={icon as any} />
-                          <Text
-                            style={{ color: icon as any, fontWeight: "700" }}
-                          >
-                            Add More
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={attachImageToSelected}
-                          style={[
-                            styles.btn,
-                            styles.btnPrimary,
-                            { flex: isSmallScreen ? undefined : 1 },
-                          ]}
-                        >
-                          <Feather name="paperclip" size={16} color="#fff" />
-                          <Text style={{ color: "#fff", fontWeight: "700" }}>
-                            Attach
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  ) : (
-                    <TouchableOpacity
-                      onPress={pickImage}
-                      style={[
-                        styles.btn,
-                        styles.btnOutline,
-                        { borderColor: border, marginTop: 8 },
-                      ]}
-                    >
-                      <Feather name="image" size={16} color={icon as any} />
-                      <Text style={{ color: icon as any, fontWeight: "700" }}>
-                        Add Image
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                {/* Quick actions */}
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <TouchableOpacity
-                    onPress={() => changeStatus("cancelled")}
-                    disabled={selected.status === "cancelled"}
-                    style={[
-                      styles.btn,
-                      styles.btnOutline,
-                      {
-                        borderColor: border,
-                        opacity: selected.status === "cancelled" ? 0.6 : 1,
-                      },
-                    ]}
-                  >
-                    <Text style={{ color: icon as any, fontWeight: "700" }}>
-                      Cancel
-                    </Text>
-                  </TouchableOpacity>
-                </View>
 
                 {/* Comments */}
                 <View>
@@ -960,11 +765,13 @@ export default function MaintenanceScreen() {
                       }}
                     >
                       <TextInput
+                        ref={commentInputRef}
                         placeholder="Write a message…"
                         placeholderTextColor={icon as any}
                         value={message}
                         onChangeText={setMessage}
                         onSubmitEditing={addComment}
+                        onFocus={scrollToCommentInput}
                         style={[
                           styles.input,
                           {
@@ -1148,6 +955,33 @@ export default function MaintenanceScreen() {
 }
 
 const styles = StyleSheet.create({
+  headerContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
+  },
+  backButton: {
+    padding: 8,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: "700",
+  },
+  subtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
   card: {
     borderWidth: 1,
     borderRadius: 12,

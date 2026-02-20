@@ -9,18 +9,20 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  TouchableOpacity,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { router } from "expo-router";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import axios from "axios";
 import { getUser, getToken } from "@/lib/auth";
-import { File, Paths } from "expo-file-system/next";
+import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
-import { Buffer } from "buffer";
+import { config } from "@/lib/config";
 
-const API = process.env.EXPO_PUBLIC_BACKEND_URL;
+const API = config.backendUrl;
 
 type PDF = {
   id: string;
@@ -32,6 +34,8 @@ export default function Documents() {
   const theme = useColorScheme() ?? "light";
   const bg = useThemeColor({}, "background");
   const text = useThemeColor({}, "text");
+  const tint = useThemeColor({}, "tint");
+  const muted = useThemeColor({}, "icon");
   const cardBg = theme === "dark" ? "#1F1F1F" : "#ffffff";
   const borderCol =
     theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
@@ -41,6 +45,12 @@ export default function Documents() {
   const [filteredPdfs, setFilteredPdfs] = useState<PDF[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2000);
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -93,33 +103,47 @@ export default function Documents() {
         responseType: "arraybuffer",
       });
 
+      if (!response.data || response.data.byteLength === 0) {
+        throw new Error("PDF file is empty");
+      }
+
       const fileName = pdf.name.endsWith(".pdf") ? pdf.name : `${pdf.name}.pdf`;
 
-      // Use new FileSystem API
+      // Convert ArrayBuffer to Uint8Array
+      const uint8Array = new Uint8Array(response.data);
+
+      // Use new File API to write the PDF
       const file = new File(Paths.cache, fileName);
+      const writableStream = file.writableStream();
+      const writer = writableStream.getWriter();
 
-      // Convert ArrayBuffer to base64
-      const base64 = Buffer.from(response.data).toString("base64");
+      try {
+        await writer.write(uint8Array);
+        await writer.close();
+      } catch (streamErr) {
+        await writer.abort();
+        throw streamErr;
+      }
 
-      // Write file using new API
-      await file.write(base64);
+      // Verify file exists
+      if (!file.exists) {
+        throw new Error("Failed to save PDF file");
+      }
 
-      // Share the file
+      // Open the PDF file directly
       if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(file.uri, {
+        await Sharing.openAsync(file.uri, {
           mimeType: "application/pdf",
-          dialogTitle: "Save or Share PDF",
           UTI: "com.adobe.pdf",
         });
-      } else {
-        Alert.alert("Success", `PDF saved to ${file.uri}`);
       }
-    } catch (err) {
-      console.error("Error downloading PDF:", err);
-      Alert.alert(
-        "Error",
-        "Failed to download PDF: " + (err?.message || "Unknown error"),
-      );
+
+      showToast("PDF opened successfully");
+    } catch (err: any) {
+      console.error("Error opening PDF:", err);
+      const errorMsg =
+        err?.response?.data?.error || err?.message || "Unknown error";
+      Alert.alert("Failed to Open PDF", `Error: ${errorMsg}`);
     } finally {
       setDownloadingId(null);
     }
@@ -143,56 +167,58 @@ export default function Documents() {
   }
 
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: bg, paddingTop: insets.top },
-      ]}
-    >
-      {/* Header */}
+    <View style={[styles.container, { backgroundColor: bg }]}>
+      {/* Fixed Header */}
       <View
         style={[
-          styles.header,
-          { backgroundColor: cardBg, borderColor: borderCol },
+          styles.headerContainer,
+          {
+            paddingTop: Math.max(insets.top, 16),
+            backgroundColor: bg,
+            borderBottomColor: borderCol,
+          },
         ]}
       >
-        <View style={styles.headerLeft}>
-          <View style={styles.headerIcon}>
-            <Feather name="file-text" size={24} color="#6366F1" />
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={styles.backButton}
+            >
+              <Feather name="arrow-left" size={24} color={tint} />
+            </TouchableOpacity>
+            <View>
+              <Text style={[styles.title, { color: text }]}>Documents</Text>
+              <Text style={[styles.subtitle, { color: muted }]}>
+                {filteredPdfs.length}{" "}
+                {filteredPdfs.length === 1 ? "Document" : "Documents"}
+              </Text>
+            </View>
           </View>
-          <View>
-            <Text style={[styles.headerTitle, { color: text }]}>Documents</Text>
-          </View>
-        </View>
-        <View style={styles.countBadge}>
-          <Text style={styles.countBadgeText}>
-            {filteredPdfs.length}{" "}
-            {filteredPdfs.length === 1 ? "Document" : "Documents"}
-          </Text>
         </View>
       </View>
 
-      {/* Search Bar */}
-      <View style={styles.searchSection}>
-        <View
-          style={[
-            styles.searchContainer,
-            { backgroundColor: cardBg, borderColor: borderCol },
-          ]}
-        >
-          <Feather name="search" size={20} color="#9CA3AF" />
-          <TextInput
-            style={[styles.searchInput, { color: text }]}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder="Search documents by name..."
-            placeholderTextColor="#9CA3AF"
-          />
+      <ScrollView style={styles.scrollView}>
+        {/* Search Bar */}
+        <View style={styles.searchSection}>
+          <View
+            style={[
+              styles.searchContainer,
+              { backgroundColor: cardBg, borderColor: borderCol },
+            ]}
+          >
+            <Feather name="search" size={20} color="#9CA3AF" />
+            <TextInput
+              style={[styles.searchInput, { color: text }]}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search documents by name..."
+              placeholderTextColor="#9CA3AF"
+            />
+          </View>
         </View>
-      </View>
 
-      {/* Documents List */}
-      <ScrollView style={styles.content}>
+        {/* Documents List */}
         {filteredPdfs.length === 0 ? (
           <View
             style={[
@@ -248,14 +274,12 @@ export default function Documents() {
                 {downloadingId === pdf.id ? (
                   <>
                     <ActivityIndicator size="small" color="#059669" />
-                    <Text style={styles.downloadButtonText}>
-                      Downloading...
-                    </Text>
+                    <Text style={styles.downloadButtonText}>Opening...</Text>
                   </>
                 ) : (
                   <>
-                    <Feather name="download" size={18} color="#059669" />
-                    <Text style={styles.downloadButtonText}>Download</Text>
+                    <Feather name="eye" size={18} color="#059669" />
+                    <Text style={styles.downloadButtonText}>View</Text>
                   </>
                 )}
               </Pressable>
@@ -263,6 +287,24 @@ export default function Documents() {
           ))
         )}
       </ScrollView>
+
+      {/* Toast Notification */}
+      {toast && (
+        <View
+          style={{
+            position: "absolute",
+            bottom: 20,
+            alignSelf: "center",
+            backgroundColor: "#111827",
+            paddingHorizontal: 16,
+            paddingVertical: 12,
+            borderRadius: 8,
+            zIndex: 10,
+          }}
+        >
+          <Text style={{ color: "#fff", fontSize: 14 }}>{toast}</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -272,39 +314,36 @@ const styles = StyleSheet.create({
   centered: { alignItems: "center", justifyContent: "center" },
   loadingText: { marginTop: 12, fontSize: 16 },
 
+  headerContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+  },
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    padding: 16,
-    borderBottomWidth: 1,
+    justifyContent: "space-between",
   },
   headerLeft: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+    flex: 1,
   },
-  headerIcon: {
-    padding: 12,
-    backgroundColor: "#EEF2FF",
-    borderRadius: 12,
+  backButton: {
+    padding: 8,
   },
-  headerTitle: {
-    fontSize: 24,
+  title: {
+    fontSize: 20,
     fontWeight: "700",
   },
-  countBadge: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: "#EEF2FF",
-    borderWidth: 1,
-    borderColor: "#C7D2FE",
-    borderRadius: 8,
+  subtitle: {
+    fontSize: 12,
+    marginTop: 2,
   },
-  countBadgeText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#4F46E5",
+
+  scrollView: {
+    flex: 1,
   },
 
   searchSection: {
@@ -323,11 +362,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     paddingVertical: 4,
-  },
-
-  content: {
-    flex: 1,
-    paddingHorizontal: 16,
   },
 
   emptyCard: {

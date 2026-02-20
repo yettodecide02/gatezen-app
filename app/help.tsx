@@ -10,9 +10,11 @@ import {
   Alert,
   Linking,
   Modal,
+  TouchableOpacity,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { router } from "expo-router";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
 
@@ -35,6 +37,8 @@ export default function Help() {
   const theme = useColorScheme() ?? "light";
   const bg = useThemeColor({}, "background");
   const text = useThemeColor({}, "text");
+  const tint = useThemeColor({}, "tint");
+  const muted = useThemeColor({}, "icon");
   const cardBg = theme === "dark" ? "#1F1F1F" : "#ffffff";
   const borderCol =
     theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
@@ -180,28 +184,42 @@ export default function Help() {
   };
 
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: bg, paddingTop: insets.top },
-      ]}
-    >
-      {/* Header */}
+    <View style={[styles.container, { backgroundColor: bg }]}>
+      {/* Fixed Header */}
       <View
         style={[
-          styles.header,
-          { backgroundColor: cardBg, borderColor: borderCol },
+          styles.headerContainer,
+          {
+            paddingTop: Math.max(insets.top, 16),
+            backgroundColor: bg,
+            borderBottomColor: borderCol,
+          },
         ]}
       >
-        <View style={styles.headerLeft}>
-          <Feather name="help-circle" size={24} color={text} />
-          <Text style={[styles.headerTitle, { color: text }]}>
-            Help & Support
-          </Text>
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={styles.backButton}
+            >
+              <Feather name="arrow-left" size={24} color={tint} />
+            </TouchableOpacity>
+            <View>
+              <Text style={[styles.title, { color: text }]}>
+                Help & Support
+              </Text>
+              <Text style={[styles.subtitle, { color: muted }]}>
+                Get answers and support
+              </Text>
+            </View>
+          </View>
         </View>
       </View>
 
-      <ScrollView style={styles.content}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.content}
+      >
         {/* Quick Actions */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: text }]}>
@@ -479,25 +497,39 @@ export default function Help() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
 
+  headerContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+  },
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    padding: 16,
-    borderBottomWidth: 1,
+    justifyContent: "space-between",
   },
   headerLeft: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+    flex: 1,
   },
-  headerTitle: {
-    fontSize: 24,
+  backButton: {
+    padding: 8,
+  },
+  title: {
+    fontSize: 20,
     fontWeight: "700",
+  },
+  subtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+
+  scrollView: {
+    flex: 1,
   },
 
   content: {
-    flex: 1,
     padding: 16,
   },
 

@@ -20,12 +20,14 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import { router } from "expo-router";
 import axios from "axios";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { getToken, getUser } from "@/lib/auth";
 import { useToast } from "@/hooks/useToast";
 import Toast from "@/components/Toast";
+import { config } from "@/lib/config";
 
 function fmtTime(dt: string | number | Date) {
   const d = new Date(dt);
@@ -132,14 +134,13 @@ export default function BookingsScreen() {
   const bg = useThemeColor({}, "background");
   const text = useThemeColor({}, "text");
   const icon = useThemeColor({}, "icon");
+  const tint = useThemeColor({}, "tint");
+  const muted = useThemeColor({}, "icon");
   const card = theme === "dark" ? "#111111" : "#ffffff";
   const border = theme === "dark" ? "#262626" : "#E5E7EB";
 
   // Backend
-  const backendUrl =
-    process.env.EXPO_PUBLIC_BACKEND_URL ||
-    process.env.EXPO_BACKEND_URL ||
-    "http://localhost:4000";
+  const backendUrl = config.backendUrl;
 
   // Toast system
   const { showError, showSuccess, toast, hideToast } = useToast();
@@ -199,6 +200,7 @@ export default function BookingsScreen() {
   const [slots, setSlots] = useState<{ start: string; end: string }[]>([]);
   const [userBookingsToday, setUserBookingsToday] = useState<Booking[]>([]);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [newBookingExpanded, setNewBookingExpanded] = useState(false);
 
   // Modals
   const [facilitiesOpen, setFacilitiesOpen] = useState(false);
@@ -530,7 +532,38 @@ export default function BookingsScreen() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: bg, paddingTop: insets.top + 8 }}>
+    <View style={{ flex: 1, backgroundColor: bg }}>
+      {/* Fixed Header */}
+      <View
+        style={[
+          styles.headerContainer,
+          {
+            paddingTop: Math.max(insets.top, 16),
+            backgroundColor: bg,
+            borderBottomColor: border,
+          },
+        ]}
+      >
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={styles.backButton}
+            >
+              <Feather name="arrow-left" size={24} color={tint} />
+            </TouchableOpacity>
+            <View>
+              <Text style={[styles.title, { color: text }]}>
+                Facility Bookings
+              </Text>
+              <Text style={[styles.subtitle, { color: muted }]}>
+                Book community facilities
+              </Text>
+            </View>
+          </View>
+        </View>
+      </View>
+
       <Toast
         message={toast.message}
         type={toast.type}
@@ -539,238 +572,244 @@ export default function BookingsScreen() {
       />
 
       <ScrollView
-        contentContainerStyle={{ padding: 16, gap: 18 }}
+        contentContainerStyle={{ padding: 16, gap: 18, paddingTop: 8 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-          <View
-            style={{
-              height: 32,
-              width: 32,
-              borderRadius: 8,
-              alignItems: "center",
-              justifyContent: "center",
-              borderWidth: 1,
-              borderColor: border,
-              backgroundColor: theme === "dark" ? "#0B0B0B" : "#F9FAFB",
-            }}
-          >
-            <Feather name="calendar" size={18} color={icon as any} />
-          </View>
-          <Text style={{ color: text, fontSize: 20, fontWeight: "800" }}>
-            Facility Bookings
-          </Text>
-        </View>
-
         {/* New Booking */}
         <View
           style={[styles.card, { backgroundColor: card, borderColor: border }]}
         >
-          <Text style={[styles.cardTitle, { color: text }]}>New Booking</Text>
-          <View style={{ gap: 10 }}>
-            {/* Facility */}
-            <Text style={[styles.label, { color: icon as any }]}>Facility</Text>
-            <TouchableOpacity
-              onPress={() => setFacilitiesOpen(true)}
-              style={[
-                styles.select,
-                {
-                  borderColor: border,
-                  backgroundColor: theme === "dark" ? "#0B0B0B" : "#F9FAFB",
-                  minHeight: 48, // Better touch target for mobile
-                },
-              ]}
-            >
-              <Text style={{ color: text, fontSize: 16 }} numberOfLines={1}>
-                {facility?.facilityType || facility?.name || "Select facility"}
+          <TouchableOpacity
+            onPress={() => setNewBookingExpanded(!newBookingExpanded)}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: newBookingExpanded ? 12 : 0,
+            }}
+          >
+            <Text style={[styles.cardTitle, { color: text }]}>New Booking</Text>
+            <Feather
+              name={newBookingExpanded ? "chevron-up" : "chevron-down"}
+              size={24}
+              color={tint}
+            />
+          </TouchableOpacity>
+          {newBookingExpanded && (
+            <View style={{ gap: 10 }}>
+              {/* Facility */}
+              <Text style={[styles.label, { color: icon as any }]}>
+                Facility
               </Text>
-              <Feather name="chevron-down" size={20} color={icon as any} />
-            </TouchableOpacity>
-
-            {/* Date */}
-            <Text style={[styles.label, { color: icon as any }]}>Date</Text>
-            <View
-              style={{ flexDirection: "row", gap: 10, alignItems: "center" }}
-            >
               <TouchableOpacity
-                onPress={() => shiftDay(-1)}
+                onPress={() => setFacilitiesOpen(true)}
                 style={[
-                  styles.btn,
-                  styles.btnOutline,
+                  styles.select,
                   {
                     borderColor: border,
-                    minHeight: 48,
-                    minWidth: 48,
-                    justifyContent: "center",
+                    backgroundColor: theme === "dark" ? "#0B0B0B" : "#F9FAFB",
+                    minHeight: 48, // Better touch target for mobile
                   },
                 ]}
               >
-                <Feather name="chevron-left" size={20} color={icon as any} />
+                <Text style={{ color: text, fontSize: 16 }} numberOfLines={1}>
+                  {facility?.facilityType ||
+                    facility?.name ||
+                    "Select facility"}
+                </Text>
+                <Feather name="chevron-down" size={20} color={icon as any} />
               </TouchableOpacity>
+
+              {/* Date */}
+              <Text style={[styles.label, { color: icon as any }]}>Date</Text>
+              <View
+                style={{ flexDirection: "row", gap: 10, alignItems: "center" }}
+              >
+                <TouchableOpacity
+                  onPress={() => shiftDay(-1)}
+                  style={[
+                    styles.btn,
+                    styles.btnOutline,
+                    {
+                      borderColor: border,
+                      minHeight: 48,
+                      minWidth: 48,
+                      justifyContent: "center",
+                    },
+                  ]}
+                >
+                  <Feather name="chevron-left" size={20} color={icon as any} />
+                </TouchableOpacity>
+                <TextInput
+                  value={date}
+                  onChangeText={setDate}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor={icon as any}
+                  style={[
+                    styles.input,
+                    {
+                      flex: 1,
+                      color: text,
+                      borderColor: border,
+                      backgroundColor: theme === "dark" ? "#0B0B0B" : "#F9FAFB",
+                      minHeight: 48,
+                      fontSize: 16,
+                      textAlign: "center",
+                    },
+                  ]}
+                />
+                <TouchableOpacity
+                  onPress={() => shiftDay(+1)}
+                  style={[
+                    styles.btn,
+                    styles.btnOutline,
+                    {
+                      borderColor: border,
+                      minHeight: 48,
+                      minWidth: 48,
+                      justifyContent: "center",
+                    },
+                  ]}
+                >
+                  <Feather name="chevron-right" size={20} color={icon as any} />
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity
+                onPress={() => setDate(new Date().toISOString().slice(0, 10))}
+                style={[
+                  styles.btn,
+                  styles.btnGhost,
+                  {
+                    alignSelf: "flex-start",
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                  },
+                ]}
+              >
+                <Text
+                  style={{
+                    color: icon as any,
+                    fontSize: 12,
+                    fontWeight: "600",
+                  }}
+                >
+                  Today
+                </Text>
+              </TouchableOpacity>
+
+              {/* Slot */}
+              <Text style={[styles.label, { color: icon as any }]}>
+                Time Slot
+              </Text>
+              <TouchableOpacity
+                onPress={() => setSlotsOpen(true)}
+                style={[
+                  styles.select,
+                  {
+                    borderColor: border,
+                    backgroundColor: theme === "dark" ? "#0B0B0B" : "#F9FAFB",
+                  },
+                ]}
+              >
+                <Text style={{ color: text, fontSize: 16 }} numberOfLines={1}>
+                  {selectedSlot
+                    ? `${fmtTime(selectedSlot)} – ${fmtTime(
+                        (slots.find((s) => s.start === selectedSlot)
+                          ?.end as any) || selectedSlot,
+                      )}`
+                    : "Select time slot"}
+                </Text>
+                <Feather name="chevron-down" size={20} color={icon as any} />
+              </TouchableOpacity>
+
+              {/* People Count */}
+              <Text style={[styles.label, { color: icon as any }]}>
+                How many people?
+              </Text>
               <TextInput
-                value={date}
-                onChangeText={setDate}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={icon as any}
+                keyboardType="number-pad"
+                value={String(peopleCount)}
+                onChangeText={(v) => {
+                  const num = parseInt(v || "1", 10);
+                  const cap = facility?.capacity || 10;
+                  setPeopleCount(
+                    isNaN(num) ? 1 : Math.max(1, Math.min(num, cap)),
+                  );
+                }}
                 style={[
                   styles.input,
                   {
-                    flex: 1,
                     color: text,
                     borderColor: border,
                     backgroundColor: theme === "dark" ? "#0B0B0B" : "#F9FAFB",
-                    minHeight: 48,
-                    fontSize: 16,
-                    textAlign: "center",
                   },
                 ]}
               />
+
+              {/* Note */}
+              <Text style={[styles.label, { color: icon as any }]}>
+                Note (optional)
+              </Text>
+              <TextInput
+                placeholder="Birthday party, team meeting, etc."
+                placeholderTextColor={icon as any}
+                value={note}
+                onChangeText={setNote}
+                style={[
+                  styles.input,
+                  {
+                    color: text,
+                    borderColor: border,
+                    backgroundColor: theme === "dark" ? "#0B0B0B" : "#F9FAFB",
+                  },
+                ]}
+              />
+
+              <Text style={{ color: icon as any, fontSize: 12 }}>
+                You have {Math.floor(minsLeft / 60)}h {minsLeft % 60}m left to
+                book today.
+              </Text>
+
               <TouchableOpacity
-                onPress={() => shiftDay(+1)}
+                onPress={createBooking}
+                disabled={!facilityId || !selectedSlot}
                 style={[
                   styles.btn,
-                  styles.btnOutline,
+                  styles.btnPrimary,
                   {
-                    borderColor: border,
-                    minHeight: 48,
-                    minWidth: 48,
+                    opacity: !facilityId || !selectedSlot ? 0.6 : 1,
+                    minHeight: 52,
                     justifyContent: "center",
                   },
                 ]}
               >
-                <Feather name="chevron-right" size={20} color={icon as any} />
-              </TouchableOpacity>
-            </View>
-            <TouchableOpacity
-              onPress={() => setDate(new Date().toISOString().slice(0, 10))}
-              style={[
-                styles.btn,
-                styles.btnGhost,
-                {
-                  alignSelf: "flex-start",
-                  paddingHorizontal: 8,
-                  paddingVertical: 4,
-                },
-              ]}
-            >
-              <Text
-                style={{ color: icon as any, fontSize: 12, fontWeight: "600" }}
-              >
-                Today
-              </Text>
-            </TouchableOpacity>
-
-            {/* Slot */}
-            <Text style={[styles.label, { color: icon as any }]}>
-              Time Slot
-            </Text>
-            <TouchableOpacity
-              onPress={() => setSlotsOpen(true)}
-              style={[
-                styles.select,
-                {
-                  borderColor: border,
-                  backgroundColor: theme === "dark" ? "#0B0B0B" : "#F9FAFB",
-                },
-              ]}
-            >
-              <Text style={{ color: text, fontSize: 16 }} numberOfLines={1}>
-                {selectedSlot
-                  ? `${fmtTime(selectedSlot)} – ${fmtTime(
-                      (slots.find((s) => s.start === selectedSlot)
-                        ?.end as any) || selectedSlot,
-                    )}`
-                  : "Select time slot"}
-              </Text>
-              <Feather name="chevron-down" size={20} color={icon as any} />
-            </TouchableOpacity>
-
-            {/* People Count */}
-            <Text style={[styles.label, { color: icon as any }]}>
-              How many people?
-            </Text>
-            <TextInput
-              keyboardType="number-pad"
-              value={String(peopleCount)}
-              onChangeText={(v) => {
-                const num = parseInt(v || "1", 10);
-                const cap = facility?.capacity || 10;
-                setPeopleCount(
-                  isNaN(num) ? 1 : Math.max(1, Math.min(num, cap)),
-                );
-              }}
-              style={[
-                styles.input,
-                {
-                  color: text,
-                  borderColor: border,
-                  backgroundColor: theme === "dark" ? "#0B0B0B" : "#F9FAFB",
-                },
-              ]}
-            />
-
-            {/* Note */}
-            <Text style={[styles.label, { color: icon as any }]}>
-              Note (optional)
-            </Text>
-            <TextInput
-              placeholder="Birthday party, team meeting, etc."
-              placeholderTextColor={icon as any}
-              value={note}
-              onChangeText={setNote}
-              style={[
-                styles.input,
-                {
-                  color: text,
-                  borderColor: border,
-                  backgroundColor: theme === "dark" ? "#0B0B0B" : "#F9FAFB",
-                },
-              ]}
-            />
-
-            <Text style={{ color: icon as any, fontSize: 12 }}>
-              You have {Math.floor(minsLeft / 60)}h {minsLeft % 60}m left to
-              book today.
-            </Text>
-
-            <TouchableOpacity
-              onPress={createBooking}
-              disabled={!facilityId || !selectedSlot}
-              style={[
-                styles.btn,
-                styles.btnPrimary,
-                {
-                  opacity: !facilityId || !selectedSlot ? 0.6 : 1,
-                  minHeight: 52,
-                  justifyContent: "center",
-                },
-              ]}
-            >
-              <Feather name="check-circle" size={18} color="#fff" />
-              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 16 }}>
-                Confirm Booking
-              </Text>
-            </TouchableOpacity>
-
-            {facility && (
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
-              >
-                <Feather name="clock" size={14} color={icon as any} />
-                <Text style={{ color: icon as any, fontSize: 12 }}>
-                  {facility.operatingHours ? (
-                    <>
-                      Hours: {facility.operatingHours} • Slot:{" "}
-                      {facility.slotMins || 60}m
-                    </>
-                  ) : (
-                    <>Facility configuration loading...</>
-                  )}
+                <Feather name="check-circle" size={18} color="#fff" />
+                <Text
+                  style={{ color: "#fff", fontWeight: "700", fontSize: 16 }}
+                >
+                  Confirm Booking
                 </Text>
-              </View>
-            )}
-          </View>
+              </TouchableOpacity>
+
+              {facility && (
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+                >
+                  <Feather name="clock" size={14} color={icon as any} />
+                  <Text style={{ color: icon as any, fontSize: 12 }}>
+                    {facility.operatingHours ? (
+                      <>
+                        Hours: {facility.operatingHours} • Slot:{" "}
+                        {facility.slotMins || 60}m
+                      </>
+                    ) : (
+                      <>Facility configuration loading...</>
+                    )}
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
         </View>
 
         {/* My Bookings */}
@@ -1219,6 +1258,33 @@ export default function BookingsScreen() {
 }
 
 const styles = StyleSheet.create({
+  headerContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
+  },
+  backButton: {
+    padding: 8,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: "700",
+  },
+  subtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
   card: {
     borderWidth: 1,
     borderRadius: 16,

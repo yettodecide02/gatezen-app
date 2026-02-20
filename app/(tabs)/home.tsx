@@ -11,9 +11,11 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
+import axios from "axios";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
-import { getUser } from "@/lib/auth";
+import { getUser, getToken } from "@/lib/auth";
+import { config } from "@/lib/config";
 import { Platform, Screen, Styling } from "@/constants/Platform";
 
 type StatCardProps = {
@@ -32,11 +34,10 @@ function StatCard({ icon, title, value, hint, color, loading }: StatCardProps) {
   const borderCol =
     theme === "dark" ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)";
 
-  // Responsive card width
   const getCardWidth = () => {
-    if (Screen.width > 1200) return "23%"; // 4 columns on very large screens
-    if (Screen.width > 768) return "31%"; // 2 columns on medium
-    return "48%"; // 2 columns on mobile
+    if (Screen.width > 1200) return "23%";
+    if (Screen.width > 768) return "31%";
+    return "48%";
   };
 
   return (
@@ -51,65 +52,73 @@ function StatCard({ icon, title, value, hint, color, loading }: StatCardProps) {
         },
       ]}
     >
-      <View style={styles.statHeader}>
+      <View style={styles.statCardContent}>
+        {/* Left: Icon */}
         <View
           style={[
-            styles.statIconContainer,
+            styles.statCardIcon,
             {
-              backgroundColor: `${color}15`,
-              borderColor: `${color}30`,
-              borderRadius: Styling.borderRadius.sm,
+              backgroundColor: `${color}12`,
             },
           ]}
         >
-          <Feather name={icon} size={Screen.isTablet ? 24 : 20} color={color} />
+          <Feather
+            name={icon}
+            size={Screen.isTablet ? 32 : 28}
+            color={color}
+            opacity={0.8}
+          />
         </View>
-      </View>
 
-      <View style={styles.statContent}>
-        {loading ? (
-          <ActivityIndicator size="small" color={color} />
-        ) : (
+        {/* Right: Value and Title */}
+        <View style={styles.statCardRight}>
+          {loading ? (
+            <ActivityIndicator size="small" color={color} />
+          ) : (
+            <Text
+              style={[
+                styles.statValue,
+                {
+                  color: text,
+                  fontSize: Screen.isTablet ? 36 : Screen.isSmall ? 24 : 28,
+                  fontWeight: Styling.fontWeight.bold,
+                },
+              ]}
+            >
+              {value}
+            </Text>
+          )}
           <Text
             style={[
-              styles.statValue,
+              styles.statTitle,
               {
                 color: text,
-                fontSize: Screen.isTablet ? 32 : Screen.isSmall ? 22 : 26,
-                fontWeight: Styling.fontWeight.bold,
+                opacity: 0.6,
+                fontSize: Screen.isTablet ? 14 : 12,
+                fontWeight: Styling.fontWeight.medium,
+                marginTop: 6,
               },
             ]}
           >
-            {value}
+            {title}
           </Text>
-        )}
-        <Text
-          style={[
-            styles.statTitle,
-            {
-              color: text,
-              opacity: 0.7,
-              fontSize: Screen.isTablet ? 15 : 13,
-              fontWeight: Styling.fontWeight.medium,
-            },
-          ]}
-        >
-          {title}
-        </Text>
-        {hint && (
-          <Text
-            style={[
-              styles.statHint,
-              {
-                color: text,
-                opacity: 0.5,
-                fontSize: Screen.isTablet ? 13 : 11,
-              },
-            ]}
-          >
-            {hint}
-          </Text>
-        )}
+          {hint && (
+            <Text
+              style={[
+                styles.statHint,
+                {
+                  color: color,
+                  opacity: 0.8,
+                  fontSize: Screen.isTablet ? 12 : 11,
+                  fontWeight: Styling.fontWeight.medium,
+                  marginTop: 4,
+                },
+              ]}
+            >
+              {hint}
+            </Text>
+          )}
+        </View>
       </View>
     </View>
   );
@@ -285,6 +294,49 @@ export default function Dashboard() {
           return;
         }
         setUser(userData);
+
+        // Fetch dashboard stats if user data is available
+        if ((userData as any)?.id && (userData as any)?.communityId) {
+          try {
+            const token = await getToken();
+            const backendUrl = config.backendUrl;
+
+            const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+            const response = await axios.get(
+              `${backendUrl}/resident/dashboard`,
+              {
+                params: {
+                  userId: (userData as any).id,
+                  communityId: (userData as any).communityId,
+                },
+                headers,
+              },
+            );
+
+            if (response.data) {
+              setStats({
+                announcements: response.data.announcements?.length || 0,
+                maintenanceOpen:
+                  response.data.maintenance?.filter(
+                    (t: any) =>
+                      t.status !== "RESOLVED" && t.status !== "CANCELLED",
+                  )?.length || 0,
+                paymentsOverdue:
+                  response.data.payments?.filter(
+                    (p: any) => p.status === "OVERDUE",
+                  )?.length || 0,
+                upcomingBookings:
+                  response.data.bookings?.filter(
+                    (b: any) => new Date(b.startsAt) > new Date(),
+                  )?.length || 0,
+              });
+            }
+          } catch (dashboardError) {
+            console.warn("Failed to fetch dashboard stats:", dashboardError);
+            // Stats will remain at default values
+          }
+        }
       } catch (error) {
         console.error("Dashboard initialization error:", error);
       } finally {
@@ -516,6 +568,23 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     gap: 12,
+  },
+  statCardContent: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  statCardIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: Styling.borderRadius.lg,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  statCardRight: {
+    flex: 1,
+    gap: 4,
   },
   statHeader: {
     flexDirection: "row",

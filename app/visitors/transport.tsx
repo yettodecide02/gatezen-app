@@ -13,6 +13,13 @@ export default function Transport() {
   const text = useThemeColor({}, "text");
   const insets = useSafeAreaInsets();
 
+  React.useEffect(() => {
+    router.replace({
+      pathname: "/visitors",
+      params: { visitorType: "CAB_AUTO" },
+    });
+  }, []);
+
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: bg }}
@@ -32,9 +39,6 @@ export default function Transport() {
         <Text style={[styles.title, { color: text }]}>Transportation</Text>
         <Text style={[styles.subtitle, { color: text, opacity: 0.7 }]}>
           Book cab or auto for your transportation needs
-        </Text>
-        <Text style={[styles.comingSoon, { color: "#06B6D4" }]}>
-          Coming Soon
         </Text>
       </View>
     </ScrollView>
@@ -85,10 +89,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: "center",
     maxWidth: 280,
-  },
-  comingSoon: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginTop: 8,
   },
 });

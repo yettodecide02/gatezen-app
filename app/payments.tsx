@@ -9,9 +9,11 @@ import {
   Alert,
   Switch,
   ActivityIndicator,
+  TouchableOpacity,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { router } from "expo-router";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
 
@@ -36,6 +38,8 @@ export default function Payments() {
   const theme = useColorScheme() ?? "light";
   const bg = useThemeColor({}, "background");
   const text = useThemeColor({}, "text");
+  const tint = useThemeColor({}, "tint");
+  const muted = useThemeColor({}, "icon");
   const cardBg = theme === "dark" ? "#1F1F1F" : "#ffffff";
   const borderCol =
     theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
@@ -132,192 +136,235 @@ export default function Payments() {
   }
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: bg }]}
-      contentContainerStyle={{ paddingTop: insets.top }}
-    >
-      {/* Alert Banner */}
-      {due.length > 0 && (
-        <View style={styles.alertBanner}>
-          <Feather name="alert-circle" size={20} color="#DC2626" />
-          <Text style={styles.alertText}>
-            <Text style={styles.alertBold}>{due.length} invoice(s)</Text>{" "}
-            pending — settle now to avoid late fees.
-          </Text>
-        </View>
-      )}
-
-      {/* Provider & Autopay Settings */}
+    <View style={[styles.container, { backgroundColor: bg }]}>
+      {/* Fixed Header */}
       <View
         style={[
-          styles.card,
-          { backgroundColor: cardBg, borderColor: borderCol },
+          styles.headerContainer,
+          {
+            paddingTop: Math.max(insets.top, 16),
+            backgroundColor: bg,
+            borderBottomColor: borderCol,
+          },
         ]}
       >
-        <View style={styles.settingsRow}>
-          <Text style={[styles.label, { color: text }]}>Payment Provider</Text>
-          <Text style={[styles.providerText, { color: text }]}>
-            {provider} (demo)
-          </Text>
-        </View>
-
-        <View style={styles.autopayRow}>
-          <View style={styles.autopayInfo}>
-            <Feather name="repeat" size={20} color={text} />
-            <Text style={[styles.autopayLabel, { color: text }]}>Auto-pay</Text>
-          </View>
-          <Switch
-            value={autopay.autopay}
-            onValueChange={toggleAutopay}
-            trackColor={{ false: "#767577", true: "#6366F1" }}
-            thumbColor={autopay.autopay ? "#ffffff" : "#f4f3f4"}
-          />
-        </View>
-        <Text style={[styles.autopayStatus, { color: text, opacity: 0.7 }]}>
-          {autopay.autopay
-            ? `On (${autopay.provider}, **** ${autopay.last4})`
-            : "Off"}
-        </Text>
-      </View>
-
-      {/* Outstanding Bills */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Feather name="credit-card" size={24} color={text} />
-          <Text style={[styles.sectionTitle, { color: text }]}>
-            Outstanding Bills
-          </Text>
-        </View>
-
-        {due.length === 0 ? (
-          <View
-            style={[
-              styles.emptyCard,
-              { backgroundColor: cardBg, borderColor: borderCol },
-            ]}
-          >
-            <Text style={[styles.emptyText, { color: text }]}>No dues 🎉</Text>
-          </View>
-        ) : (
-          due.map((bill) => (
-            <View
-              key={bill.id}
-              style={[
-                styles.billCard,
-                { backgroundColor: cardBg, borderColor: borderCol },
-              ]}
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={styles.backButton}
             >
-              <View style={styles.billInfo}>
-                <Text style={[styles.billTitle, { color: text }]}>
-                  {bill.description}
-                </Text>
-                <Text style={[styles.billDate, { color: text, opacity: 0.7 }]}>
-                  {new Date(bill.createdAt).toLocaleDateString()}
-                </Text>
-              </View>
-              <Text style={[styles.billAmount, { color: text }]}>
-                {bill.amount} {bill.currency || "INR"}
+              <Feather name="arrow-left" size={24} color={tint} />
+            </TouchableOpacity>
+            <View>
+              <Text style={[styles.title, { color: text }]}>Payments</Text>
+              <Text style={[styles.subtitle, { color: muted }]}>
+                Manage your payments and billing
               </Text>
-              <Pressable
-                style={[styles.payButton, busy && styles.payButtonDisabled]}
-                onPress={() => payNow(bill.id)}
-                disabled={busy}
-              >
-                <Feather name="zap" size={16} color="#ffffff" />
-                <Text style={styles.payButtonText}>
-                  {busy ? "Processing..." : "Pay now"}
-                </Text>
-              </Pressable>
             </View>
-          ))
-        )}
+          </View>
+        </View>
       </View>
 
-      {/* Payment History */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Feather name="file-text" size={24} color={text} />
-          <Text style={[styles.sectionTitle, { color: text }]}>
-            Payment History
-          </Text>
-        </View>
-
-        {history.length === 0 ? (
-          <View
-            style={[
-              styles.emptyCard,
-              { backgroundColor: cardBg, borderColor: borderCol },
-            ]}
-          >
-            <Text style={[styles.emptyText, { color: text }]}>
-              No previous payments
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={{ paddingTop: 0 }}
+      >
+        {/* Alert Banner */}
+        {due.length > 0 && (
+          <View style={styles.alertBanner}>
+            <Feather name="alert-circle" size={20} color="#DC2626" />
+            <Text style={styles.alertText}>
+              <Text style={styles.alertBold}>{due.length} invoice(s)</Text>{" "}
+              pending — settle now to avoid late fees.
             </Text>
           </View>
-        ) : (
-          history.map((payment) => (
+        )}
+
+        {/* Provider & Autopay Settings */}
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: cardBg, borderColor: borderCol },
+          ]}
+        >
+          <View style={styles.settingsRow}>
+            <Text style={[styles.label, { color: text }]}>
+              Payment Provider
+            </Text>
+            <Text style={[styles.providerText, { color: text }]}>
+              {provider} (demo)
+            </Text>
+          </View>
+
+          <View style={styles.autopayRow}>
+            <View style={styles.autopayInfo}>
+              <Feather name="repeat" size={20} color={text} />
+              <Text style={[styles.autopayLabel, { color: text }]}>
+                Auto-pay
+              </Text>
+            </View>
+            <Switch
+              value={autopay.autopay}
+              onValueChange={toggleAutopay}
+              trackColor={{ false: "#767577", true: "#6366F1" }}
+              thumbColor={autopay.autopay ? "#ffffff" : "#f4f3f4"}
+            />
+          </View>
+          <Text style={[styles.autopayStatus, { color: text, opacity: 0.7 }]}>
+            {autopay.autopay
+              ? `On (${autopay.provider}, **** ${autopay.last4})`
+              : "Off"}
+          </Text>
+        </View>
+
+        {/* Outstanding Bills */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Feather name="credit-card" size={24} color={text} />
+            <Text style={[styles.sectionTitle, { color: text }]}>
+              Outstanding Bills
+            </Text>
+          </View>
+
+          {due.length === 0 ? (
             <View
-              key={payment.id}
               style={[
-                styles.historyCard,
+                styles.emptyCard,
                 { backgroundColor: cardBg, borderColor: borderCol },
               ]}
             >
-              <View style={styles.historyInfo}>
-                <Text style={[styles.historyTitle, { color: text }]}>
-                  {payment.description}
-                </Text>
-                <Text
-                  style={[styles.historyDate, { color: text, opacity: 0.7 }]}
-                >
-                  {payment.status === "paid"
-                    ? `Paid on ${new Date(
-                        payment.paidAt!,
-                      ).toLocaleDateString()}`
-                    : payment.status.toUpperCase()}
-                </Text>
-              </View>
-              <View
-                style={[styles.statusChip, styles[`status_${payment.status}`]]}
-              >
-                <Feather name="check-circle" size={14} color="#065F46" />
-                <Text
-                  style={[
-                    styles.statusText,
-                    styles[`statusText_${payment.status}`],
-                  ]}
-                >
-                  {payment.status}
-                </Text>
-              </View>
-              <Pressable
-                style={[
-                  styles.receiptButton,
-                  payment.status !== "paid" && styles.receiptButtonDisabled,
-                ]}
-                onPress={() => downloadReceipt(payment.id)}
-                disabled={payment.status !== "paid"}
-              >
-                <Feather
-                  name="file-text"
-                  size={16}
-                  color={payment.status === "paid" ? "#6366F1" : "#9CA3AF"}
-                />
-                <Text
-                  style={[
-                    styles.receiptButtonText,
-                    {
-                      color: payment.status === "paid" ? "#6366F1" : "#9CA3AF",
-                    },
-                  ]}
-                >
-                  Receipt
-                </Text>
-              </Pressable>
+              <Text style={[styles.emptyText, { color: text }]}>
+                No dues 🎉
+              </Text>
             </View>
-          ))
-        )}
-      </View>
-    </ScrollView>
+          ) : (
+            due.map((bill) => (
+              <View
+                key={bill.id}
+                style={[
+                  styles.billCard,
+                  { backgroundColor: cardBg, borderColor: borderCol },
+                ]}
+              >
+                <View style={styles.billInfo}>
+                  <Text style={[styles.billTitle, { color: text }]}>
+                    {bill.description}
+                  </Text>
+                  <Text
+                    style={[styles.billDate, { color: text, opacity: 0.7 }]}
+                  >
+                    {new Date(bill.createdAt).toLocaleDateString()}
+                  </Text>
+                </View>
+                <Text style={[styles.billAmount, { color: text }]}>
+                  {bill.amount} {bill.currency || "INR"}
+                </Text>
+                <Pressable
+                  style={[styles.payButton, busy && styles.payButtonDisabled]}
+                  onPress={() => payNow(bill.id)}
+                  disabled={busy}
+                >
+                  <Feather name="zap" size={16} color="#ffffff" />
+                  <Text style={styles.payButtonText}>
+                    {busy ? "Processing..." : "Pay now"}
+                  </Text>
+                </Pressable>
+              </View>
+            ))
+          )}
+        </View>
+
+        {/* Payment History */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Feather name="file-text" size={24} color={text} />
+            <Text style={[styles.sectionTitle, { color: text }]}>
+              Payment History
+            </Text>
+          </View>
+
+          {history.length === 0 ? (
+            <View
+              style={[
+                styles.emptyCard,
+                { backgroundColor: cardBg, borderColor: borderCol },
+              ]}
+            >
+              <Text style={[styles.emptyText, { color: text }]}>
+                No previous payments
+              </Text>
+            </View>
+          ) : (
+            history.map((payment) => (
+              <View
+                key={payment.id}
+                style={[
+                  styles.historyCard,
+                  { backgroundColor: cardBg, borderColor: borderCol },
+                ]}
+              >
+                <View style={styles.historyInfo}>
+                  <Text style={[styles.historyTitle, { color: text }]}>
+                    {payment.description}
+                  </Text>
+                  <Text
+                    style={[styles.historyDate, { color: text, opacity: 0.7 }]}
+                  >
+                    {payment.status === "paid"
+                      ? `Paid on ${new Date(
+                          payment.paidAt!,
+                        ).toLocaleDateString()}`
+                      : payment.status.toUpperCase()}
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.statusChip,
+                    styles[`status_${payment.status}`],
+                  ]}
+                >
+                  <Feather name="check-circle" size={14} color="#065F46" />
+                  <Text
+                    style={[
+                      styles.statusText,
+                      styles[`statusText_${payment.status}`],
+                    ]}
+                  >
+                    {payment.status}
+                  </Text>
+                </View>
+                <Pressable
+                  style={[
+                    styles.receiptButton,
+                    payment.status !== "paid" && styles.receiptButtonDisabled,
+                  ]}
+                  onPress={() => downloadReceipt(payment.id)}
+                  disabled={payment.status !== "paid"}
+                >
+                  <Feather
+                    name="file-text"
+                    size={16}
+                    color={payment.status === "paid" ? "#6366F1" : "#9CA3AF"}
+                  />
+                  <Text
+                    style={[
+                      styles.receiptButtonText,
+                      {
+                        color:
+                          payment.status === "paid" ? "#6366F1" : "#9CA3AF",
+                      },
+                    ]}
+                  >
+                    Receipt
+                  </Text>
+                </Pressable>
+              </View>
+            ))
+          )}
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -325,6 +372,38 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   centered: { alignItems: "center", justifyContent: "center" },
   loadingText: { marginTop: 12, fontSize: 16 },
+
+  headerContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
+  },
+  backButton: {
+    padding: 8,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: "700",
+  },
+  subtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+
+  scrollView: {
+    flex: 1,
+  },
 
   alertBanner: {
     flexDirection: "row",
@@ -335,7 +414,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 12,
     padding: 16,
-    margin: 16,
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 0,
   },
   alertText: { flex: 1, color: "#DC2626", fontSize: 14 },
   alertBold: { fontWeight: "700" },

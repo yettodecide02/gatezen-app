@@ -24,12 +24,14 @@ import {
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import { router, useLocalSearchParams } from "expo-router";
 import axios from "axios";
 
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { getToken, getUser } from "@/lib/auth";
 import Toast from "@/components/Toast";
+import { config } from "@/lib/config";
 
 const STATUS_LABEL: any = {
   pending: "Pending",
@@ -184,6 +186,8 @@ export default function VisitorsScreen() {
   const bg = useThemeColor({}, "background");
   const text = useThemeColor({}, "text");
   const icon = useThemeColor({}, "icon");
+  const tint = useThemeColor({}, "tint");
+  const muted = useThemeColor({}, "icon");
   const card = theme === "dark" ? "#111111" : "#ffffff";
   const border = theme === "dark" ? "#262626" : "#E5E7EB";
 
@@ -214,10 +218,7 @@ export default function VisitorsScreen() {
   const containerPadding = isSmallScreen ? 12 : 16;
 
   // Backend
-  const backendUrl =
-    process.env.EXPO_PUBLIC_BACKEND_URL ||
-    process.env.EXPO_BACKEND_URL ||
-    "http://localhost:4000";
+  const backendUrl = config.backendUrl;
 
   // Auth
   const [user, setUserState] = useState<any>(null);
@@ -257,6 +258,7 @@ export default function VisitorsScreen() {
 
   // Visitor type picker modal
   const [visitorTypePickerOpen, setVisitorTypePickerOpen] = useState(false);
+  const [preAuthorizeExpanded, setPreAuthorizeExpanded] = useState(false);
 
   // Toast
   const [toastVisible, setToastVisible] = useState(false);
@@ -275,6 +277,15 @@ export default function VisitorsScreen() {
   const hideToast = useCallback(() => {
     setToastVisible(false);
   }, []);
+
+  // Handle route params for visitor type pre-selection
+  const searchParams = useLocalSearchParams();
+  useEffect(() => {
+    if (searchParams.visitorType) {
+      setType(searchParams.visitorType as string);
+      setPreAuthorizeExpanded(true);
+    }
+  }, [searchParams.visitorType]);
 
   const authHeaders = useMemo(
     () => (token ? { Authorization: `Bearer ${token}` } : undefined),
@@ -433,9 +444,36 @@ export default function VisitorsScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={insets.top}
     >
-      <View
-        style={{ flex: 1, backgroundColor: bg, paddingTop: insets.top + 8 }}
-      >
+      <View style={{ flex: 1, backgroundColor: bg }}>
+        {/* Fixed Header */}
+        <View
+          style={[
+            styles.headerContainer,
+            {
+              paddingTop: Math.max(insets.top, 16),
+              backgroundColor: bg,
+              borderBottomColor: border,
+            },
+          ]}
+        >
+          <View style={styles.header}>
+            <View style={styles.headerLeft}>
+              <TouchableOpacity
+                onPress={() => router.back()}
+                style={styles.backButton}
+              >
+                <Feather name="arrow-left" size={24} color={tint} />
+              </TouchableOpacity>
+              <View>
+                <Text style={[styles.title, { color: text }]}>Visitors</Text>
+                <Text style={[styles.subtitle, { color: muted }]}>
+                  Manage visitor access
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
         <Toast
           visible={toastVisible}
           message={toastMessage}
@@ -448,45 +486,10 @@ export default function VisitorsScreen() {
             padding: containerPadding,
             gap: isSmallScreen ? 14 : 18,
             paddingBottom: insets.bottom + 20,
+            paddingTop: 8,
           }}
           showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: isSmallScreen ? 8 : 12,
-            }}
-          >
-            <View
-              style={{
-                height: isSmallScreen ? 28 : 32,
-                width: isSmallScreen ? 28 : 32,
-                borderRadius: 8,
-                alignItems: "center",
-                justifyContent: "center",
-                borderWidth: 1,
-                borderColor: border,
-                backgroundColor: theme === "dark" ? "#0B0B0B" : "#F9FAFB",
-              }}
-            >
-              <Feather name="users" size={headerIconSize} color={icon as any} />
-            </View>
-            <Text
-              style={{
-                color: text,
-                fontSize: headerFontSize,
-                fontWeight: "800",
-                flex: 1,
-                flexWrap: "wrap",
-              }}
-              numberOfLines={2}
-            >
-              Visitor & Access Management
-            </Text>
-          </View>
-
           {/* Pre-Authorize Guest */}
           <View
             style={[
@@ -498,293 +501,319 @@ export default function VisitorsScreen() {
               },
             ]}
           >
-            <Text
-              style={[
-                styles.cardTitle,
-                { color: text, fontSize: isSmallScreen ? 16 : 18 },
-              ]}
+            <TouchableOpacity
+              onPress={() => setPreAuthorizeExpanded(!preAuthorizeExpanded)}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: preAuthorizeExpanded ? 12 : 0,
+              }}
             >
-              Pre-Authorize Guest
-            </Text>
-            <View style={{ gap: isSmallScreen ? 8 : 10 }}>
-              <TextInput
-                placeholder="Visitor Name (e.g., John Doe)"
-                placeholderTextColor={icon as any}
-                value={name}
-                onChangeText={setName}
+              <Text
                 style={[
-                  styles.input,
-                  {
-                    color: text,
-                    borderColor: border,
-                    backgroundColor: theme === "dark" ? "#0B0B0B" : "#F9FAFB",
-                    minHeight: isSmallScreen ? 44 : 48,
-                    fontSize: inputFontSize,
-                    paddingHorizontal: inputPaddingH,
-                    paddingVertical: inputPaddingV,
-                  },
+                  styles.cardTitle,
+                  { color: text, fontSize: isSmallScreen ? 16 : 18 },
                 ]}
+              >
+                Pre-Authorize Guest
+              </Text>
+              <Feather
+                name={preAuthorizeExpanded ? "chevron-up" : "chevron-down"}
+                size={24}
+                color={tint}
               />
-
-              <View style={styles.inputWithIcon}>
-                <View
+            </TouchableOpacity>
+            {preAuthorizeExpanded && (
+              <View style={{ gap: isSmallScreen ? 8 : 10 }}>
+                <TextInput
+                  placeholder="Visitor Name (e.g., John Doe)"
+                  placeholderTextColor={icon as any}
+                  value={name}
+                  onChangeText={setName}
                   style={[
                     styles.input,
                     {
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 8,
                       color: text,
                       borderColor: border,
                       backgroundColor: theme === "dark" ? "#0B0B0B" : "#F9FAFB",
                       minHeight: isSmallScreen ? 44 : 48,
-                      paddingHorizontal: inputPaddingH,
-                      paddingVertical: inputPaddingV,
-                    },
-                  ]}
-                >
-                  <Feather
-                    name="mail"
-                    size={isSmallScreen ? 14 : 16}
-                    color={icon as any}
-                  />
-                  <TextInput
-                    placeholder={
-                      type === "GUEST"
-                        ? "visitor@example.com (required)"
-                        : "visitor@example.com (optional)"
-                    }
-                    placeholderTextColor={icon as any}
-                    value={email}
-                    onChangeText={setEmail}
-                    keyboardType="email-address"
-                    style={{
-                      flex: 1,
-                      color: text,
                       fontSize: inputFontSize,
-                    }}
-                  />
-                </View>
-              </View>
-
-              {/* Visitor Type Selector */}
-              <View>
-                <Text
-                  style={[
-                    styles.label,
-                    {
-                      color: text,
-                      marginBottom: 8,
-                      fontSize: isSmallScreen ? 13 : 14,
-                    },
-                  ]}
-                >
-                  Visitor Type
-                </Text>
-                <TouchableOpacity
-                  onPress={() => setVisitorTypePickerOpen(true)}
-                  style={[
-                    styles.input,
-                    {
-                      borderColor: border,
-                      backgroundColor: theme === "dark" ? "#0B0B0B" : "#F9FAFB",
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      minHeight: isSmallScreen ? 44 : 48,
                       paddingHorizontal: inputPaddingH,
                       paddingVertical: inputPaddingV,
                     },
                   ]}
-                >
+                />
+
+                <View style={styles.inputWithIcon}>
                   <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 10,
-                      flex: 1,
-                    }}
+                    style={[
+                      styles.input,
+                      {
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 8,
+                        color: text,
+                        borderColor: border,
+                        backgroundColor:
+                          theme === "dark" ? "#0B0B0B" : "#F9FAFB",
+                        minHeight: isSmallScreen ? 44 : 48,
+                        paddingHorizontal: inputPaddingH,
+                        paddingVertical: inputPaddingV,
+                      },
+                    ]}
                   >
                     <Feather
-                      name={
-                        type === "GUEST"
-                          ? "user"
-                          : type === "DELIVERY"
-                            ? "package"
-                            : type === "CAB_AUTO"
-                              ? "truck"
-                              : "user"
-                      }
+                      name="mail"
                       size={isSmallScreen ? 14 : 16}
                       color={icon as any}
                     />
-                    <Text
+                    <TextInput
+                      placeholder={
+                        type === "GUEST"
+                          ? "visitor@example.com (required)"
+                          : "visitor@example.com (optional)"
+                      }
+                      placeholderTextColor={icon as any}
+                      value={email}
+                      onChangeText={setEmail}
+                      keyboardType="email-address"
                       style={{
+                        flex: 1,
                         color: text,
                         fontSize: inputFontSize,
+                      }}
+                    />
+                  </View>
+                </View>
+
+                {/* Visitor Type Selector */}
+                <View>
+                  <Text
+                    style={[
+                      styles.label,
+                      {
+                        color: text,
+                        marginBottom: 8,
+                        fontSize: isSmallScreen ? 13 : 14,
+                      },
+                    ]}
+                  >
+                    Visitor Type
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setVisitorTypePickerOpen(true)}
+                    style={[
+                      styles.input,
+                      {
+                        borderColor: border,
+                        backgroundColor:
+                          theme === "dark" ? "#0B0B0B" : "#F9FAFB",
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        minHeight: isSmallScreen ? 44 : 48,
+                        paddingHorizontal: inputPaddingH,
+                        paddingVertical: inputPaddingV,
+                      },
+                    ]}
+                  >
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 10,
                         flex: 1,
                       }}
                     >
-                      {VISITOR_TYPES.find((t) => t.value === type)?.label ||
-                        "Guest"}
-                    </Text>
+                      <Feather
+                        name={
+                          type === "GUEST"
+                            ? "user"
+                            : type === "DELIVERY"
+                              ? "package"
+                              : type === "CAB_AUTO"
+                                ? "truck"
+                                : "user"
+                        }
+                        size={isSmallScreen ? 14 : 16}
+                        color={icon as any}
+                      />
+                      <Text
+                        style={{
+                          color: text,
+                          fontSize: inputFontSize,
+                          flex: 1,
+                        }}
+                      >
+                        {VISITOR_TYPES.find((t) => t.value === type)?.label ||
+                          "Guest"}
+                      </Text>
+                    </View>
+                    <Feather
+                      name="chevron-down"
+                      size={isSmallScreen ? 14 : 16}
+                      color={icon as any}
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Date & Time */}
+                <View>
+                  <Text
+                    style={[
+                      styles.label,
+                      {
+                        color: text,
+                        marginBottom: 8,
+                        fontSize: isSmallScreen ? 13 : 14,
+                      },
+                    ]}
+                  >
+                    Expected Date & Time
+                  </Text>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      gap: isSmallScreen ? 8 : 10,
+                      marginTop: 6,
+                    }}
+                  >
+                    <TouchableOpacity
+                      onPress={() => setShowExpectedDatePicker(true)}
+                      style={[
+                        styles.input,
+                        {
+                          flex: 1,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          borderColor: border,
+                          backgroundColor:
+                            theme === "dark" ? "#0B0B0B" : "#F9FAFB",
+                          minHeight: isSmallScreen ? 44 : 48,
+                          paddingHorizontal: inputPaddingH,
+                          paddingVertical: inputPaddingV,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={{
+                          color: text,
+                          fontSize: isSmallScreen ? 13 : 16,
+                        }}
+                        numberOfLines={1}
+                      >
+                        {new Date(expectedDate).toLocaleDateString()}
+                      </Text>
+                      <Feather
+                        name="calendar"
+                        size={isSmallScreen ? 16 : 18}
+                        color={icon as any}
+                      />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setShowExpectedTimePicker(true)}
+                      style={[
+                        styles.input,
+                        {
+                          flex: 1,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          borderColor: border,
+                          backgroundColor:
+                            theme === "dark" ? "#0B0B0B" : "#F9FAFB",
+                          minHeight: isSmallScreen ? 44 : 48,
+                          paddingHorizontal: inputPaddingH,
+                          paddingVertical: inputPaddingV,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={{
+                          color: text,
+                          fontSize: isSmallScreen ? 13 : 16,
+                        }}
+                      >
+                        {expectedTime}
+                      </Text>
+                      <Feather
+                        name="clock"
+                        size={isSmallScreen ? 16 : 18}
+                        color={icon as any}
+                      />
+                    </TouchableOpacity>
                   </View>
+                </View>
+
+                <View style={styles.inputWithIcon}>
+                  <View
+                    style={[
+                      styles.input,
+                      {
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 8,
+                        color: text,
+                        borderColor: border,
+                        backgroundColor:
+                          theme === "dark" ? "#0B0B0B" : "#F9FAFB",
+                        minHeight: isSmallScreen ? 44 : 48,
+                        paddingHorizontal: inputPaddingH,
+                        paddingVertical: inputPaddingV,
+                      },
+                    ]}
+                  >
+                    <Feather
+                      name="truck"
+                      size={isSmallScreen ? 14 : 16}
+                      color={icon as any}
+                    />
+                    <TextInput
+                      placeholder="Vehicle (optional, e.g., KA01 AB 1234)"
+                      placeholderTextColor={icon as any}
+                      value={vehicle}
+                      onChangeText={setVehicle}
+                      style={{
+                        flex: 1,
+                        color: text,
+                        fontSize: inputFontSize,
+                      }}
+                    />
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  onPress={preAuthorize}
+                  disabled={submitting}
+                  style={[
+                    styles.btn,
+                    styles.btnPrimary,
+                    {
+                      opacity: submitting ? 0.6 : 1,
+                      minHeight: isSmallScreen ? 46 : 52,
+                      justifyContent: "center",
+                    },
+                  ]}
+                >
                   <Feather
-                    name="chevron-down"
-                    size={isSmallScreen ? 14 : 16}
-                    color={icon as any}
+                    name="check-circle"
+                    size={isSmallScreen ? 16 : 18}
+                    color="#fff"
                   />
+                  <Text
+                    style={{
+                      color: "#fff",
+                      fontWeight: "700",
+                      fontSize: isSmallScreen ? 14 : 16,
+                    }}
+                  >
+                    {submitting ? "Submitting..." : "Submit Request"}
+                  </Text>
                 </TouchableOpacity>
               </View>
-
-              {/* Date & Time */}
-              <View>
-                <Text
-                  style={[
-                    styles.label,
-                    {
-                      color: text,
-                      marginBottom: 8,
-                      fontSize: isSmallScreen ? 13 : 14,
-                    },
-                  ]}
-                >
-                  Expected Date & Time
-                </Text>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    gap: isSmallScreen ? 8 : 10,
-                    marginTop: 6,
-                  }}
-                >
-                  <TouchableOpacity
-                    onPress={() => setShowExpectedDatePicker(true)}
-                    style={[
-                      styles.input,
-                      {
-                        flex: 1,
-                        flexDirection: "row",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        borderColor: border,
-                        backgroundColor:
-                          theme === "dark" ? "#0B0B0B" : "#F9FAFB",
-                        minHeight: isSmallScreen ? 44 : 48,
-                        paddingHorizontal: inputPaddingH,
-                        paddingVertical: inputPaddingV,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={{ color: text, fontSize: isSmallScreen ? 13 : 16 }}
-                      numberOfLines={1}
-                    >
-                      {new Date(expectedDate).toLocaleDateString()}
-                    </Text>
-                    <Feather
-                      name="calendar"
-                      size={isSmallScreen ? 16 : 18}
-                      color={icon as any}
-                    />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => setShowExpectedTimePicker(true)}
-                    style={[
-                      styles.input,
-                      {
-                        flex: 1,
-                        flexDirection: "row",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        borderColor: border,
-                        backgroundColor:
-                          theme === "dark" ? "#0B0B0B" : "#F9FAFB",
-                        minHeight: isSmallScreen ? 44 : 48,
-                        paddingHorizontal: inputPaddingH,
-                        paddingVertical: inputPaddingV,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={{ color: text, fontSize: isSmallScreen ? 13 : 16 }}
-                    >
-                      {expectedTime}
-                    </Text>
-                    <Feather
-                      name="clock"
-                      size={isSmallScreen ? 16 : 18}
-                      color={icon as any}
-                    />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              <View style={styles.inputWithIcon}>
-                <View
-                  style={[
-                    styles.input,
-                    {
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 8,
-                      color: text,
-                      borderColor: border,
-                      backgroundColor: theme === "dark" ? "#0B0B0B" : "#F9FAFB",
-                      minHeight: isSmallScreen ? 44 : 48,
-                      paddingHorizontal: inputPaddingH,
-                      paddingVertical: inputPaddingV,
-                    },
-                  ]}
-                >
-                  <Feather
-                    name="truck"
-                    size={isSmallScreen ? 14 : 16}
-                    color={icon as any}
-                  />
-                  <TextInput
-                    placeholder="Vehicle (optional, e.g., KA01 AB 1234)"
-                    placeholderTextColor={icon as any}
-                    value={vehicle}
-                    onChangeText={setVehicle}
-                    style={{
-                      flex: 1,
-                      color: text,
-                      fontSize: inputFontSize,
-                    }}
-                  />
-                </View>
-              </View>
-
-              <TouchableOpacity
-                onPress={preAuthorize}
-                disabled={submitting}
-                style={[
-                  styles.btn,
-                  styles.btnPrimary,
-                  {
-                    opacity: submitting ? 0.6 : 1,
-                    minHeight: isSmallScreen ? 46 : 52,
-                    justifyContent: "center",
-                  },
-                ]}
-              >
-                <Feather
-                  name="check-circle"
-                  size={isSmallScreen ? 16 : 18}
-                  color="#fff"
-                />
-                <Text
-                  style={{
-                    color: "#fff",
-                    fontWeight: "700",
-                    fontSize: isSmallScreen ? 14 : 16,
-                  }}
-                >
-                  {submitting ? "Submitting..." : "Submit Request"}
-                </Text>
-              </TouchableOpacity>
-            </View>
+            )}
           </View>
 
           {/* My Visitors */}
@@ -1219,6 +1248,33 @@ export default function VisitorsScreen() {
 }
 
 const styles = StyleSheet.create({
+  headerContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
+  },
+  backButton: {
+    padding: 8,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: "700",
+  },
+  subtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
   card: {
     borderWidth: 1,
     borderRadius: 16,

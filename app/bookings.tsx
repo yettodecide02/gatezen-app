@@ -194,7 +194,7 @@ export default function BookingsScreen() {
   );
   const [selectedSlot, setSelectedSlot] = useState<string>("");
   const [note, setNote] = useState<string>("");
-  const [peopleCount, setPeopleCount] = useState<number>(1);
+  const [peopleCount, setPeopleCount] = useState<number>("");
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [slots, setSlots] = useState<{ start: string; end: string }[]>([]);
@@ -422,6 +422,7 @@ export default function BookingsScreen() {
     }
 
     const cap = facility?.capacity || 10;
+    const count = peopleCount === "" ? 1 : Number(peopleCount);
     const bookedCount = (bookings || [])
       .filter(
         (b) =>
@@ -431,7 +432,7 @@ export default function BookingsScreen() {
       )
       .reduce((sum, b) => sum + (b.peopleCount || 1), 0);
 
-    if (bookedCount + peopleCount > cap) {
+    if (bookedCount + count > cap) {
       showError("Slot Full", "This time slot is already fully booked");
       return;
     }
@@ -453,7 +454,7 @@ export default function BookingsScreen() {
         startsAt: slot.start,
         endsAt: slot.end,
         note: note.trim() || undefined,
-        peopleCount,
+        peopleCount: count,
         communityId: user?.communityId,
       };
       const res = await axios.post(`${backendUrl}/resident/bookings`, payload, {
@@ -464,7 +465,7 @@ export default function BookingsScreen() {
       });
       setNote("");
       setSelectedSlot("");
-      setPeopleCount(1);
+      setPeopleCount("");
       showSuccess("Success", "Booking confirmed successfully");
       setBookings((prev) =>
         [res.data, ...prev].sort(
@@ -730,10 +731,14 @@ export default function BookingsScreen() {
                 keyboardType="number-pad"
                 value={String(peopleCount)}
                 onChangeText={(v) => {
-                  const num = parseInt(v || "1", 10);
+                  if (v === "") {
+                    setPeopleCount("");
+                    return;
+                  }
+                  const num = parseInt(v, 10);
                   const cap = facility?.capacity || 10;
                   setPeopleCount(
-                    isNaN(num) ? 1 : Math.max(1, Math.min(num, cap)),
+                    isNaN(num) ? "" : Math.max(1, Math.min(num, cap)),
                   );
                 }}
                 style={[

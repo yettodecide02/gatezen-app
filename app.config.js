@@ -1,8 +1,8 @@
 export default ({ config }) => ({
   ...config,
   expo: {
-    name: "gatezen-app",
-    slug: "gatezen-app",
+    name: "CGate",
+    slug: "cgate",
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
@@ -24,6 +24,7 @@ export default ({ config }) => ({
       edgeToEdgeEnabled: true,
       permissions: ["android.permission.CAMERA"],
       package: "com.yettodecide.gatezenapp",
+      googleServicesFile: "./google-services.json",
     },
     web: {
       bundler: "metro",
@@ -50,6 +51,14 @@ export default ({ config }) => ({
         },
       ],
       "expo-font",
+      [
+        "expo-notifications",
+        {
+          icon: "./assets/images/icon.png",
+          color: "#6366F1",
+          sounds: [],
+        },
+      ],
       [
         "expo-build-properties",
         {

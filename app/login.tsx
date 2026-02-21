@@ -20,6 +20,7 @@ import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useToast } from "@/hooks/useToast";
 import { config } from "@/lib/config";
+import { registerForPushNotifications } from "@/lib/notifications";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -66,6 +67,9 @@ export default function LoginScreen() {
 
         await setToken(res.data.jwttoken);
         if (res.data.user) await setUser(res.data.user);
+
+        // Register push token silently — errors won't block login
+        registerForPushNotifications(res.data.jwttoken).catch(() => {});
 
         showSuccess("Welcome back! Login successful.");
 
@@ -117,7 +121,7 @@ export default function LoginScreen() {
           </View>
           <View>
             <Text style={[styles.brandName, { color: textColor }]}>
-              GateZen
+              CGate
             </Text>
             <Text style={[styles.brandSub, { color: muted }]}>
               Community Portal

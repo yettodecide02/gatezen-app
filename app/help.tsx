@@ -137,7 +137,7 @@ export default function Help() {
       title: "Email Us",
       icon: "mail",
       color: "#F59E0B",
-      action: () => Linking.openURL("mailto:support@gatezen.com"),
+      action: () => Linking.openURL("mailto:support@CGate.com"),
     },
     {
       title: "Call Help Desk",

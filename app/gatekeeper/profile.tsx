@@ -299,7 +299,7 @@ export default function GatekeeperProfileScreen() {
         {/* Version Info */}
         <View style={{ alignItems: "center", paddingTop: 16 }}>
           <Text style={{ color: icon as any, fontSize: 12 }}>
-            GateZen Gatekeeper v1.0.0
+            CGate Gatekeeper v1.0.0
           </Text>
           <Text style={{ color: icon as any, fontSize: 10, marginTop: 4 }}>
             Security & Visitor Management

@@ -5,15 +5,70 @@ import {
 } from "@react-navigation/native";
 import { View, Platform } from "react-native";
 import { useFonts } from "expo-font";
-import { Stack } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import * as Notifications from "expo-notifications";
+import { useEffect, useRef } from "react";
 
 import { useColorScheme } from "@/hooks/useColorScheme";
+import { configureNotificationHandler } from "@/lib/notifications";
+
+// Configure foreground notification behaviour once at the module level
+configureNotificationHandler();
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const router = useRouter();
+  const notificationListener = useRef<Notifications.EventSubscription>();
+  const responseListener = useRef<Notifications.EventSubscription>();
+
+  useEffect(() => {
+    // Listen for notifications received while app is in foreground
+    notificationListener.current =
+      Notifications.addNotificationReceivedListener(() => {
+        // Notification received — badge / alert handled by the handler above
+      });
+
+    // Listen for taps on notifications (foreground, background, or closed)
+    responseListener.current =
+      Notifications.addNotificationResponseReceivedListener((response) => {
+        const data = response.notification.request.content.data as Record<
+          string,
+          string
+        >;
+        if (!data?.type) return;
+        switch (data.type) {
+          case "VISITOR_CHECKIN":
+            router.push("/visitors/passes");
+            break;
+          case "PACKAGE":
+            router.push("/mypackages");
+            break;
+          case "ANNOUNCEMENT":
+            router.push("/(tabs)/home");
+            break;
+          case "TICKET_UPDATE":
+            router.push("/maintenance");
+            break;
+          case "NEW_USER":
+            router.push("/admin");
+            break;
+          case "BOOKING_REMINDER":
+            router.push("/bookings");
+            break;
+          default:
+            break;
+        }
+      });
+
+    return () => {
+      notificationListener.current?.remove();
+      responseListener.current?.remove();
+    };
+  }, []);
+
   const LightNavTheme = {
     ...DefaultTheme,
     colors: {

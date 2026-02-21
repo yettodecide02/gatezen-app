@@ -25,9 +25,18 @@ type StatCardProps = {
   hint?: string;
   color: string;
   loading?: boolean;
+  onPress?: () => void;
 };
 
-function StatCard({ icon, title, value, hint, color, loading }: StatCardProps) {
+function StatCard({
+  icon,
+  title,
+  value,
+  hint,
+  color,
+  loading,
+  onPress,
+}: StatCardProps) {
   const theme = useColorScheme() ?? "light";
   const text = useThemeColor({}, "text");
   const cardBg = theme === "dark" ? "#1F1F1F" : "#ffffff";
@@ -41,13 +50,15 @@ function StatCard({ icon, title, value, hint, color, loading }: StatCardProps) {
   };
 
   return (
-    <View
-      style={[
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
         styles.statCard,
         {
           backgroundColor: cardBg,
           borderColor: borderCol,
           width: getCardWidth(),
+          opacity: pressed ? 0.75 : 1,
           ...Styling.shadow,
         },
       ]}
@@ -120,7 +131,7 @@ function StatCard({ icon, title, value, hint, color, loading }: StatCardProps) {
           )}
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -389,7 +400,7 @@ export default function Dashboard() {
                 },
               ]}
             >
-              Gatezen
+              CGate
             </Text>
             {user && (
               <Text
@@ -430,6 +441,7 @@ export default function Dashboard() {
             hint="New updates"
             color="#F59E0B"
             loading={loading}
+            onPress={() => router.push("/announcements")}
           />
           <StatCard
             icon="tool"
@@ -438,6 +450,7 @@ export default function Dashboard() {
             hint="Open tickets"
             color="#EF4444"
             loading={loading}
+            onPress={() => router.push("/maintenance")}
           />
           <StatCard
             icon="credit-card"
@@ -446,6 +459,7 @@ export default function Dashboard() {
             hint="Overdue"
             color="#8B5CF6"
             loading={loading}
+            onPress={() => router.push("/payments")}
           />
           <StatCard
             icon="calendar"
@@ -454,6 +468,7 @@ export default function Dashboard() {
             hint="Upcoming"
             color="#10B981"
             loading={loading}
+            onPress={() => router.push("/bookings")}
           />
         </View>
       </View>

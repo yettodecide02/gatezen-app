@@ -286,7 +286,7 @@ export default function RegisterScreen() {
             <Text style={styles.logoText}>GZ</Text>
           </View>
           <View>
-            <Text style={styles.title}>GateZen</Text>
+            <Text style={styles.title}>CGate</Text>
             <Text style={styles.subtitle}>Community Portal</Text>
           </View>
         </View>

@@ -26,13 +26,6 @@ type UserProfile = {
   block: string;
   unit: string;
   communityName: string;
-  notifications: {
-    email: boolean;
-    push: boolean;
-    maintenance: boolean;
-    payments: boolean;
-    announcements: boolean;
-  };
 };
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -59,13 +52,6 @@ export default function Profile() {
     block: "",
     unit: "",
     communityName: "",
-    notifications: {
-      email: true,
-      push: true,
-      maintenance: true,
-      payments: true,
-      announcements: true,
-    },
   });
 
   const isSmallScreen = SCREEN_WIDTH < BREAKPOINT_SM;
@@ -85,13 +71,6 @@ export default function Profile() {
         block: user?.blockName || "",
         unit: user?.unit?.number || "",
         communityName: user?.communityName || "",
-        notifications: {
-          email: true,
-          push: true,
-          maintenance: true,
-          payments: true,
-          announcements: true,
-        },
       };
 
       setProfile(basicProfile);
@@ -137,18 +116,7 @@ export default function Profile() {
     ]);
   };
 
-  const updateNotificationSetting = (
-    key: keyof UserProfile["notifications"],
-    value: boolean,
-  ) => {
-    setProfile((prev) => ({
-      ...prev,
-      notifications: {
-        ...prev.notifications,
-        [key]: value,
-      },
-    }));
-  };
+
 
   if (loading) {
     return (
@@ -488,78 +456,6 @@ export default function Profile() {
           </View>
         </View>
 
-        {/* Notification Preferences */}
-        <View
-          style={[
-            styles.section,
-            { backgroundColor: cardBg, borderColor: borderCol },
-          ]}
-        >
-          <View style={styles.sectionHeader}>
-            <Feather name="bell" size={18} color={tint} />
-            <Text style={[styles.sectionTitle, { color: text }]}>
-              Notification Preferences
-            </Text>
-          </View>
-
-          <NotificationItem
-            label="Email Notifications"
-            description="Receive notifications via email"
-            value={profile.notifications.email}
-            onValueChange={(value) => updateNotificationSetting("email", value)}
-            tint={tint}
-            text={text}
-            borderCol={borderCol}
-          />
-
-          <NotificationItem
-            label="Push Notifications"
-            description="Receive push notifications on your device"
-            value={profile.notifications.push}
-            onValueChange={(value) => updateNotificationSetting("push", value)}
-            tint={tint}
-            text={text}
-            borderCol={borderCol}
-          />
-
-          <NotificationItem
-            label="Maintenance Updates"
-            description="Updates on maintenance requests"
-            value={profile.notifications.maintenance}
-            onValueChange={(value) =>
-              updateNotificationSetting("maintenance", value)
-            }
-            tint={tint}
-            text={text}
-            borderCol={borderCol}
-          />
-
-          <NotificationItem
-            label="Payment Reminders"
-            description="Reminders for pending payments"
-            value={profile.notifications.payments}
-            onValueChange={(value) =>
-              updateNotificationSetting("payments", value)
-            }
-            tint={tint}
-            text={text}
-            borderCol={borderCol}
-          />
-
-          <NotificationItem
-            label="Community Announcements"
-            description="Important community updates"
-            value={profile.notifications.announcements}
-            onValueChange={(value) =>
-              updateNotificationSetting("announcements", value)
-            }
-            tint={tint}
-            text={text}
-            borderCol={borderCol}
-            isLast
-          />
-        </View>
-
         {/* Save Button */}
         {editing && (
           <Pressable
@@ -575,38 +471,7 @@ export default function Profile() {
   );
 }
 
-// Notification Item Component
-const NotificationItem = ({
-  label,
-  description,
-  value,
-  onValueChange,
-  tint,
-  text,
-  borderCol,
-  isLast = false,
-}) => (
-  <View
-    style={[
-      styles.notificationItem,
-      !isLast && { borderBottomWidth: 1, borderBottomColor: borderCol },
-    ]}
-  >
-    <View style={styles.notificationContent}>
-      <Text style={[styles.notificationLabel, { color: text }]}>{label}</Text>
-      <Text style={[styles.notificationDesc, { color: text, opacity: 0.6 }]}>
-        {description}
-      </Text>
-    </View>
-    <Switch
-      value={value}
-      onValueChange={onValueChange}
-      trackColor={{ false: "#767577", true: tint + "44" }}
-      thumbColor={value ? tint : "#f4f3f4"}
-      ios_backgroundColor="#767577"
-    />
-  </View>
-);
+
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
@@ -756,25 +621,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
-  notificationItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 14,
-    gap: 12,
-  },
-  notificationContent: {
-    flex: 1,
-    gap: 4,
-  },
-  notificationLabel: {
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  notificationDesc: {
-    fontSize: 13,
-    lineHeight: 18,
-  },
 
   saveButton: {
     flexDirection: "row",

@@ -242,7 +242,7 @@ export default function RegisterScreen() {
       if (res.data.user) await setUser(res.data.user);
 
       // Show success message
-      showSuccess("Registration successful! Welcome to GateZen.");
+      showSuccess("Registration successful! Welcome to CGate.");
 
       // Check user status after registration
       if (res.data.user.status === "PENDING") {
@@ -290,7 +290,7 @@ export default function RegisterScreen() {
             </View>
             <View>
               <Text style={[styles.brandName, { color: textColor }]}>
-                GateZen
+                CGate
               </Text>
               <Text style={[styles.brandSub, { color: muted }]}>
                 Community Portal

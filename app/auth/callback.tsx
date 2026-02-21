@@ -47,7 +47,7 @@ export default function AuthCallback() {
           if (response.data.user.role === "ADMIN") router.replace("/admin");
           else if (response.data.user.role === "GATEKEEPER")
             router.replace("/gatekeeper");
-          else router.replace("/(drawer)/dashboard");
+          else router.replace("/(tab)/home");
 
           return;
         } else {

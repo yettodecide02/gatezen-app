@@ -17,7 +17,6 @@ import { Feather } from "@expo/vector-icons";
 import axios from "axios";
 import { router } from "expo-router";
 
-import supabase from "@/lib/supabase";
 import Toast from "@/components/Toast";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
@@ -32,7 +31,8 @@ export default function ForgotPasswordScreen() {
 
   const { width } = useWindowDimensions();
   const scale = width / 375; // base scale for responsiveness
-  const normalize = (size: number) => Math.round(PixelRatio.roundToNearestPixel(size * scale));
+  const normalize = (size: number) =>
+    Math.round(PixelRatio.roundToNearestPixel(size * scale));
 
   const { toast, showError, showSuccess, hideToast } = useToast();
   const theme = useColorScheme() ?? "light";
@@ -42,7 +42,8 @@ export default function ForgotPasswordScreen() {
   const iconColor = useThemeColor({}, "icon");
   const cardBg = theme === "dark" ? "#1F1F1F" : "#ffffff";
   const fieldBg = theme === "dark" ? "#181818" : "#f3f4f6";
-  const borderCol = theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
+  const borderCol =
+    theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
   const muted = iconColor;
   const placeholder = iconColor;
   const buttonBg = tint;
@@ -57,8 +58,13 @@ export default function ForgotPasswordScreen() {
           showError("Email is required");
           return;
         }
-        const res = await axios.post(`${backendUrl}/auth/send-otp`, { email: email.trim() });
-        showSuccess(res?.data?.message || "If the account exists, a code was sent.");
+        const res = await axios.post(`${backendUrl}/auth/send-otp`, {
+          email: email.trim(),
+          operation: "password-reset",
+        });
+        showSuccess(
+          res?.data?.message || "If the account exists, a code was sent.",
+        );
         setStage("otp");
       } else if (stage === "otp") {
         if (!otp.trim()) {
@@ -76,25 +82,25 @@ export default function ForgotPasswordScreen() {
           showError("New password is required");
           return;
         }
-        const authP = await supabase.auth.updateUser({ password: newPassword });
-        if (!authP) {
-          showError("Error updating password");
+        if (newPassword.length < 8) {
+          showError("Password must be at least 8 characters");
           return;
         }
         const res = await axios.post(`${backendUrl}/auth/password-reset`, {
           email: email.trim(),
           password: newPassword,
         });
-        if (!res) {
-          showError("Error resetting password");
-          return;
-        }
-        showSuccess(res?.data?.message || "Password reset successful. You can now sign in.");
+        showSuccess(
+          res?.data?.message ||
+            "Password reset successful. You can now sign in.",
+        );
         router.replace("/login");
       }
     } catch (e: any) {
       console.error("Error resetting password:", e);
-      showError(e?.response?.data?.message || e?.message || "Something went wrong");
+      showError(
+        e?.response?.data?.message || e?.message || "Something went wrong",
+      );
     }
   };
 
@@ -165,7 +171,10 @@ export default function ForgotPasswordScreen() {
         behavior={Platform.select({ ios: "padding", android: undefined })}
       >
         <ScrollView
-          contentContainerStyle={[styles.scrollContent, { padding: normalize(16) }]}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { padding: normalize(16) },
+          ]}
           keyboardShouldPersistTaps="handled"
         >
           <View
@@ -183,10 +192,19 @@ export default function ForgotPasswordScreen() {
               <View
                 style={[
                   styles.logoBadge,
-                  { backgroundColor: tint, width: normalize(44), height: normalize(44) },
+                  {
+                    backgroundColor: tint,
+                    width: normalize(44),
+                    height: normalize(44),
+                  },
                 ]}
               >
-                <Text style={[styles.logoText, { color: buttonText, fontSize: normalize(18) }]}>
+                <Text
+                  style={[
+                    styles.logoText,
+                    { color: buttonText, fontSize: normalize(18) },
+                  ]}
+                >
                   GZ
                 </Text>
               </View>
@@ -204,7 +222,11 @@ export default function ForgotPasswordScreen() {
               <View
                 style={[
                   styles.field,
-                  { backgroundColor: fieldBg, borderColor: borderCol, paddingHorizontal: normalize(12) },
+                  {
+                    backgroundColor: fieldBg,
+                    borderColor: borderCol,
+                    paddingHorizontal: normalize(12),
+                  },
                 ]}
               >
                 <Feather
@@ -214,7 +236,10 @@ export default function ForgotPasswordScreen() {
                   style={styles.icon}
                 />
                 <TextInput
-                  style={[styles.input, { color: textColor, fontSize: normalize(15) }]}
+                  style={[
+                    styles.input,
+                    { color: textColor, fontSize: normalize(15) },
+                  ]}
                   placeholderTextColor={placeholder}
                   selectionColor={tint}
                   returnKeyType="done"
@@ -226,7 +251,11 @@ export default function ForgotPasswordScreen() {
               <TouchableOpacity
                 style={[
                   styles.authBtn,
-                  { backgroundColor: buttonBg, paddingVertical: normalize(12), borderRadius: normalize(10) },
+                  {
+                    backgroundColor: buttonBg,
+                    paddingVertical: normalize(12),
+                    borderRadius: normalize(10),
+                  },
                 ]}
                 onPress={submit}
               >
@@ -241,10 +270,18 @@ export default function ForgotPasswordScreen() {
               </TouchableOpacity>
 
               <View style={styles.foot}>
-                <Text style={[styles.muted, { color: muted, fontSize: normalize(14) }]}>
+                <Text
+                  style={[
+                    styles.muted,
+                    { color: muted, fontSize: normalize(14) },
+                  ]}
+                >
                   Remember your password?{" "}
                   <Text
-                    style={[styles.link, { color: tint, fontSize: normalize(14) }]}
+                    style={[
+                      styles.link,
+                      { color: tint, fontSize: normalize(14) },
+                    ]}
                     onPress={() => router.push("/login")}
                   >
                     Sign in
@@ -256,7 +293,12 @@ export default function ForgotPasswordScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <Toast visible={toast.visible} message={toast.message} type={toast.type} onHide={hideToast} />
+      <Toast
+        visible={toast.visible}
+        message={toast.message}
+        type={toast.type}
+        onHide={hideToast}
+      />
     </SafeAreaView>
   );
 }

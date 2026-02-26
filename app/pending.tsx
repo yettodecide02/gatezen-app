@@ -6,16 +6,23 @@ import {
   View,
   TouchableOpacity,
   ScrollView,
+  ActivityIndicator,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
+import axios from "axios";
 
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
-import { logout, getUser } from "@/lib/auth";
+import { logout, getUser, getToken, setUser } from "@/lib/auth";
+import { config } from "@/lib/config";
 
 export default function PendingScreen() {
-  const [user, setUser] = useState(null);
+  const [user, setUserState] = useState(null);
+  const [checking, setChecking] = useState(false);
+  const [checkResult, setCheckResult] = useState<
+    "approved" | "still_pending" | null
+  >(null);
 
   const theme = useColorScheme() ?? "light";
   const bg = useThemeColor({}, "background");
@@ -33,10 +40,42 @@ export default function PendingScreen() {
   useEffect(() => {
     const loadUser = async () => {
       const userData = await getUser();
-      setUser(userData);
+      setUserState(userData);
     };
     loadUser();
   }, []);
+
+  const handleCheckApproval = async () => {
+    setChecking(true);
+    setCheckResult(null);
+    try {
+      const token = await getToken();
+      if (!token) {
+        router.replace("/login");
+        return;
+      }
+      const res = await axios.get(`${config.backendUrl}/resident/profile`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const fresh = res.data?.user ?? res.data;
+      if (fresh && fresh.status !== "PENDING") {
+        await setUser(fresh);
+        if (fresh.role === "ADMIN") {
+          router.replace("/admin");
+        } else if (fresh.role === "GATEKEEPER") {
+          router.replace("/gatekeeper/visitors");
+        } else {
+          router.replace("/(tabs)/home");
+        }
+      } else {
+        setCheckResult("still_pending");
+      }
+    } catch {
+      setCheckResult("still_pending");
+    } finally {
+      setChecking(false);
+    }
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -103,6 +142,29 @@ export default function PendingScreen() {
             </View>
           </View>
 
+          {checkResult === "still_pending" && (
+            <View
+              style={[
+                styles.infoItem,
+                {
+                  borderColor: "#FCD34D",
+                  backgroundColor: "#FFFBEB",
+                  marginBottom: 4,
+                },
+              ]}
+            >
+              <Feather
+                name="alert-circle"
+                size={16}
+                color="#B45309"
+                style={styles.infoIcon}
+              />
+              <Text style={[styles.infoText, { color: "#92400E" }]}>
+                Still pending — please contact your community admin.
+              </Text>
+            </View>
+          )}
+
           <View style={styles.stepsSection}>
             <Text style={[styles.stepsTitle, { color: textColor }]}>
               What's next?
@@ -124,15 +186,44 @@ export default function PendingScreen() {
           </View>
         </View>
 
-        <TouchableOpacity
-          style={[styles.button, { backgroundColor: buttonBg }]}
-          onPress={handleLogout}
-        >
-          <Feather name="log-out" size={18} color={buttonText} />
-          <Text style={[styles.buttonText, { color: buttonText }]}>
-            Logout & Try Different Account
-          </Text>
-        </TouchableOpacity>
+        <View style={{ width: "100%", gap: 12 }}>
+          <TouchableOpacity
+            style={[
+              styles.button,
+              {
+                backgroundColor: checking ? "#93C5FD" : tint,
+              },
+            ]}
+            onPress={handleCheckApproval}
+            disabled={checking}
+          >
+            {checking ? (
+              <ActivityIndicator size="small" color={buttonText} />
+            ) : (
+              <Feather name="refresh-cw" size={18} color={buttonText} />
+            )}
+            <Text style={[styles.buttonText, { color: buttonText }]}>
+              {checking ? "Checking..." : "Check Approval Status"}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.button,
+              {
+                backgroundColor: "transparent",
+                borderWidth: 1,
+                borderColor: borderCol,
+              },
+            ]}
+            onPress={handleLogout}
+          >
+            <Feather name="log-out" size={18} color={textColor} />
+            <Text style={[styles.buttonText, { color: textColor }]}>
+              Logout & Try Different Account
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </ScrollView>
   );

@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "CGate",
-    "slug": "cgate",
+    "slug": "gatezen-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -21,7 +21,9 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "permissions": ["android.permission.CAMERA"],
+      "permissions": [
+        "android.permission.CAMERA"
+      ],
       "package": "com.yettodecide.gatezenapp",
       "googleServicesFile": "./path/to/google-services.json"
     },

@@ -1,7 +1,6 @@
 // @ts-nocheck
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
-  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -28,6 +27,7 @@ export default function ResidentPackagesScreen() {
   const bg = useThemeColor({}, "background");
   const text = useThemeColor({}, "text");
   const icon = useThemeColor({}, "icon");
+  const tint = useThemeColor({}, "tint");
   const card = theme === "dark" ? "#111111" : "#ffffff";
   const border = theme === "dark" ? "#262626" : "#E5E7EB";
 
@@ -112,65 +112,64 @@ export default function ResidentPackagesScreen() {
     () => ({
       total: packages.length,
       pending: packages.filter((p) => p.status === "PENDING").length,
-      collected: packages.filter(
-        (p) => p.status === "PICKED" || p.status === "COLLECTED",
-      ).length,
+      collected: packages.filter((p) => p.status === "PICKED").length,
     }),
     [packages],
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: bg, paddingTop: insets.top + 16 }}>
-      <ScrollView
-        contentContainerStyle={{ padding: 20, paddingBottom: 100, gap: 20 }}
-        showsVerticalScrollIndicator={false}
+    <View style={{ flex: 1, backgroundColor: bg }}>
+      {/* Fixed Header */}
+      <View
+        style={[
+          styles.headerContainer,
+          {
+            paddingTop: Math.max(insets.top, 16),
+            backgroundColor: bg,
+            borderBottomColor: border,
+          },
+        ]}
       >
-        {/* Header */}
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+        <View style={styles.headerRow}>
+          <View style={styles.headerLeft}>
             <View
-              style={{
-                padding: 12,
-                backgroundColor: "#EEF2FF",
-                borderRadius: 12,
-              }}
+              style={[
+                styles.headerIcon,
+                { backgroundColor: theme === "dark" ? "#1a1a2e" : "#EEF2FF" },
+              ]}
             >
-              <Feather name="package" size={24} color="#2563EB" />
+              <Feather name="package" size={20} color={tint} />
             </View>
             <View>
-              <Text style={{ color: text, fontSize: 24, fontWeight: "800" }}>
-                My Packages
-              </Text>
-              <Text style={{ color: icon as any, fontSize: 14, marginTop: 2 }}>
-                View your package delivery history
+              <Text style={[styles.title, { color: text }]}>My Packages</Text>
+              <Text style={[styles.subtitle, { color: icon as any }]}>
+                Delivery history
               </Text>
             </View>
           </View>
+          <TouchableOpacity
+            onPress={load}
+            disabled={loading}
+            style={styles.refreshBtn}
+          >
+            {loading ? (
+              <ActivityIndicator size="small" color={tint} />
+            ) : (
+              <Feather name="refresh-cw" size={18} color={tint} />
+            )}
+          </TouchableOpacity>
         </View>
+      </View>
 
-        <TouchableOpacity
-          onPress={load}
-          disabled={loading}
-          style={[
-            styles.button,
-            { backgroundColor: card, borderColor: border },
-          ]}
-        >
-          <Feather
-            name="refresh-cw"
-            size={16}
-            color={icon as any}
-            style={loading ? { transform: [{ rotate: "180deg" }] } : {}}
-          />
-          <Text style={{ color: text, fontWeight: "600" }}>Refresh</Text>
-        </TouchableOpacity>
-
+      <ScrollView
+        contentContainerStyle={{
+          padding: 16,
+          gap: 16,
+          paddingBottom: insets.bottom + 20,
+          paddingTop: 8,
+        }}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Date Filter */}
         <View
           style={[styles.card, { backgroundColor: card, borderColor: border }]}
@@ -179,7 +178,7 @@ export default function ResidentPackagesScreen() {
             style={{
               color: text,
               fontSize: 16,
-              fontWeight: "700",
+              fontWeight: "800",
               marginBottom: 16,
             }}
           >
@@ -277,27 +276,25 @@ export default function ResidentPackagesScreen() {
 
             {/* Apply Button */}
             <TouchableOpacity
-              onPress={() => {
-                load();
-              }}
+              onPress={load}
               disabled={loading}
               style={{
                 flexDirection: "row",
                 alignItems: "center",
                 justifyContent: "center",
                 gap: 8,
-                backgroundColor: loading ? "#93C5FD" : "#2563EB",
-                padding: 14,
-                borderRadius: 8,
+                backgroundColor: loading ? "#93C5FD" : tint,
+                padding: 13,
+                borderRadius: 10,
               }}
             >
               {loading ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <Feather name="calendar" size={16} color="#fff" />
+                <Feather name="search" size={15} color="#fff" />
               )}
-              <Text style={{ color: "#fff", fontWeight: "600", fontSize: 15 }}>
-                {loading ? "Loading..." : "Apply Filter"}
+              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>
+                {loading ? "Loading..." : "Apply"}
               </Text>
             </TouchableOpacity>
           </View>
@@ -324,17 +321,34 @@ export default function ResidentPackagesScreen() {
         )}
 
         {/* Error Message */}
-        {error && (
+        {!!error && (
           <View
-            style={{
-              backgroundColor: "#FEE2E2",
-              borderColor: "#FECACA",
-              borderWidth: 1,
-              borderRadius: 12,
-              padding: 16,
-            }}
+            style={[
+              styles.card,
+              {
+                backgroundColor: theme === "dark" ? "#2a0b0b" : "#fef2f2",
+                borderColor: theme === "dark" ? "#3d1212" : "#fecaca",
+              },
+            ]}
           >
-            <Text style={{ color: "#B91C1C", fontSize: 14 }}>{error}</Text>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+            >
+              <Feather
+                name="alert-circle"
+                size={16}
+                color={theme === "dark" ? "#fca5a5" : "#b91c1c"}
+              />
+              <Text
+                style={{
+                  color: theme === "dark" ? "#fca5a5" : "#b91c1c",
+                  fontSize: 14,
+                  flex: 1,
+                }}
+              >
+                {error}
+              </Text>
+            </View>
           </View>
         )}
 
@@ -350,53 +364,45 @@ export default function ResidentPackagesScreen() {
               style={{
                 color: text,
                 fontSize: 16,
-                fontWeight: "700",
+                fontWeight: "800",
                 marginBottom: 16,
               }}
             >
               Summary
             </Text>
-            <View style={{ flexDirection: "row", gap: 12 }}>
-              <View style={{ flex: 1, alignItems: "center" }}>
-                <Text
-                  style={{
-                    color: "#2563EB",
-                    fontSize: 24,
-                    fontWeight: "800",
-                  }}
+            <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+              {[
+                { label: "Total", value: stats.total, color: tint },
+                { label: "Pending", value: stats.pending, color: "#F59E0B" },
+                {
+                  label: "Collected",
+                  value: stats.collected,
+                  color: "#10B981",
+                },
+              ].map((s) => (
+                <View
+                  key={s.label}
+                  style={[
+                    styles.statChip,
+                    {
+                      backgroundColor: theme === "dark" ? "#1a1a1a" : "#F9FAFB",
+                      borderColor: border,
+                      flex: 1,
+                    },
+                  ]}
                 >
-                  {stats.total}
-                </Text>
-                <Text style={{ color: icon as any, fontSize: 12 }}>Total</Text>
-              </View>
-              <View style={{ flex: 1, alignItems: "center" }}>
-                <Text
-                  style={{
-                    color: "#F59E0B",
-                    fontSize: 24,
-                    fontWeight: "800",
-                  }}
-                >
-                  {stats.pending}
-                </Text>
-                <Text style={{ color: icon as any, fontSize: 12 }}>
-                  Pending
-                </Text>
-              </View>
-              <View style={{ flex: 1, alignItems: "center" }}>
-                <Text
-                  style={{
-                    color: "#10B981",
-                    fontSize: 24,
-                    fontWeight: "800",
-                  }}
-                >
-                  {stats.collected}
-                </Text>
-                <Text style={{ color: icon as any, fontSize: 12 }}>
-                  Collected
-                </Text>
-              </View>
+                  <Text
+                    style={{ color: s.color, fontSize: 22, fontWeight: "800" }}
+                  >
+                    {s.value}
+                  </Text>
+                  <Text
+                    style={{ color: icon as any, fontSize: 12, marginTop: 2 }}
+                  >
+                    {s.label}
+                  </Text>
+                </View>
+              ))}
             </View>
           </View>
         )}
@@ -408,7 +414,7 @@ export default function ResidentPackagesScreen() {
           <Text
             style={{
               color: text,
-              fontSize: 18,
+              fontSize: 16,
               fontWeight: "800",
               marginBottom: 16,
             }}
@@ -418,38 +424,38 @@ export default function ResidentPackagesScreen() {
 
           {loading && packages.length === 0 ? (
             <View style={{ paddingVertical: 40, alignItems: "center" }}>
-              <ActivityIndicator size="large" color="#2563EB" />
+              <ActivityIndicator size="large" color={tint} />
               <Text style={{ color: icon as any, marginTop: 12 }}>
                 Loading packages...
               </Text>
             </View>
           ) : packages.length === 0 ? (
-            <View style={{ paddingVertical: 40, alignItems: "center" }}>
+            <View
+              style={{ paddingVertical: 40, alignItems: "center", gap: 10 }}
+            >
               <View
                 style={{
-                  width: 64,
-                  height: 64,
-                  backgroundColor: "#F3F4F6",
-                  borderRadius: 32,
+                  width: 56,
+                  height: 56,
+                  backgroundColor: theme === "dark" ? "#1a1a1a" : "#F3F4F6",
+                  borderRadius: 28,
                   alignItems: "center",
                   justifyContent: "center",
-                  marginBottom: 12,
                 }}
               >
-                <Feather name="package" size={32} color="#9CA3AF" />
+                <Feather name="package" size={28} color={icon as any} />
               </View>
-              <Text
-                style={{
-                  color: text,
-                  fontSize: 16,
-                  fontWeight: "600",
-                  marginBottom: 4,
-                }}
-              >
+              <Text style={{ color: text, fontSize: 15, fontWeight: "600" }}>
                 No packages found
               </Text>
-              <Text style={{ color: icon as any, fontSize: 14 }}>
-                No packages were delivered in the selected date range
+              <Text
+                style={{
+                  color: icon as any,
+                  fontSize: 13,
+                  textAlign: "center",
+                }}
+              >
+                No deliveries in the selected date range
               </Text>
             </View>
           ) : (
@@ -469,11 +475,17 @@ export default function ResidentPackagesScreen() {
                     {/* Status Icon */}
                     <View
                       style={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: 24,
+                        width: 44,
+                        height: 44,
+                        borderRadius: 22,
                         backgroundColor:
-                          pkg.status === "PENDING" ? "#FEF3C7" : "#D1FAE5",
+                          pkg.status === "PENDING"
+                            ? theme === "dark"
+                              ? "#2d1d00"
+                              : "#FEF3C7"
+                            : theme === "dark"
+                              ? "#052e1f"
+                              : "#D1FAE5",
                         alignItems: "center",
                         justifyContent: "center",
                       }}
@@ -482,7 +494,7 @@ export default function ResidentPackagesScreen() {
                         name={
                           pkg.status === "PENDING" ? "clock" : "check-circle"
                         }
-                        size={24}
+                        size={20}
                         color={pkg.status === "PENDING" ? "#F59E0B" : "#10B981"}
                       />
                     </View>
@@ -517,42 +529,44 @@ export default function ResidentPackagesScreen() {
                         {/* Status Badge */}
                         <View
                           style={{
-                            paddingHorizontal: 12,
-                            paddingVertical: 6,
-                            borderRadius: 12,
+                            paddingHorizontal: 10,
+                            paddingVertical: 4,
+                            borderRadius: 999,
                             backgroundColor:
-                              pkg.status === "PENDING" ? "#FEF3C7" : "#D1FAE5",
+                              pkg.status === "PENDING"
+                                ? theme === "dark"
+                                  ? "#2d1d00"
+                                  : "#FEF3C7"
+                                : theme === "dark"
+                                  ? "#052e1f"
+                                  : "#D1FAE5",
                             borderWidth: 1,
                             borderColor:
-                              pkg.status === "PENDING" ? "#FCD34D" : "#6EE7B7",
-                            flexDirection: "row",
-                            alignItems: "center",
-                            gap: 4,
+                              pkg.status === "PENDING"
+                                ? theme === "dark"
+                                  ? "#92400e"
+                                  : "#FCD34D"
+                                : theme === "dark"
+                                  ? "#065f46"
+                                  : "#6EE7B7",
                             alignSelf: "flex-start",
                           }}
                         >
-                          <Feather
-                            name={
-                              pkg.status === "PENDING"
-                                ? "clock"
-                                : "check-circle"
-                            }
-                            size={12}
-                            color={
-                              pkg.status === "PENDING" ? "#B45309" : "#059669"
-                            }
-                          />
                           <Text
                             style={{
-                              fontSize: 12,
-                              fontWeight: "600",
+                              fontSize: 11,
+                              fontWeight: "700",
                               color:
                                 pkg.status === "PENDING"
-                                  ? "#B45309"
-                                  : "#059669",
+                                  ? theme === "dark"
+                                    ? "#fbbf24"
+                                    : "#B45309"
+                                  : theme === "dark"
+                                    ? "#34d399"
+                                    : "#059669",
                             }}
                           >
-                            {pkg.status}
+                            {pkg.status === "PENDING" ? "Pending" : "Collected"}
                           </Text>
                         </View>
                       </View>
@@ -597,20 +611,21 @@ export default function ResidentPackagesScreen() {
                             style={{
                               flexDirection: "row",
                               alignItems: "center",
-                              gap: 6,
+                              gap: 5,
                               paddingHorizontal: 10,
                               paddingVertical: 6,
-                              backgroundColor: "#EEF2FF",
-                              borderColor: "#C7D2FE",
                               borderWidth: 1,
+                              borderColor: border,
                               borderRadius: 8,
+                              alignSelf: "flex-start",
+                              marginTop: 8,
                             }}
                           >
-                            <Feather name="image" size={12} color="#2563EB" />
+                            <Feather name="image" size={12} color={tint} />
                             <Text
                               style={{
-                                color: "#2563EB",
-                                fontSize: 11,
+                                color: tint,
+                                fontSize: 12,
                                 fontWeight: "600",
                               }}
                             >
@@ -643,34 +658,32 @@ export default function ResidentPackagesScreen() {
         >
           <View
             style={{
-              backgroundColor: "#fff",
+              backgroundColor: card,
               borderRadius: 16,
-              maxWidth: "100%",
-              maxHeight: "90%",
               overflow: "hidden",
+              position: "relative",
             }}
           >
             <TouchableOpacity
               style={{
                 position: "absolute",
-                top: 16,
-                right: 16,
+                top: 12,
+                right: 12,
                 zIndex: 10,
-                backgroundColor: "#fff",
+                borderWidth: 1,
+                borderColor: border,
                 borderRadius: 20,
-                padding: 8,
+                padding: 6,
+                backgroundColor: "rgba(0,0,0,0.4)",
               }}
               onPress={() => setSelectedImage(null)}
             >
-              <Feather name="x" size={20} color="#374151" />
+              <Feather name="x" size={18} color={text} />
             </TouchableOpacity>
             <Image
               source={{ uri: selectedImage }}
-              style={{
-                width: 400,
-                height: 400,
-                resizeMode: "contain",
-              }}
+              style={{ width: 340, height: 340 }}
+              resizeMode="contain"
             />
           </View>
         </TouchableOpacity>
@@ -680,30 +693,56 @@ export default function ResidentPackagesScreen() {
 }
 
 const styles = StyleSheet.create({
-  card: {
-    borderWidth: 1,
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+  headerContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
   },
-  button: {
+  headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    justifyContent: "space-between",
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
+  },
+  headerIcon: {
+    width: 40,
+    height: 40,
     borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: "700",
+  },
+  subtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  refreshBtn: {
+    padding: 8,
+  },
+  card: {
     borderWidth: 1,
+    borderRadius: 16,
+    padding: 16,
+  },
+  statChip: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
   },
   label: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "600",
-    color: "#374151",
-    marginBottom: 8,
+    marginBottom: 6,
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
   },
 });

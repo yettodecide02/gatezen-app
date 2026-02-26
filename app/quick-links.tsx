@@ -251,53 +251,96 @@ export default function QuickLinks() {
   const theme = useColorScheme() ?? "light";
   const bg = useThemeColor({}, "background");
   const text = useThemeColor({}, "text");
+  const tint = useThemeColor({}, "tint");
+  const border = theme === "dark" ? "#262626" : "#E5E7EB";
   const insets = useSafeAreaInsets();
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: bg }}
-      contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
-    >
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <Feather name="arrow-left" size={24} color={text} />
-        </Pressable>
-        <Text style={[styles.headerTitle, { color: text }]}>All Services</Text>
-      </View>
-
-      {SERVICE_SECTIONS.map((section, index) => (
-        <View key={section.title} style={styles.section}>
-          <SectionHeader section={section} />
-          <View style={styles.servicesContainer}>
-            {section.services.map((service) => (
-              <ServiceCard key={service.key} service={service} />
-            ))}
+    <View style={{ flex: 1, backgroundColor: bg }}>
+      {/* Fixed header — sits above the scroll area */}
+      <View
+        style={[
+          styles.headerContainer,
+          {
+            paddingTop: Math.max(insets.top, 16),
+            backgroundColor: bg,
+            borderBottomColor: border,
+          },
+        ]}
+      >
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <Pressable onPress={() => router.back()} style={styles.backButton}>
+              <Feather name="arrow-left" size={24} color={tint} />
+            </Pressable>
+            <View>
+              <Text style={[styles.headerTitle, { color: text }]}>
+                All Services
+              </Text>
+              <Text
+                style={[styles.headerSubtitle, { color: text, opacity: 0.5 }]}
+              >
+                Browse all available features
+              </Text>
+            </View>
           </View>
         </View>
-      ))}
-    </ScrollView>
+      </View>
+
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: insets.bottom + 20 },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        {SERVICE_SECTIONS.map((section) => (
+          <View key={section.title} style={styles.section}>
+            <SectionHeader section={section} />
+            <View style={styles.servicesContainer}>
+              {section.services.map((service) => (
+                <ServiceCard key={service.key} service={service} />
+              ))}
+            </View>
+          </View>
+        ))}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  content: {
-    padding: 16,
-    gap: 24,
+  headerContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 16,
-    marginBottom: 8,
+    justifyContent: "space-between",
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
   },
   backButton: {
     padding: 8,
-    marginLeft: -8,
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: "800",
-    letterSpacing: 0.3,
+    fontSize: 20,
+    fontWeight: "700",
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  content: {
+    padding: 16,
+    gap: 24,
   },
   section: {
     gap: 16,

@@ -8,6 +8,9 @@ import {
   ScrollView,
   RefreshControl,
   Alert,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -38,6 +41,12 @@ const STATUS_CONFIG = {
     bg: "#dcfce7",
     label: "Resolved",
   },
+  CLOSED: {
+    icon: "x-square",
+    color: "#6b7280",
+    bg: "#f3f4f6",
+    label: "Close",
+  },
 };
 
 // Maintenance Card Component
@@ -49,7 +58,19 @@ function MaintenanceCard({
   tint,
   onStatusUpdate,
   updateLoading,
+  onAddComment,
 }) {
+  const [showComments, setShowComments] = React.useState(false);
+  const [commentText, setCommentText] = React.useState("");
+  const [commentLoading, setCommentLoading] = React.useState(false);
+
+  const handleSubmitComment = async () => {
+    if (!commentText.trim()) return;
+    setCommentLoading(true);
+    await onAddComment(item.id, commentText.trim());
+    setCommentText("");
+    setCommentLoading(false);
+  };
   const getStatusBadge = (status) => {
     let backgroundColor, color;
 
@@ -186,6 +207,128 @@ function MaintenanceCard({
             );
           })}
         </View>
+
+        {/* Comments Toggle */}
+        <TouchableOpacity
+          style={[
+            styles.commentsToggle,
+            {
+              borderTopColor:
+                theme === "dark"
+                  ? "rgba(255,255,255,0.08)"
+                  : "rgba(0,0,0,0.06)",
+            },
+          ]}
+          onPress={() => setShowComments((v) => !v)}
+        >
+          <View style={styles.commentsToggleLeft}>
+            <Feather name="message-circle" size={13} color={tint} />
+            <Text style={[styles.commentsToggleText, { color: tint }]}>
+              {item.comments?.length || 0} Comment
+              {(item.comments?.length || 0) !== 1 ? "s" : ""}
+            </Text>
+          </View>
+          <Feather
+            name={showComments ? "chevron-up" : "chevron-down"}
+            size={13}
+            color={muted}
+          />
+        </TouchableOpacity>
+
+        {/* Comments Section */}
+        {showComments && (
+          <View style={styles.commentsSection}>
+            {!item.comments || item.comments.length === 0 ? (
+              <Text style={[styles.noComments, { color: muted }]}>
+                No comments yet.
+              </Text>
+            ) : (
+              item.comments.map((c) => (
+                <View
+                  key={c.id}
+                  style={[
+                    styles.commentItem,
+                    {
+                      backgroundColor:
+                        theme === "dark"
+                          ? "rgba(255,255,255,0.05)"
+                          : "rgba(0,0,0,0.03)",
+                    },
+                  ]}
+                >
+                  <View style={styles.commentHeader}>
+                    <View style={styles.commentAuthorRow}>
+                      <Text
+                        style={[styles.commentAuthor, { color: textColor }]}
+                      >
+                        {c.user?.name || "Unknown"}
+                      </Text>
+                      {c.user?.role === "ADMIN" && (
+                        <View style={styles.adminBadge}>
+                          <Text style={styles.adminBadgeText}>Admin</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={[styles.commentTime, { color: muted }]}>
+                      {new Date(c.createdAt).toLocaleDateString()}
+                    </Text>
+                  </View>
+                  <Text style={[styles.commentText, { color: textColor }]}>
+                    {c.text}
+                  </Text>
+                </View>
+              ))
+            )}
+
+            {/* Add Comment Input */}
+            <View
+              style={[
+                styles.addCommentRow,
+                {
+                  borderTopColor:
+                    theme === "dark"
+                      ? "rgba(255,255,255,0.08)"
+                      : "rgba(0,0,0,0.06)",
+                },
+              ]}
+            >
+              <TextInput
+                style={[
+                  styles.commentInput,
+                  {
+                    backgroundColor:
+                      theme === "dark"
+                        ? "rgba(255,255,255,0.07)"
+                        : "rgba(0,0,0,0.04)",
+                    color: textColor,
+                    borderColor:
+                      theme === "dark"
+                        ? "rgba(255,255,255,0.12)"
+                        : "rgba(0,0,0,0.12)",
+                  },
+                ]}
+                placeholder="Add a comment..."
+                placeholderTextColor={muted}
+                value={commentText}
+                onChangeText={setCommentText}
+                multiline
+              />
+              <TouchableOpacity
+                onPress={handleSubmitComment}
+                disabled={commentLoading || !commentText.trim()}
+                style={[
+                  styles.commentSendBtn,
+                  {
+                    backgroundColor: tint,
+                    opacity: commentLoading || !commentText.trim() ? 0.4 : 1,
+                  },
+                ]}
+              >
+                <Feather name="send" size={14} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -237,6 +380,7 @@ export default function AdminMaintenance() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
   const [updateLoading, setUpdateLoading] = useState({});
+  const [commentLoadingMap, setCommentLoadingMap] = useState({});
 
   const url = config.backendUrl;
 
@@ -319,6 +463,30 @@ export default function AdminMaintenance() {
     }
   };
 
+  const handleAddComment = async (ticketId, text) => {
+    try {
+      const token = await getToken();
+      const res = await axios.post(
+        `${url}/admin/maintenance/${ticketId}/comments`,
+        { text },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      const newComment = res.data.comment;
+      setMaintenance((prev) =>
+        prev.map((item) =>
+          item.id === ticketId
+            ? { ...item, comments: [...(item.comments || []), newComment] }
+            : item,
+        ),
+      );
+    } catch (error) {
+      Alert.alert(
+        "Error",
+        error.response?.data?.error || "Failed to add comment",
+      );
+    }
+  };
+
   const getFilteredMaintenance = () => {
     switch (activeTab) {
       case "pending":
@@ -329,6 +497,8 @@ export default function AdminMaintenance() {
         return maintenance.filter((m) => m.status === "IN_PROGRESS");
       case "resolved":
         return maintenance.filter((m) => m.status === "RESOLVED");
+      case "closed":
+        return maintenance.filter((m) => m.status === "CLOSED");
       default:
         return maintenance;
     }
@@ -342,7 +512,8 @@ export default function AdminMaintenance() {
       (m) => m.status === "IN_PROGRESS",
     ).length;
     const resolved = maintenance.filter((m) => m.status === "RESOLVED").length;
-    return { total: maintenance.length, pending, inProgress, resolved };
+    const closed = maintenance.filter((m) => m.status === "CLOSED").length;
+    return { total: maintenance.length, pending, inProgress, resolved, closed };
   };
 
   const stats = getStats();
@@ -353,6 +524,7 @@ export default function AdminMaintenance() {
     { key: "pending", label: "Pending", count: stats.pending },
     { key: "in_progress", label: "In Progress", count: stats.inProgress },
     { key: "resolved", label: "Resolved", count: stats.resolved },
+    { key: "closed", label: "Closed", count: stats.closed },
   ];
 
   if (loading) {
@@ -580,6 +752,7 @@ export default function AdminMaintenance() {
                     tint={tint}
                     onStatusUpdate={handleStatusUpdate}
                     updateLoading={updateLoading[item.id]}
+                    onAddComment={handleAddComment}
                   />
                 ))}
               </View>
@@ -817,5 +990,92 @@ const styles = StyleSheet.create({
   actionButtonText: {
     fontSize: 11,
     fontWeight: "600",
+  },
+  commentsToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+  },
+  commentsToggleLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  commentsToggleText: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  commentsSection: {
+    marginTop: 10,
+    gap: 8,
+  },
+  noComments: {
+    fontSize: 12,
+    textAlign: "center",
+    paddingVertical: 8,
+  },
+  commentItem: {
+    borderRadius: 8,
+    padding: 10,
+    gap: 4,
+  },
+  commentHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  commentAuthorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  commentAuthor: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  adminBadge: {
+    backgroundColor: "#6366f120",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  adminBadgeText: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "#6366f1",
+  },
+  commentTime: {
+    fontSize: 10,
+  },
+  commentText: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  addCommentRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 8,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+  },
+  commentInput: {
+    flex: 1,
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 13,
+    maxHeight: 80,
+  },
+  commentSendBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

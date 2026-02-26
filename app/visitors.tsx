@@ -131,7 +131,6 @@ function TypeChip({ type }: any) {
       ?.replace("_", " ")
       .toLowerCase()
       .replace(/\b\w/g, (l: string) => l.toUpperCase()) || "Guest";
-
   const typeConfig: any = {
     Guest: { icon: "user", color: theme === "dark" ? "#60a5fa" : "#2563eb" },
     Delivery: {
@@ -235,16 +234,6 @@ export default function VisitorsScreen() {
     })();
   }, []);
 
-  // Data
-  const [visitors, setVisitors] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  // Date filters
-  const [from, setFrom] = useState(isoNowLocalDate());
-  const [to, setTo] = useState(isoNowLocalDate());
-  const [showFromPicker, setShowFromPicker] = useState(false);
-  const [showToPicker, setShowToPicker] = useState(false);
-
   // New visitor form
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -292,44 +281,6 @@ export default function VisitorsScreen() {
     [token],
   );
 
-  const load = useCallback(async () => {
-    if (!user?.id || !user?.communityId) return;
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (from) params.set("from", from);
-      if (to) params.set("to", to);
-      params.set("communityId", user.communityId);
-      params.set("userId", user.id);
-
-      const res = await axios.get(
-        `${backendUrl}/resident/visitors?${params.toString()}`,
-        {
-          headers: authHeaders,
-        },
-      );
-      const list = Array.isArray(res.data) ? res.data : [];
-      setVisitors(list);
-    } catch (e) {
-      setVisitors([]);
-      showToast("Error loading visitors", "error");
-    } finally {
-      setLoading(false);
-    }
-  }, [
-    backendUrl,
-    user?.id,
-    user?.communityId,
-    from,
-    to,
-    authHeaders,
-    showToast,
-  ]);
-
-  useEffect(() => {
-    if (user) load();
-  }, [user, load]);
-
   const preAuthorize = useCallback(async () => {
     if (!name.trim()) {
       showToast("Visitor name is required", "error");
@@ -358,8 +309,16 @@ export default function VisitorsScreen() {
 
     try {
       setSubmitting(true);
-      const localDateTime = `${expectedDate}T${expectedTime}:00`;
-      const expectedAt = new Date(localDateTime).toISOString();
+      const [year, month, day] = expectedDate.split("-").map(Number);
+      const [hours, minutes] = expectedTime.split(":").map(Number);
+      const expectedAt = new Date(
+        year,
+        month - 1,
+        day,
+        hours,
+        minutes,
+        0,
+      ).toISOString();
 
       const requestData = {
         name: name.trim(),
@@ -399,7 +358,6 @@ export default function VisitorsScreen() {
       setExpectedTime(isoNowLocalTime());
       setVehicle("");
       showToast("Pre-authorization submitted successfully!", "success");
-      load();
     } catch (error: any) {
       let errorMessage = "Error creating visitor. Please try again.";
 
@@ -435,7 +393,6 @@ export default function VisitorsScreen() {
     expectedTime,
     vehicle,
     showToast,
-    load,
   ]);
 
   return (
@@ -816,276 +773,69 @@ export default function VisitorsScreen() {
             )}
           </View>
 
-          {/* My Visitors */}
-          <View
-            style={[
-              styles.card,
-              {
-                backgroundColor: card,
-                borderColor: border,
-                padding: cardPadding,
-              },
-            ]}
+          {/* View All Passes Card */}
+          <TouchableOpacity
+            onPress={() => router.push("/visitors/passes")}
+            activeOpacity={0.7}
           >
             <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
+              style={[
+                styles.card,
+                {
+                  backgroundColor: card,
+                  borderColor: border,
+                  padding: cardPadding,
+                },
+              ]}
             >
-              <Text
-                style={[
-                  styles.cardTitle,
-                  { color: text, fontSize: isSmallScreen ? 16 : 18 },
-                ]}
-              >
-                Upcoming / Recent
-              </Text>
-              <TouchableOpacity onPress={load} disabled={loading}>
-                {loading ? (
-                  <ActivityIndicator size="small" color={icon as any} />
-                ) : (
-                  <Feather
-                    name="refresh-cw"
-                    size={isSmallScreen ? 14 : 16}
-                    color={icon as any}
-                  />
-                )}
-              </TouchableOpacity>
-            </View>
-
-            {/* Date Range Filter */}
-            <View
-              style={{
-                flexDirection: "row",
-                gap: isSmallScreen ? 6 : 8,
-                marginBottom: 10,
-              }}
-            >
-              <View style={{ flex: 1 }}>
-                <Text
-                  style={[
-                    styles.filterLabel,
-                    { color: icon as any, fontSize: isSmallScreen ? 11 : 12 },
-                  ]}
-                >
-                  From
-                </Text>
-                <TouchableOpacity
-                  onPress={() => setShowFromPicker(true)}
-                  style={[
-                    styles.filterInput,
-                    {
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      borderColor: border,
-                      backgroundColor: theme === "dark" ? "#0B0B0B" : "#F9FAFB",
-                      paddingHorizontal: isSmallScreen ? 8 : 10,
-                      paddingVertical: isSmallScreen ? 6 : 8,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={{ color: text, fontSize: isSmallScreen ? 12 : 14 }}
-                    numberOfLines={1}
-                  >
-                    {new Date(from).toLocaleDateString()}
-                  </Text>
-                  <Feather
-                    name="calendar"
-                    size={isSmallScreen ? 12 : 14}
-                    color={icon as any}
-                  />
-                </TouchableOpacity>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text
-                  style={[
-                    styles.filterLabel,
-                    { color: icon as any, fontSize: isSmallScreen ? 11 : 12 },
-                  ]}
-                >
-                  To
-                </Text>
-                <TouchableOpacity
-                  onPress={() => setShowToPicker(true)}
-                  style={[
-                    styles.filterInput,
-                    {
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      borderColor: border,
-                      backgroundColor: theme === "dark" ? "#0B0B0B" : "#F9FAFB",
-                      paddingHorizontal: isSmallScreen ? 8 : 10,
-                      paddingVertical: isSmallScreen ? 6 : 8,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={{ color: text, fontSize: isSmallScreen ? 12 : 14 }}
-                    numberOfLines={1}
-                  >
-                    {new Date(to).toLocaleDateString()}
-                  </Text>
-                  <Feather
-                    name="calendar"
-                    size={isSmallScreen ? 12 : 14}
-                    color={icon as any}
-                  />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {loading ? (
-              <View style={{ paddingVertical: 20, alignItems: "center" }}>
-                <ActivityIndicator size="large" color={icon as any} />
-              </View>
-            ) : visitors.length === 0 ? (
-              <Text
+              <View
                 style={{
-                  color: icon as any,
-                  textAlign: "center",
-                  paddingVertical: 20,
-                  fontSize: isSmallScreen ? 13 : 14,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
                 }}
               >
-                No visitors in range.
-              </Text>
-            ) : (
-              <View style={{ gap: isSmallScreen ? 10 : 12 }}>
-                {visitors.map((visitor) => (
-                  <View
-                    key={visitor.id}
+                <View style={{ flex: 1 }}>
+                  <Text
                     style={[
-                      styles.visitorItem,
-                      {
-                        borderColor: border,
-                        backgroundColor: "transparent",
-                        padding: isSmallScreen ? 12 : 16,
-                        minHeight: isSmallScreen ? 90 : 100,
-                      },
+                      styles.cardTitle,
+                      { color: text, fontSize: isSmallScreen ? 16 : 18 },
                     ]}
                   >
-                    <View style={{ flex: 1 }}>
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          gap: 6,
-                          marginBottom: 4,
-                          flexWrap: "wrap",
-                        }}
-                      >
-                        <Text
-                          style={{
-                            color: text,
-                            fontWeight: "700",
-                            fontSize: isSmallScreen ? 14 : 16,
-                            flexShrink: 1,
-                          }}
-                          numberOfLines={2}
-                        >
-                          {visitor.name}
-                        </Text>
-                        <TypeChip type={visitor.type} />
-                      </View>
-                      <Text
-                        style={{
-                          color: icon as any,
-                          fontSize: isSmallScreen ? 12 : 14,
-                          marginBottom: 2,
-                        }}
-                        numberOfLines={1}
-                      >
-                        {visitor.email}
-                      </Text>
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          gap: 4,
-                          marginBottom: 2,
-                        }}
-                      >
-                        <Feather
-                          name="calendar"
-                          size={isSmallScreen ? 10 : 12}
-                          color={icon as any}
-                        />
-                        <Text
-                          style={{
-                            color: icon as any,
-                            fontSize: isSmallScreen ? 11 : 12,
-                          }}
-                        >
-                          {new Date(visitor.visitDate).toLocaleString()}
-                        </Text>
-                      </View>
-                      {visitor.vehicle && (
-                        <Text
-                          style={{
-                            color: icon as any,
-                            fontSize: isSmallScreen ? 11 : 12,
-                            marginBottom: 2,
-                          }}
-                        >
-                          Vehicle: {visitor.vehicle}
-                        </Text>
-                      )}
-                    </View>
-                    <View style={{ alignItems: "flex-end" }}>
-                      <StatusChip status={visitor.status?.toLowerCase()} />
-                    </View>
-                  </View>
-                ))}
+                    My Passes
+                  </Text>
+                  <Text
+                    style={{
+                      color: icon as any,
+                      fontSize: isSmallScreen ? 12 : 13,
+                      marginTop: 4,
+                    }}
+                  >
+                    View past visitor records
+                  </Text>
+                </View>
+                <Feather
+                  name="arrow-right"
+                  size={isSmallScreen ? 20 : 24}
+                  color={tint}
+                />
               </View>
-            )}
-          </View>
+            </View>
+          </TouchableOpacity>
         </ScrollView>
 
-        {/* Date/Time Pickers */}
-        {showFromPicker && (
-          <DateTimePicker
-            value={new Date(from)}
-            mode="date"
-            display={Platform.OS === "ios" ? "spinner" : "default"}
-            onChange={(event, selectedDate) => {
-              setShowFromPicker(false);
-              if (selectedDate) {
-                const formattedDate = selectedDate.toISOString().split("T")[0];
-                setFrom(formattedDate);
-              }
-            }}
-          />
-        )}
-
-        {showToPicker && (
-          <DateTimePicker
-            value={new Date(to)}
-            mode="date"
-            display={Platform.OS === "ios" ? "spinner" : "default"}
-            onChange={(event, selectedDate) => {
-              setShowToPicker(false);
-              if (selectedDate) {
-                const formattedDate = selectedDate.toISOString().split("T")[0];
-                setTo(formattedDate);
-              }
-            }}
-          />
-        )}
-
+        {/* Expected Date/Time Pickers */}
         {showExpectedDatePicker && (
           <DateTimePicker
             value={new Date(expectedDate)}
             mode="date"
+            minimumDate={new Date()}
             display={Platform.OS === "ios" ? "spinner" : "default"}
             onChange={(event, selectedDate) => {
               setShowExpectedDatePicker(false);
               if (selectedDate) {
-                const formattedDate = selectedDate.toISOString().split("T")[0];
+                const pad = (n: number) => String(n).padStart(2, "0");
+                const formattedDate = `${selectedDate.getFullYear()}-${pad(selectedDate.getMonth() + 1)}-${pad(selectedDate.getDate())}`;
                 setExpectedDate(formattedDate);
               }
             }}
@@ -1096,6 +846,9 @@ export default function VisitorsScreen() {
           <DateTimePicker
             value={new Date(`${expectedDate}T${expectedTime}:00`)}
             mode="time"
+            minimumDate={
+              expectedDate === isoNowLocalDate() ? new Date() : undefined
+            }
             display={Platform.OS === "ios" ? "spinner" : "default"}
             onChange={(event, selectedTime) => {
               setShowExpectedTimePicker(false);

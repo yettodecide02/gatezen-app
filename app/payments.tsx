@@ -14,8 +14,11 @@ import {
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import axios from "axios";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
+import { getToken, getUser } from "@/lib/auth";
+import { config } from "@/lib/config";
 
 type PaymentItem = {
   id: string;
@@ -53,6 +56,16 @@ export default function Payments() {
     provider: "mock",
     last4: "0000",
   });
+  const [token, setToken] = useState<string | null>(null);
+  const [user, setUserData] = useState<any>(null);
+
+  useEffect(() => {
+    (async () => {
+      const [t, u] = await Promise.all([getToken(), getUser()]);
+      setToken(t);
+      setUserData(u);
+    })();
+  }, []);
 
   const due = useMemo(() => items.filter((i) => i.status === "due"), [items]);
   const history = useMemo(
@@ -60,17 +73,39 @@ export default function Payments() {
     [items],
   );
 
+  // Map backend PaymentStatus enum to frontend status strings
+  const mapStatus = (s: string): "due" | "paid" | "failed" => {
+    switch (s?.toUpperCase()) {
+      case "COMPLETED":
+        return "paid";
+      case "FAILED":
+        return "failed";
+      default:
+        return "due"; // PENDING, OVERDUE
+    }
+  };
+
   const load = async () => {
     try {
       setLoading(true);
-      // TODO: Replace with actual API calls
-      // const response = await fetch('/api/payments');
-      // const data = await response.json();
-      // setItems(data.payments);
-      // setAutopay(data.autopaySettings);
-
-      setItems([]);
-      setAutopay({ autopay: false, provider: "mock", last4: "0000" });
+      const [t, u] = await Promise.all([getToken(), getUser()]);
+      if (!t || !u?.communityId) return;
+      const res = await axios.get(`${config.backendUrl}/resident/payments`, {
+        params: { communityId: u.communityId },
+        headers: { Authorization: `Bearer ${t}` },
+      });
+      const raw = res.data?.data ?? res.data ?? [];
+      setItems(
+        (Array.isArray(raw) ? raw : []).map((p: any) => ({
+          id: p.id,
+          description: p.description,
+          amount: p.amount,
+          currency: p.currency || "INR",
+          status: mapStatus(p.status),
+          createdAt: p.createdAt,
+          paidAt: p.paidAt,
+        })),
+      );
     } catch (error) {
       console.error("Failed to load payments:", error);
     } finally {
@@ -85,20 +120,15 @@ export default function Payments() {
   const payNow = async (id: string) => {
     try {
       setBusy(true);
-      // TODO: Replace with actual payment processing
-      // const response = await fetch('/api/payments/process', {
-      //   method: 'POST',
-      //   body: JSON.stringify({ id, provider })
-      // });
-      // const result = await response.json();
-
+      // Payment processing is handled externally (e.g. Razorpay/Stripe gateway);
+      // mark the payment as completed on the backend once the gateway callback is received.
       Alert.alert(
-        "Payment Successful",
-        "Your payment has been processed successfully.",
-        [{ text: "OK", onPress: () => load() }],
+        "Coming Soon",
+        "Online payment processing will be available soon. Please contact your admin to record manual payment.",
+        [{ text: "OK" }],
       );
     } catch (error) {
-      Alert.alert("Payment Failed", "Please try again later.");
+      Alert.alert("Error", "Please try again later.");
     } finally {
       setBusy(false);
     }
@@ -107,11 +137,6 @@ export default function Payments() {
   const toggleAutopay = async () => {
     const newValue = !autopay.autopay;
     setAutopay((prev) => ({ ...prev, autopay: newValue }));
-    // TODO: Sync with backend
-    // await fetch('/api/payments/autopay', {
-    //   method: 'POST',
-    //   body: JSON.stringify({ autopay: newValue, provider })
-    // });
   };
 
   const downloadReceipt = (id: string) => {
@@ -324,7 +349,13 @@ export default function Payments() {
                     styles[`status_${payment.status}`],
                   ]}
                 >
-                  <Feather name="check-circle" size={14} color="#065F46" />
+                  <Feather
+                    name={
+                      payment.status === "paid" ? "check-circle" : "x-circle"
+                    }
+                    size={14}
+                    color={payment.status === "paid" ? "#065F46" : "#DC2626"}
+                  />
                   <Text
                     style={[
                       styles.statusText,

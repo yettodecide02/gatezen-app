@@ -197,6 +197,11 @@ export default function RegisterScreen() {
       return;
     }
 
+    if(password.length < 8) {
+      showError("Password must be at least 8 characters");
+      return;
+    }
+
     setLoading(true);
     try {
       // Check existing user

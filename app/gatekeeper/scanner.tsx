@@ -294,32 +294,18 @@ export default function GatekeeperScannerScreen() {
 
               <View style={{ flexDirection: "row", gap: 12, marginTop: 16 }}>
                 {visitor.status === "pending" && (
-                  <>
-                    <TouchableOpacity
-                      onPress={() => updateVisitorStatus("checked_in")}
-                      style={[
-                        styles.btn,
-                        { backgroundColor: "#10B981", flex: 1 },
-                      ]}
-                    >
-                      <Feather name="check" size={16} color="#fff" />
-                      <Text style={{ color: "#fff", fontWeight: "700" }}>
-                        Check In
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => updateVisitorStatus("cancelled")}
-                      style={[
-                        styles.btn,
-                        { backgroundColor: "#EF4444", flex: 1 },
-                      ]}
-                    >
-                      <Feather name="x" size={16} color="#fff" />
-                      <Text style={{ color: "#fff", fontWeight: "700" }}>
-                        Cancel
-                      </Text>
-                    </TouchableOpacity>
-                  </>
+                  <TouchableOpacity
+                    onPress={() => updateVisitorStatus("checked_in")}
+                    style={[
+                      styles.btn,
+                      { backgroundColor: "#10B981", flex: 1 },
+                    ]}
+                  >
+                    <Feather name="check" size={16} color="#fff" />
+                    <Text style={{ color: "#fff", fontWeight: "700" }}>
+                      Check In
+                    </Text>
+                  </TouchableOpacity>
                 )}
 
                 {visitor.status === "checked_in" && (

@@ -28,7 +28,7 @@ export default function RegisterScreen() {
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("Goo");
+  const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
 
   const [selectedCommunity, setSelectedCommunity] = useState("");
@@ -58,6 +58,8 @@ export default function RegisterScreen() {
           setName(data.user.user_metadata.full_name);
           setEmail(data.user.email);
           setPassword(config.googleSignupPassword);
+          // Email is already verified by Google — skip OTP step
+          setCurrentStep(2);
         }
       } catch (err) {
         console.error(err);
@@ -211,12 +213,12 @@ export default function RegisterScreen() {
       const res = await axios.post(config.backendUrl + "/auth/signup", req);
 
       if (res.status === 201) {
-        setToken(res.data.jwttoken);
-        setUser(res.data.user);
+        await setToken(res.data.jwttoken);
+        await setUser(res.data.user);
         showSuccess("Registration successful");
 
         if (res.data.user.status === "PENDING") router.replace("/pending");
-        else router.replace("/(drawer)/dashboard");
+        else router.replace("/(tabs)/home");
       } else {
         showError("Registration failed");
       }

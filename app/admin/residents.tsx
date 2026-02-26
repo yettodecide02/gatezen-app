@@ -223,6 +223,7 @@ export default function AdminResidents() {
   const handleResidentAction = async (userId, action) => {
     try {
       const token = await getToken();
+      const communityId = await getCommunityId();
       const endpoint =
         action === "approve"
           ? "/admin/approve-resident"
@@ -230,7 +231,7 @@ export default function AdminResidents() {
 
       await axios.post(
         url + endpoint,
-        { userId, communityId: getCommunityId() },
+        { userId, communityId },
         {
           headers: {
             Authorization: `Bearer ${token}`,

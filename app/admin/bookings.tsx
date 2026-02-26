@@ -221,8 +221,6 @@ export default function AdminBookings() {
 
   const getFilteredBookings = () => {
     switch (activeTab) {
-      case "pending":
-        return bookings.filter((b) => b.status === "PENDING");
       case "confirmed":
         return bookings.filter((b) => b.status === "CONFIRMED");
       case "cancelled":
@@ -233,7 +231,6 @@ export default function AdminBookings() {
   };
 
   const getStats = () => {
-    const pending = bookings.filter((b) => b.status === "PENDING").length;
     const confirmed = bookings.filter((b) => b.status === "CONFIRMED").length;
     const cancelled = bookings.filter((b) => b.status === "CANCELLED").length;
     const totalRevenue = bookings
@@ -242,7 +239,6 @@ export default function AdminBookings() {
 
     return {
       total: bookings.length,
-      pending,
       confirmed,
       cancelled,
       totalRevenue,
@@ -254,7 +250,6 @@ export default function AdminBookings() {
 
   const tabs = [
     { key: "all", label: "All Bookings", count: stats.total },
-    { key: "pending", label: "Pending", count: stats.pending },
     { key: "confirmed", label: "Confirmed", count: stats.confirmed },
     { key: "cancelled", label: "Cancelled", count: stats.cancelled },
   ];
@@ -327,19 +322,19 @@ export default function AdminBookings() {
               muted={muted}
             />
             <StatCard
-              icon="clock"
-              title="Pending"
-              value={stats.pending}
-              color="#f59e0b"
+              icon="check-circle"
+              title="Confirmed"
+              value={stats.confirmed}
+              color="#10b981"
               theme={theme}
               textColor={textColor}
               muted={muted}
             />
             <StatCard
-              icon="check-circle"
-              title="Confirmed"
-              value={stats.confirmed}
-              color="#10b981"
+              icon="x-circle"
+              title="Cancelled"
+              value={stats.cancelled}
+              color="#ef4444"
               theme={theme}
               textColor={textColor}
               muted={muted}
@@ -449,7 +444,6 @@ export default function AdminBookings() {
                 <Feather name="calendar" size={20} color={tint} />
                 <Text style={[styles.sectionTitle, { color: textColor }]}>
                   {activeTab === "all" && "All Bookings"}
-                  {activeTab === "pending" && "Pending Bookings"}
                   {activeTab === "confirmed" && "Confirmed Bookings"}
                   {activeTab === "cancelled" && "Cancelled Bookings"}
                 </Text>
@@ -465,7 +459,6 @@ export default function AdminBookings() {
                 <Feather name="calendar" size={48} color={muted} />
                 <Text style={[styles.emptyText, { color: muted }]}>
                   {activeTab === "all" && "No bookings found."}
-                  {activeTab === "pending" && "No pending bookings."}
                   {activeTab === "confirmed" && "No confirmed bookings."}
                   {activeTab === "cancelled" && "No cancelled bookings."}
                 </Text>

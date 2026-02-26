@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -18,6 +19,7 @@ import {
   View,
   Vibration,
 } from "react-native";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -201,6 +203,7 @@ export default function BookingsScreen() {
   const [userBookingsToday, setUserBookingsToday] = useState<Booking[]>([]);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [newBookingExpanded, setNewBookingExpanded] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   // Modals
   const [facilitiesOpen, setFacilitiesOpen] = useState(false);
@@ -271,7 +274,12 @@ export default function BookingsScreen() {
         : Array.isArray(res.data)
           ? res.data
           : [];
-      setFacilities(f);
+      setFacilities(
+        f.map((a: any) => ({
+          ...a,
+          facilityType: a.facilityType?.replace(/_/g, " ") ?? a.facilityType,
+        })),
+      );
       if (!facilityId && f[0]?.id) setFacilityId(f[0].id);
     } catch (e: any) {
       console.warn("Failed to load facilities", e);
@@ -641,24 +649,40 @@ export default function BookingsScreen() {
                 >
                   <Feather name="chevron-left" size={20} color={icon as any} />
                 </TouchableOpacity>
-                <TextInput
-                  value={date}
-                  onChangeText={setDate}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor={icon as any}
+                <TouchableOpacity
+                  onPress={() => setShowDatePicker(true)}
                   style={[
-                    styles.input,
+                    styles.select,
                     {
                       flex: 1,
-                      color: text,
                       borderColor: border,
                       backgroundColor: theme === "dark" ? "#0B0B0B" : "#F9FAFB",
-                      minHeight: 48,
-                      fontSize: 16,
-                      textAlign: "center",
+                      justifyContent: "center",
                     },
                   ]}
-                />
+                >
+                  <Feather
+                    name="calendar"
+                    size={16}
+                    color={icon as any}
+                    style={{ marginRight: 8 }}
+                  />
+                  <Text
+                    style={{
+                      color: text,
+                      fontSize: 15,
+                      fontWeight: "600",
+                      flex: 1,
+                      textAlign: "center",
+                    }}
+                  >
+                    {new Date(date + "T00:00:00").toLocaleDateString("en-US", {
+                      weekday: "short",
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </Text>
+                </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => shiftDay(+1)}
                   style={[
@@ -697,6 +721,81 @@ export default function BookingsScreen() {
                   Today
                 </Text>
               </TouchableOpacity>
+
+              {/* Native date picker — Android shows dialog, iOS shows in modal */}
+              {showDatePicker && Platform.OS === "android" && (
+                <DateTimePicker
+                  value={new Date(date + "T00:00:00")}
+                  mode="date"
+                  minimumDate={
+                    new Date(
+                      new Date().toISOString().slice(0, 10) + "T00:00:00",
+                    )
+                  }
+                  onChange={(event, selectedDate) => {
+                    setShowDatePicker(false);
+                    if (event.type === "dismissed" || !selectedDate) return;
+                    setSelectedBooking(null);
+                    setDate(selectedDate.toISOString().slice(0, 10));
+                  }}
+                />
+              )}
+              {showDatePicker && Platform.OS === "ios" && (
+                <Modal transparent animationType="fade">
+                  <View style={styles.modalBackdrop}>
+                    <View
+                      style={[
+                        styles.modalCard,
+                        { backgroundColor: card, borderColor: border },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.cardTitle,
+                          { color: text, marginBottom: 8 },
+                        ]}
+                      >
+                        Select Date
+                      </Text>
+                      <DateTimePicker
+                        value={new Date(date + "T00:00:00")}
+                        mode="date"
+                        display="inline"
+                        minimumDate={
+                          new Date(
+                            new Date().toISOString().slice(0, 10) + "T00:00:00",
+                          )
+                        }
+                        themeVariant={theme === "dark" ? "dark" : "light"}
+                        style={{ width: "100%" }}
+                        onChange={(event, selectedDate) => {
+                          if (!selectedDate) return;
+                          setSelectedBooking(null);
+                          setDate(selectedDate.toISOString().slice(0, 10));
+                        }}
+                      />
+                      <TouchableOpacity
+                        onPress={() => setShowDatePicker(false)}
+                        style={[
+                          styles.btn,
+                          styles.btnPrimary,
+                          { marginTop: 12 },
+                        ]}
+                      >
+                        <Text
+                          style={{
+                            color: "#fff",
+                            fontWeight: "700",
+                            fontSize: 16,
+                          }}
+                        >
+                          Done
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </Modal>
+              )}
 
               {/* Slot */}
               <Text style={[styles.label, { color: icon as any }]}>

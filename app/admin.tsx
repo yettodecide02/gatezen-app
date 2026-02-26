@@ -73,7 +73,11 @@ function AnnouncementModal({
     const communityId = await getCommunityId();
     setIsSubmitting(true);
     try {
-      await onSubmit({ title: title.trim(), content: content.trim(), communityId: communityId });
+      await onSubmit({
+        title: title.trim(),
+        content: content.trim(),
+        communityId: communityId,
+      });
       setTitle("");
       setContent("");
       onClose();
@@ -315,13 +319,15 @@ export default function AdminDashboard() {
 
   const kpis = useMemo(() => {
     const totalDue = payments
-      .filter((p) => p.status === "due")
+      .filter((p) => p.status === "PENDING" || p.status === "OVERDUE")
       .reduce((a, b) => a + (b.amount || 0), 0);
-    const openMaint = maintenance.filter((m) => m.status !== "RESOLVED").length;
-    const pendingBookings = bookings.filter(
-      (b) => b.status !== "CONFIRMED",
+    const openMaint = maintenance.filter(
+      (m) => m.status !== "RESOLVED" && m.status !== "CLOSED",
     ).length;
-    return { totalDue, openMaint, pendingBookings };
+    const cancelledBookings = bookings.filter(
+      (b) => b.status === "CANCELLED",
+    ).length;
+    return { totalDue, openMaint, cancelledBookings };
   }, [payments, maintenance, bookings]);
 
   if (loading) {
@@ -409,9 +415,9 @@ export default function AdminDashboard() {
             />
             <StatCard
               icon="calendar"
-              title="Pending Bookings"
-              value={kpis.pendingBookings}
-              hint="To review"
+              title="Cancelled Bookings"
+              value={kpis.cancelledBookings}
+              hint="Total cancelled"
               accentColor="#06b6d4"
               theme={theme}
               textColor={textColor}
@@ -681,13 +687,15 @@ export default function AdminDashboard() {
               </TouchableOpacity>
             </View>
 
-            {maintenance.filter((m) => m.status !== "RESOLVED").length === 0 ? (
+            {maintenance.filter(
+              (m) => m.status !== "RESOLVED" && m.status !== "CLOSED",
+            ).length === 0 ? (
               <Text style={[styles.emptyText, { color: muted }]}>
                 All maintenance requests resolved.
               </Text>
             ) : (
               maintenance
-                .filter((m) => m.status !== "RESOLVED")
+                .filter((m) => m.status !== "RESOLVED" && m.status !== "CLOSED")
                 .slice(0, 5)
                 .map((item) => (
                   <View key={item.id} style={styles.listItem}>

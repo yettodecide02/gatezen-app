@@ -327,11 +327,13 @@ export default function Dashboard() {
 
             if (response.data) {
               setStats({
-                announcements: response.data.announcements?.length || 0,
+                announcements: response.data.announcementsCount || 0,
                 maintenanceOpen:
                   response.data.maintenance?.filter(
                     (t: any) =>
-                      t.status !== "RESOLVED" && t.status !== "CANCELLED",
+                      t.status !== "RESOLVED" &&
+                      t.status !== "CANCELLED" &&
+                      t.status !== "CLOSED",
                   )?.length || 0,
                 paymentsOverdue:
                   response.data.payments?.filter(
@@ -378,7 +380,7 @@ export default function Dashboard() {
       <View style={styles.header}>
         <View style={styles.brandRow}>
           <Image
-            source={require("@/assets/images/icon.png")}
+            source={require("@/assets/images/splash-icon.png")}
             style={[
               styles.brandLogo,
               {

@@ -2,7 +2,7 @@ export default ({ config }) => ({
   ...config,
   expo: {
     name: "CGate",
-    slug: "cgate",
+    slug: "gatezen-app",
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
@@ -79,7 +79,8 @@ export default ({ config }) => ({
     extra: {
       router: {},
       eas: {
-        projectId: "e56eade6-43e3-4685-9a58-f6b20f009650",
+        // projectId: "e56eade6-43e3-4685-9a58-f6b20f009650",
+        projectId: "522cf5b5-95e5-4b52-bac0-b3273b4cfc5a",
       },
       // Inject environment variables here so they're baked into the build
       supabaseUrl:
@@ -89,8 +90,7 @@ export default ({ config }) => ({
         process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx5Y255cnF0cmx5dHlkYmpkcHV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTYyODg1NTcsImV4cCI6MjA3MTg2NDU1N30.pv7awgJ7FUDGxTTAQUkuRsJeg9lakKPh89lzTd9G5Do",
       backendUrl:
-        process.env.EXPO_PUBLIC_BACKEND_URL ||
-        "https://gatezen-starter-rh69.vercel.app/",
+        process.env.EXPO_PUBLIC_BACKEND_URL || "https://api.communitygate.in",
       googleSignupPassword:
         process.env.EXPO_PUBLIC_GOOGLE_SIGNUP_PASSWORD || "1234567890",
     },

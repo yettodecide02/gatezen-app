@@ -8,29 +8,25 @@ import {
   Pressable,
   TextInput,
   Alert,
-  Switch,
-  Dimensions,
+  ActivityIndicator,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
-import { logout, getUser } from "@/lib/auth";
+import axios from "axios";
+import { config } from "@/lib/config";
+import { logout, getUser, getToken, setUser } from "@/lib/auth";
 
 type UserProfile = {
   id: string;
   name: string;
   email: string;
-  phone?: string;
   block: string;
   unit: string;
   communityName: string;
 };
-
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const BREAKPOINT_SM = 375;
-const BREAKPOINT_MD = 768;
 
 export default function Profile() {
   const insets = useSafeAreaInsets();
@@ -38,40 +34,59 @@ export default function Profile() {
   const bg = useThemeColor({}, "background");
   const text = useThemeColor({}, "text");
   const tint = useThemeColor({}, "tint");
-  const cardBg = theme === "dark" ? "#1F1F1F" : "#ffffff";
-  const borderCol =
-    theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
+  const icon = useThemeColor({}, "icon");
+  const card = theme === "dark" ? "#111111" : "#ffffff";
+  const border = theme === "dark" ? "#262626" : "#E5E7EB";
 
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
+  const backendUrl = config.backendUrl;
   const [profile, setProfile] = useState<UserProfile>({
     id: "",
     name: "",
     email: "",
-    phone: "",
     block: "",
     unit: "",
     communityName: "",
   });
 
-  const isSmallScreen = SCREEN_WIDTH < BREAKPOINT_SM;
-  const isMediumScreen =
-    SCREEN_WIDTH >= BREAKPOINT_SM && SCREEN_WIDTH < BREAKPOINT_MD;
-
   const loadProfile = async () => {
     try {
       setLoading(true);
-      const user = await getUser();
+      const [user, tok] = await Promise.all([getUser(), getToken()]);
+      setToken(tok);
 
       const basicProfile: UserProfile = {
         id: user?.id || "1",
         name: user?.name || "User",
         email: user?.email || "",
-        phone: "",
         block: user?.blockName || "",
         unit: user?.unit?.number || "",
         communityName: user?.communityName || "",
       };
+
+      // Fetch fresh data from API
+      if (tok) {
+        try {
+          const res = await axios.get(`${backendUrl}/resident/profile`, {
+            headers: { Authorization: `Bearer ${tok}` },
+          });
+          if (res.data?.success) {
+            const d = res.data.data;
+            setProfile({
+              id: d.id,
+              name: d.name,
+              email: d.email,
+              block: d.blockName || basicProfile.block,
+              unit: d.unitNumber || basicProfile.unit,
+              communityName: d.communityName || basicProfile.communityName,
+            });
+            return;
+          }
+        } catch {}
+      }
 
       setProfile(basicProfile);
     } catch (error) {
@@ -86,11 +101,31 @@ export default function Profile() {
   }, []);
 
   const handleSaveProfile = async () => {
+    if (!profile.name.trim()) {
+      Alert.alert("Validation", "Name cannot be empty.");
+      return;
+    }
     try {
+      setSaving(true);
+      if (token) {
+        const res = await axios.patch(
+          `${backendUrl}/resident/profile`,
+          { name: profile.name.trim() },
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        if (res.data?.success) {
+          // Update cached user name
+          const cached = await getUser<any>();
+          if (cached) await setUser({ ...cached, name: res.data.data.name });
+          setProfile((prev) => ({ ...prev, name: res.data.data.name }));
+        }
+      }
       Alert.alert("Success", "Profile updated successfully!");
       setEditing(false);
     } catch (error) {
       Alert.alert("Error", "Failed to update profile. Please try again.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -116,20 +151,17 @@ export default function Profile() {
     ]);
   };
 
-
-
   if (loading) {
     return (
       <View
-        style={[
-          styles.container,
-          styles.centered,
-          { backgroundColor: bg, paddingTop: insets.top },
-        ]}
+        style={{
+          flex: 1,
+          backgroundColor: bg,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
       >
-        <Text style={[styles.loadingText, { color: text }]}>
-          Loading profile...
-        </Text>
+        <ActivityIndicator size="large" color={tint} />
       </View>
     );
   }
@@ -144,54 +176,69 @@ export default function Profile() {
   };
 
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: bg, paddingTop: insets.top },
-      ]}
-    >
-      {/* Header */}
+    <View style={{ flex: 1, backgroundColor: bg }}>
+      {/* Fixed Header */}
       <View
         style={[
-          styles.header,
-          { backgroundColor: cardBg, borderColor: borderCol },
+          styles.headerContainer,
+          {
+            paddingTop: Math.max(insets.top, 16),
+            backgroundColor: bg,
+            borderBottomColor: border,
+          },
         ]}
       >
-        <View style={styles.headerLeft}>
-          <Text style={[styles.headerTitle, { color: text }]}>Profile</Text>
-        </View>
-        <View style={styles.headerRight}>
-          <Pressable
-            onPress={() => setEditing(!editing)}
-            style={[styles.headerIcon, { backgroundColor: tint + "15" }]}
-          >
-            <Feather name={editing ? "x" : "edit-2"} size={18} color={tint} />
-          </Pressable>
-          <Pressable
-            onPress={handleLogout}
-            style={[styles.headerIcon, { backgroundColor: "#EF444415" }]}
-          >
-            <Feather name="log-out" size={18} color="#EF4444" />
-          </Pressable>
+        <View style={[styles.header, { backgroundColor: bg }]}>
+          <View style={styles.headerLeft}>
+            <Text style={[styles.headerTitle, { color: text }]}>Profile</Text>
+          </View>
+          <View style={styles.headerRight}>
+            {editing && (
+              <Pressable
+                onPress={handleSaveProfile}
+                disabled={saving}
+                style={[
+                  styles.saveHeaderButton,
+                  { backgroundColor: saving ? tint + "80" : tint },
+                ]}
+              >
+                <Feather name="check" size={16} color="#ffffff" />
+                <Text style={styles.saveHeaderButtonText}>
+                  {saving ? "Saving..." : "Save"}
+                </Text>
+              </Pressable>
+            )}
+            <Pressable
+              onPress={() => setEditing(!editing)}
+              style={[styles.headerIcon, { backgroundColor: tint + "15" }]}
+            >
+              <Feather name={editing ? "x" : "edit-2"} size={18} color={tint} />
+            </Pressable>
+            <Pressable
+              onPress={handleLogout}
+              style={[styles.headerIcon, { backgroundColor: "#EF444415" }]}
+            >
+              <Feather name="log-out" size={18} color="#EF4444" />
+            </Pressable>
+          </View>
         </View>
       </View>
 
       <ScrollView
         style={styles.content}
-        contentContainerStyle={[
-          styles.scrollContent,
-          {
-            paddingBottom: insets.bottom + 24,
-            paddingHorizontal: isSmallScreen ? 12 : isMediumScreen ? 16 : 20,
-          },
-        ]}
+        contentContainerStyle={{
+          padding: 16,
+          gap: 16,
+          paddingBottom: insets.bottom + 20,
+          paddingTop: 8,
+        }}
         showsVerticalScrollIndicator={false}
       >
         {/* Profile Header Card */}
         <View
           style={[
             styles.profileCard,
-            { backgroundColor: cardBg, borderColor: borderCol },
+            { backgroundColor: card, borderColor: border },
           ]}
         >
           <View
@@ -209,19 +256,11 @@ export default function Profile() {
               {profile.name}
             </Text>
             <View style={styles.profileMetaRow}>
-              <Feather name="mail" size={14} color={text} opacity={0.6} />
-              <Text style={[styles.profileMeta, { color: text }]}>
+              <Feather name="mail" size={14} color={icon as any} />
+              <Text style={[styles.profileMeta, { color: icon as any }]}>
                 {profile.email}
               </Text>
             </View>
-            {profile.apartment && (
-              <View style={styles.profileMetaRow}>
-                <Feather name="home" size={14} color={text} opacity={0.6} />
-                <Text style={[styles.profileMeta, { color: text }]}>
-                  Apartment {profile.apartment}
-                </Text>
-              </View>
-            )}
           </View>
         </View>
 
@@ -229,7 +268,7 @@ export default function Profile() {
         <View
           style={[
             styles.section,
-            { backgroundColor: cardBg, borderColor: borderCol },
+            { backgroundColor: card, borderColor: border },
           ]}
         >
           <View style={styles.sectionHeader}>
@@ -241,14 +280,16 @@ export default function Profile() {
 
           <View style={styles.formRow}>
             <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: text }]}>Full Name</Text>
+              <Text style={[styles.label, { color: icon as any }]}>
+                Full Name
+              </Text>
               {editing ? (
                 <TextInput
                   style={[
                     styles.input,
                     {
                       color: text,
-                      borderColor: borderCol,
+                      borderColor: border,
                       backgroundColor: bg,
                     },
                   ]}
@@ -268,11 +309,11 @@ export default function Profile() {
 
           <View style={styles.formRow}>
             <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: text }]}>Email</Text>
-              <Text style={[styles.value, { color: text, opacity: 0.7 }]}>
+              <Text style={[styles.label, { color: icon as any }]}>Email</Text>
+              <Text style={[styles.value, { color: icon as any }]}>
                 {profile.email}
               </Text>
-              <Text style={[styles.note, { color: text, opacity: 0.5 }]}>
+              <Text style={[styles.note, { color: icon as any }]}>
                 <Feather name="lock" size={10} /> Contact admin to change
               </Text>
             </View>
@@ -280,38 +321,13 @@ export default function Profile() {
 
           <View style={styles.formRow}>
             <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: text }]}>Phone</Text>
-              {editing ? (
-                <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      color: text,
-                      borderColor: borderCol,
-                      backgroundColor: bg,
-                    },
-                  ]}
-                  value={profile.phone}
-                  onChangeText={(text) =>
-                    setProfile((prev) => ({ ...prev, phone: text }))
-                  }
-                  keyboardType="phone-pad"
-                  placeholder="Enter phone number"
-                  placeholderTextColor={text + "60"}
-                />
-              ) : (
-                <Text style={[styles.value, { color: text }]}>
-                  {profile.phone || "Not set"}
-                </Text>
-              )}
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: text }]}>Community</Text>
-              <Text style={[styles.value, { color: text, opacity: 0.7 }]}>
+              <Text style={[styles.label, { color: icon as any }]}>
+                Community
+              </Text>
+              <Text style={[styles.value, { color: icon as any }]}>
                 {profile.communityName || "Not set"}
               </Text>
-              <Text style={[styles.note, { color: text, opacity: 0.5 }]}>
+              <Text style={[styles.note, { color: icon as any }]}>
                 <Feather name="lock" size={10} /> Contact admin to change
               </Text>
             </View>
@@ -319,176 +335,41 @@ export default function Profile() {
 
           <View style={styles.formRow}>
             <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: text }]}>Block</Text>
-              <Text style={[styles.value, { color: text, opacity: 0.7 }]}>
+              <Text style={[styles.label, { color: icon as any }]}>Block</Text>
+              <Text style={[styles.value, { color: icon as any }]}>
                 {profile.block || "Not set"}
               </Text>
-              <Text style={[styles.note, { color: text, opacity: 0.5 }]}>
+              <Text style={[styles.note, { color: icon as any }]}>
                 <Feather name="lock" size={10} /> Contact admin to change
               </Text>
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: text }]}>Unit</Text>
-              <Text style={[styles.value, { color: text, opacity: 0.7 }]}>
+              <Text style={[styles.label, { color: icon as any }]}>Unit</Text>
+              <Text style={[styles.value, { color: icon as any }]}>
                 {profile.unit || "Not set"}
               </Text>
-              <Text style={[styles.note, { color: text, opacity: 0.5 }]}>
+              <Text style={[styles.note, { color: icon as any }]}>
                 <Feather name="lock" size={10} /> Contact admin to change
               </Text>
             </View>
           </View>
         </View>
-
-        {/* Emergency Contact */}
-        <View
-          style={[
-            styles.section,
-            { backgroundColor: cardBg, borderColor: borderCol },
-          ]}
-        >
-          <View style={styles.sectionHeader}>
-            <Feather name="alert-circle" size={18} color={tint} />
-            <Text style={[styles.sectionTitle, { color: text }]}>
-              Emergency Contact
-            </Text>
-          </View>
-
-          <View style={styles.formRow}>
-            <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: text }]}>Name</Text>
-              {editing ? (
-                <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      color: text,
-                      borderColor: borderCol,
-                      backgroundColor: bg,
-                    },
-                  ]}
-                  value={profile.emergencyContact?.name}
-                  onChangeText={(text) =>
-                    setProfile((prev) => ({
-                      ...prev,
-                      emergencyContact: {
-                        ...prev.emergencyContact!,
-                        name: text,
-                      },
-                    }))
-                  }
-                  placeholder="Contact name"
-                  placeholderTextColor={text + "60"}
-                />
-              ) : (
-                <Text style={[styles.value, { color: text }]}>
-                  {profile.emergencyContact?.name || "Not set"}
-                </Text>
-              )}
-            </View>
-          </View>
-
-          <View style={styles.formRow}>
-            <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: text }]}>Phone</Text>
-              {editing ? (
-                <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      color: text,
-                      borderColor: borderCol,
-                      backgroundColor: bg,
-                    },
-                  ]}
-                  value={profile.emergencyContact?.phone}
-                  onChangeText={(text) =>
-                    setProfile((prev) => ({
-                      ...prev,
-                      emergencyContact: {
-                        ...prev.emergencyContact!,
-                        phone: text,
-                      },
-                    }))
-                  }
-                  keyboardType="phone-pad"
-                  placeholder="Contact phone"
-                  placeholderTextColor={text + "60"}
-                />
-              ) : (
-                <Text style={[styles.value, { color: text }]}>
-                  {profile.emergencyContact?.phone || "Not set"}
-                </Text>
-              )}
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: text }]}>Relationship</Text>
-              {editing ? (
-                <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      color: text,
-                      borderColor: borderCol,
-                      backgroundColor: bg,
-                    },
-                  ]}
-                  value={profile.emergencyContact?.relationship}
-                  onChangeText={(text) =>
-                    setProfile((prev) => ({
-                      ...prev,
-                      emergencyContact: {
-                        ...prev.emergencyContact!,
-                        relationship: text,
-                      },
-                    }))
-                  }
-                  placeholder="e.g., Spouse, Parent"
-                  placeholderTextColor={text + "60"}
-                />
-              ) : (
-                <Text style={[styles.value, { color: text }]}>
-                  {profile.emergencyContact?.relationship || "Not set"}
-                </Text>
-              )}
-            </View>
-          </View>
-        </View>
-
-        {/* Save Button */}
-        {editing && (
-          <Pressable
-            style={[styles.saveButton, { backgroundColor: tint }]}
-            onPress={handleSaveProfile}
-          >
-            <Feather name="check" size={18} color="#ffffff" />
-            <Text style={styles.saveButtonText}>Save Changes</Text>
-          </Pressable>
-        )}
       </ScrollView>
     </View>
   );
 }
 
-
-
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  centered: { alignItems: "center", justifyContent: "center" },
-  loadingText: { fontSize: 16, fontWeight: "500" },
-
+  headerContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+  },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
   },
   headerLeft: {
     flex: 1,
@@ -503,16 +384,12 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   headerTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "700",
-    letterSpacing: -0.5,
   },
 
   content: {
     flex: 1,
-  },
-  scrollContent: {
-    paddingTop: 16,
   },
 
   profileCard: {
@@ -520,69 +397,53 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 1,
     borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    elevation: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    padding: 16,
   },
   avatarContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
-    marginRight: 16,
+    marginRight: 14,
   },
   avatarText: {
-    fontSize: 26,
+    fontSize: 22,
     fontWeight: "700",
     letterSpacing: 1,
   },
   profileMainInfo: {
     flex: 1,
-    gap: 6,
+    gap: 5,
   },
   profileName: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "700",
-    marginBottom: 2,
   },
   profileMetaRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 6,
   },
   profileMeta: {
-    fontSize: 14,
-    opacity: 0.7,
+    fontSize: 13,
   },
 
   section: {
     borderWidth: 1,
     borderRadius: 16,
     padding: 16,
-    marginBottom: 50,
-    elevation: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
   },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    marginBottom: 16,
+    marginBottom: 14,
     paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(0,0,0,0.05)",
   },
   sectionTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "700",
     letterSpacing: -0.3,
   },
@@ -590,56 +451,48 @@ const styles = StyleSheet.create({
   formRow: {
     flexDirection: "row",
     gap: 12,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   formGroup: {
     flex: 1,
   },
   label: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
-    marginBottom: 8,
+    marginBottom: 6,
     textTransform: "uppercase",
-    letterSpacing: 0.5,
-    opacity: 0.8,
+    letterSpacing: 0.4,
   },
   value: {
-    fontSize: 16,
-    marginBottom: 4,
+    fontSize: 15,
     fontWeight: "500",
   },
   note: {
     fontSize: 11,
     fontStyle: "italic",
-    marginTop: 4,
+    marginTop: 3,
   },
   input: {
     borderWidth: 1,
     borderRadius: 10,
-    padding: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     fontSize: 16,
     fontWeight: "500",
   },
 
-
-  saveButton: {
+  saveHeaderButton: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    borderRadius: 14,
-    paddingVertical: 16,
-    marginTop: 8,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
+    gap: 6,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
   },
-  saveButtonText: {
+  saveHeaderButtonText: {
     color: "#ffffff",
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "700",
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
 });

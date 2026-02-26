@@ -36,6 +36,7 @@ const STATUS_LABEL: any = {
   in_progress: "In Progress",
   resolved: "Resolved",
   cancelled: "Cancelled",
+  closed: "Closed",
 };
 
 function StatusChip({ status }: any) {
@@ -64,6 +65,12 @@ function StatusChip({ status }: any) {
       clr: "#991b1b",
       br: "#fecaca",
       icon: <Feather name="x-circle" size={14} color="#991b1b" />,
+    },
+    closed: {
+      bg: "#f3f4f6",
+      clr: "#374151",
+      br: "#d1d5db",
+      icon: <Feather name="check-square" size={14} color="#374151" />,
     },
   };
   const s = map[key] || map.submitted;
@@ -690,10 +697,6 @@ export default function MaintenanceScreen() {
                     {selected.description || "—"}
                   </Text>
                 </View>
-
-                {/* Images */}
-
-                {/* Comments */}
                 <View>
                   <Text
                     style={{ color: text, fontWeight: "700", marginBottom: 6 }}
@@ -727,7 +730,7 @@ export default function MaintenanceScreen() {
                                 fontSize: 14,
                               }}
                             >
-                              {c.name || "User"}
+                              {c.user.role || "User"}
                             </Text>
                           ) : null}
                           <Text

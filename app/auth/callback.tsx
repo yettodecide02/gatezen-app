@@ -9,6 +9,7 @@ import Toast from "@/components/Toast";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useToast } from "@/hooks/useToast";
 import { config } from "@/lib/config";
+import { registerForPushNotifications } from "@/lib/notifications";
 
 export default function AuthCallback() {
   const [message, setMessage] = useState("Finishing sign-in…");
@@ -43,15 +44,25 @@ export default function AuthCallback() {
         if (response.data?.exists) {
           if (response.data.jwttoken) await setToken(response.data.jwttoken);
           if (response.data.user) await setUser(response.data.user);
-
-          if (response.data.user.role === "ADMIN") router.replace("/admin");
-          else if (response.data.user.role === "GATEKEEPER")
+          registerForPushNotifications(response.data.jwttoken).catch(() => {});
+          const u = response.data.user;
+          if (u.status === "PENDING") {
+            router.replace("/pending");
+          } else if (u.status === "REJECTED") {
+            showError(
+              "Your account has been rejected. Please contact your community admin.",
+            );
+            setTimeout(() => router.replace("/login"), 2000);
+          } else if (u.role === "ADMIN") {
+            router.replace("/admin");
+          } else if (u.role === "GATEKEEPER") {
             router.replace("/gatekeeper");
-          else router.replace("/(tab)/home");
-
+          } else {
+            router.replace("/(tabs)/home");
+          }
           return;
         } else {
-          router.replace("/auth/residentform")
+          router.replace("/auth/residentform");
         }
 
         // Register new user

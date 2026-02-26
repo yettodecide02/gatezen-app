@@ -7,7 +7,6 @@ import {
   ScrollView,
   Pressable,
   TextInput,
-  Alert,
   ActivityIndicator,
   TouchableOpacity,
 } from "react-native";
@@ -18,7 +17,7 @@ import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import axios from "axios";
 import { getUser, getToken } from "@/lib/auth";
-import { File, Paths } from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { config } from "@/lib/config";
 
@@ -97,9 +96,7 @@ export default function Documents() {
     setDownloadingId(pdf.id);
     try {
       const response = await axios.get(`${API}/resident/pdf/${pdf.id}`, {
-        headers: {
-          Authorization: `Bearer ${await getToken()}`,
-        },
+        headers: { Authorization: `Bearer ${await getToken()}` },
         responseType: "arraybuffer",
       });
 
@@ -107,43 +104,40 @@ export default function Documents() {
         throw new Error("PDF file is empty");
       }
 
+      // Convert ArrayBuffer → base64 string (chunked to avoid stack overflow)
+      const bytes = new Uint8Array(response.data);
+      let binary = "";
+      const chunkSize = 8192;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+      }
+      const base64 = btoa(binary);
+
       const fileName = pdf.name.endsWith(".pdf") ? pdf.name : `${pdf.name}.pdf`;
+      const fileUri = FileSystem.cacheDirectory + fileName;
 
-      // Convert ArrayBuffer to Uint8Array
-      const uint8Array = new Uint8Array(response.data);
+      // Write base64 to cache
+      await FileSystem.writeAsStringAsync(fileUri, base64, {
+        encoding: "base64",
+      });
 
-      // Use new File API to write the PDF
-      const file = new File(Paths.cache, fileName);
-      const writableStream = file.writableStream();
-      const writer = writableStream.getWriter();
-
-      try {
-        await writer.write(uint8Array);
-        await writer.close();
-      } catch (streamErr) {
-        await writer.abort();
-        throw streamErr;
-      }
-
-      // Verify file exists
-      if (!file.exists) {
-        throw new Error("Failed to save PDF file");
-      }
-
-      // Open the PDF file directly
+      // Open with native PDF viewer / save to Files
       if (await Sharing.isAvailableAsync()) {
-        await Sharing.openAsync(file.uri, {
+        await Sharing.shareAsync(fileUri, {
           mimeType: "application/pdf",
           UTI: "com.adobe.pdf",
+          dialogTitle: `Open ${fileName}`,
         });
+      } else {
+        showToast("Sharing is not available on this device");
       }
 
-      showToast("PDF opened successfully");
+      showToast("PDF ready");
     } catch (err: any) {
       console.error("Error opening PDF:", err);
       const errorMsg =
         err?.response?.data?.error || err?.message || "Unknown error";
-      Alert.alert("Failed to Open PDF", `Error: ${errorMsg}`);
+      showToast(`Failed: ${errorMsg}`);
     } finally {
       setDownloadingId(null);
     }

@@ -135,8 +135,8 @@ export default function VisitorLog() {
         return { bg: "#dbeafe", text: "#1e40af", icon: "truck" };
       case "GUEST":
         return { bg: "#d1fae5", text: "#065f46", icon: "user" };
-      case "SERVICE":
-        return { bg: "#e9d5ff", text: "#6b21a8", icon: "user" };
+      case "CAB_AUTO":
+        return { bg: "#fef3c7", text: "#92400e", icon: "navigation" };
       default:
         return { bg: "#f3f4f6", text: "#374151", icon: "user" };
     }
@@ -478,6 +478,7 @@ export default function VisitorLog() {
                         <Picker.Item label="All Types" value="ALL" />
                         <Picker.Item label="Guest" value="GUEST" />
                         <Picker.Item label="Delivery" value="DELIVERY" />
+                        <Picker.Item label="Cab / Auto" value="CAB_AUTO" />
                       </Picker>
                     </View>
                   </View>
@@ -649,11 +650,11 @@ export default function VisitorLog() {
                         <Text
                           style={[styles.visitingValue, { color: textColor }]}
                         >
-                          {visitor.user.name}
+                          {visitor.user?.name ?? "Unknown"}
                         </Text>
-                        {" • "}
-                        Unit {visitor.user.unit.number}, Block{" "}
-                        {visitor.user.unit.block.name}
+                        {visitor.user?.unit
+                          ? `${" • "}Unit ${visitor.user.unit.number}, Block ${visitor.user.unit.block?.name ?? ""}`
+                          : ""}
                       </Text>
                     </View>
 

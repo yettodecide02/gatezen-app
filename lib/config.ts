@@ -22,19 +22,17 @@ export const config = {
     process.env.EXPO_PUBLIC_BACKEND_URL ||
     process.env.EXPO_BACKEND_URL ||
     Constants.expoConfig?.extra?.backendUrl ||
-    "https://gatezen-starter-rh69.vercel.app/",
+    "https://api.communitygate.in",
 
   googleSignupPassword:
     process.env.EXPO_PUBLIC_GOOGLE_SIGNUP_PASSWORD ||
     Constants.expoConfig?.extra?.googleSignupPassword ||
-    "1234567890",
+    "1234567890", // Must be set via EXPO_PUBLIC_GOOGLE_SIGNUP_PASSWORD env var
 };
 
-// Log configuration status in development
-if (__DEV__) {
-  console.log("🔧 Config loaded:", {
-    supabaseUrl: config.supabaseUrl.substring(0, 20) + "...",
-    backendUrl: config.backendUrl,
-    hasAnonKey: !!config.supabaseAnonKey,
-  });
-}
+// Log configuration status
+console.log("🔧 Config loaded:", {
+  supabaseUrl: config.supabaseUrl.substring(0, 20) + "...",
+  backendUrl: config.backendUrl,
+  hasAnonKey: !!config.supabaseAnonKey,
+});

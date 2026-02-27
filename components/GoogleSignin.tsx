@@ -1,10 +1,12 @@
 // @ts-nocheck
-import { Alert, Pressable, StyleSheet, Text } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import { makeRedirectUri } from "expo-auth-session";
 import { router } from "expo-router";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import supabase from "@/lib/supabase";
+import Toast from "@/components/Toast";
+import { useToast } from "@/hooks/useToast";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -12,6 +14,8 @@ export default function GoogleSignin() {
   const bg = useThemeColor({}, "background");
   const text = useThemeColor({}, "text");
   const border = useThemeColor({}, "icon");
+
+  const { toast, showError, hideToast } = useToast();
 
   const onPress = async () => {
     try {
@@ -37,17 +41,14 @@ export default function GoogleSignin() {
       // ✅ Open system browser
       const result = await WebBrowser.openAuthSessionAsync(
         data.url,
-        redirectTo
+        redirectTo,
       );
-
 
       // ✅ When user returns
       if (result.type === "success" && result.url) {
-
         // 👇 Parse tokens from the URL fragment
         const hash = result.url.split("#")[1];
         const params = Object.fromEntries(new URLSearchParams(hash));
-
 
         if (params.access_token && params.refresh_token) {
           const { data, error } = await supabase.auth.setSession({
@@ -63,19 +64,27 @@ export default function GoogleSignin() {
       }
     } catch (err) {
       console.error("Google Sign-In Error:", err);
-      Alert.alert("Google Sign-In failed", err?.message ?? "Unknown error");
+      showError(err?.message ?? "Google Sign-In failed");
     }
   };
 
   return (
-    <Pressable
-      style={[styles.btn, { backgroundColor: bg, borderColor: border }]}
-      onPress={onPress}
-    >
-      <Text style={[styles.btnText, { color: text }]}>
-        Continue with Google
-      </Text>
-    </Pressable>
+    <View>
+      <Pressable
+        style={[styles.btn, { backgroundColor: bg, borderColor: border }]}
+        onPress={onPress}
+      >
+        <Text style={[styles.btnText, { color: text }]}>
+          Continue with Google
+        </Text>
+      </Pressable>
+      <Toast
+        visible={toast.visible}
+        message={toast.message}
+        type={toast.type}
+        onHide={hideToast}
+      />
+    </View>
   );
 }
 

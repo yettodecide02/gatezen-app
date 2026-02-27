@@ -1,39 +1,33 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import React, { useEffect, useState } from "react";
 import {
-  StyleSheet,
-  Text,
-  View,
-  TouchableOpacity,
-  ScrollView,
-  TextInput,
-  Modal,
-  Alert,
-  ActivityIndicator,
+  StyleSheet, Text, View, TouchableOpacity, ScrollView,
+  TextInput, Modal, ActivityIndicator, Switch,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import axios from "axios";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Picker } from "@react-native-picker/picker";
-
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { getToken, getCommunityId } from "@/lib/auth";
 import { config } from "@/lib/config";
+import Toast from "@/components/Toast";
+import { useToast } from "@/hooks/useToast";
 
 const FACILITY_TYPES = [
-  { id: "swimming_pool", name: "Swimming Pool", icon: "🏊" },
-  { id: "gymnasium", name: "Gymnasium", icon: "🏋️" },
-  { id: "tennis_court", name: "Tennis Court", icon: "🎾" },
-  { id: "basketball_court", name: "Basketball Court", icon: "🏀" },
-  { id: "playground", name: "Playground", icon: "🛝" },
-  { id: "clubhouse", name: "Clubhouse", icon: "🏛️" },
-  { id: "party_hall", name: "Party Hall", icon: "🎉" },
-  { id: "conference_room", name: "Conference Room", icon: "🏢" },
-  { id: "library", name: "Library", icon: "📚" },
-  { id: "garden", name: "Garden", icon: "🌳" },
-  { id: "jogging_track", name: "Jogging Track", icon: "🏃" },
+  { id: "swimming_pool", name: "Swimming Pool", icon: "droplet" },
+  { id: "gymnasium", name: "Gymnasium", icon: "activity" },
+  { id: "tennis_court", name: "Tennis Court", icon: "target" },
+  { id: "basketball_court", name: "Basketball Court", icon: "circle" },
+  { id: "playground", name: "Playground", icon: "smile" },
+  { id: "clubhouse", name: "Clubhouse", icon: "home" },
+  { id: "party_hall", name: "Party Hall", icon: "star" },
+  { id: "conference_room", name: "Conference Room", icon: "briefcase" },
+  { id: "library", name: "Library", icon: "book" },
+  { id: "garden", name: "Garden", icon: "feather" },
+  { id: "jogging_track", name: "Jogging Track", icon: "wind" },
 ];
 
 const PRICE_TYPES = [
@@ -51,7 +45,6 @@ const TIME_OPTIONS_START = [
   { value: "10:00", label: "10:00 AM" },
   { value: "11:00", label: "11:00 AM" },
 ];
-
 const TIME_OPTIONS_END = [
   { value: "17:00", label: "05:00 PM" },
   { value: "18:00", label: "06:00 PM" },
@@ -60,46 +53,38 @@ const TIME_OPTIONS_END = [
   { value: "21:00", label: "09:00 PM" },
 ];
 
+const FACILITY_COLORS = [
+  "#6366F1", "#3B82F6", "#10B981", "#F59E0B", "#EF4444",
+  "#8B5CF6", "#EC4899", "#14B8A6", "#F97316", "#06B6D4",
+  "#84CC16",
+];
+
 export default function CommunityConfig() {
   const theme = useColorScheme() ?? "light";
   const bg = useThemeColor({}, "background");
   const textColor = useThemeColor({}, "text");
   const tint = useThemeColor({}, "tint");
-  const iconColor = useThemeColor({}, "icon");
-  const cardBg = theme === "dark" ? "#1F1F1F" : "#ffffff";
-  const borderCol =
-    theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
-  const muted = iconColor;
   const insets = useSafeAreaInsets();
+  const isDark = theme === "dark";
+  const muted = isDark ? "#94A3B8" : "#64748B";
+  const borderCol = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)";
+  const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
 
-  const [communityData, setCommunityData] = useState({
-    name: "",
-    description: "",
-    address: "",
-  });
-
+  const [communityData, setCommunityData] = useState({ name: "", description: "", address: "" });
   const [facilities, setFacilities] = useState({});
   const [loading, setLoading] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true);
   const [selectedFacility, setSelectedFacility] = useState(null);
 
+  const { toast, showError, showSuccess, hideToast } = useToast();
   const url = config.backendUrl;
 
   useEffect(() => {
-    const initialFacilities = {};
-    FACILITY_TYPES.forEach((type) => {
-      initialFacilities[type.id] = {
-        enabled: false,
-        quantity: 1,
-        maxCapacity: 10,
-        isPaid: false,
-        price: 0,
-        priceType: "per_hour",
-        operatingHours: "09:00-21:00",
-        rules: "",
-      };
+    const init = {};
+    FACILITY_TYPES.forEach(t => {
+      init[t.id] = { enabled: false, quantity: 1, maxCapacity: 10, isPaid: false, price: 0, priceType: "per_hour", operatingHours: "09:00-21:00", rules: "" };
     });
-    setFacilities(initialFacilities);
+    setFacilities(init);
     loadCommunityData();
   }, []);
 
@@ -107,1026 +92,335 @@ export default function CommunityConfig() {
     try {
       const token = await getToken();
       const communityId = await getCommunityId();
-
-      if (!communityId) {
-        Alert.alert("Error", "Community information not found");
-        return;
-      }
-
-      const response = await axios.get(`${url}/admin/community`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+      if (!communityId) { showError("Community not found"); return; }
+      const res = await axios.get(`${url}/admin/community`, {
+        headers: { Authorization: `Bearer ${token}` },
         params: { communityId },
       });
-
-      if (response.data.success && response.data.data) {
-        const community = response.data.data;
-
-        setCommunityData({
-          name: community.name || "",
-          description: community.description || "",
-          address: community.address || "",
-        });
-
-        if (community.facilities && community.facilities.length > 0) {
-          const facilitiesMap = {};
-
-          FACILITY_TYPES.forEach((type) => {
-            facilitiesMap[type.id] = {
-              enabled: false,
-              quantity: 1,
-              maxCapacity: 10,
-              isPaid: false,
-              price: 0,
-              priceType: "per_hour",
-              operatingHours: "09:00-21:00",
-              rules: "",
-            };
+      if (res.data.success && res.data.data) {
+        const c = res.data.data;
+        setCommunityData({ name: c.name || "", description: c.description || "", address: c.address || "" });
+        if (c.facilities?.length > 0) {
+          const map = {};
+          FACILITY_TYPES.forEach(t => {
+            map[t.id] = { enabled: false, quantity: 1, maxCapacity: 10, isPaid: false, price: 0, priceType: "per_hour", operatingHours: "09:00-21:00", rules: "" };
           });
-
-          community.facilities.forEach((facility) => {
-            facilitiesMap[facility.facilityType] = {
-              enabled: facility.enabled,
-              quantity: facility.quantity,
-              maxCapacity: facility.maxCapacity,
-              isPaid: facility.isPaid,
-              price: facility.price || 0,
-              priceType: facility.priceType || "per_hour",
-              operatingHours: facility.operatingHours || "09:00-21:00",
-              rules: facility.rules || "",
-            };
+          c.facilities.forEach(f => {
+            map[f.facilityType] = { enabled: f.enabled, quantity: f.quantity, maxCapacity: f.maxCapacity, isPaid: f.isPaid, price: f.price || 0, priceType: f.priceType || "per_hour", operatingHours: f.operatingHours || "09:00-21:00", rules: f.rules || "" };
           });
-
-          setFacilities(facilitiesMap);
+          setFacilities(map);
         }
       }
-    } catch (error) {
-      console.error("Error loading community data:", error);
-      Alert.alert("Error", "Failed to load community data");
+    } catch {
+      showError("Failed to load community data");
     } finally {
       setInitialLoad(false);
     }
   };
 
-  const updateCommunityData = (field, value) => {
-    setCommunityData((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const updateFacility = (facilityId, field, value) => {
-    setFacilities((prev) => ({
-      ...prev,
-      [facilityId]: {
-        ...prev[facilityId],
-        [field]: value,
-      },
-    }));
-  };
-
-  const adjustQuantity = (facilityId, delta) => {
-    const currentQuantity = facilities[facilityId]?.quantity || 1;
-    const newQuantity = Math.max(1, Math.min(50, currentQuantity + delta));
-    updateFacility(facilityId, "quantity", newQuantity);
-  };
-
-  const adjustCapacity = (facilityId, delta) => {
-    const currentCapacity = facilities[facilityId]?.maxCapacity || 1;
-    const newCapacity = Math.max(1, Math.min(1000, currentCapacity + delta));
-    updateFacility(facilityId, "maxCapacity", newCapacity);
+  const updateFacility = (id, field, value) => {
+    setFacilities(prev => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
   };
 
   const handleSave = async () => {
-    if (!communityData.name.trim()) {
-      Alert.alert("Validation Error", "Community name is required");
-      return;
-    }
-
+    if (!communityData.name.trim()) { showError("Community name is required"); return; }
     setLoading(true);
-
     try {
       const token = await getToken();
       const communityId = await getCommunityId();
-
-      const enabledFacilities = Object.entries(facilities)
-        .filter(([_, config]) => config.enabled)
-        .map(([facilityId, config]) => ({
-          facilityType: facilityId,
-          ...config,
-        }));
-
-      const payload = {
-        ...communityData,
-        facilities: enabledFacilities,
-        communityId,
-      };
-
-      const response = await axios.post(`${url}/admin/community`, payload, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (response.data.success) {
-        Alert.alert(
-          "Success",
-          response.data.message ||
-            "Community configuration saved successfully!",
-        );
+      const enabledFacilities = Object.entries(facilities).filter(([_, f]) => f.enabled).map(([id, f]) => ({ facilityType: id, ...f }));
+      const res = await axios.post(`${url}/admin/community`, { ...communityData, facilities: enabledFacilities, communityId }, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.data.success) {
+        showSuccess(res.data.message || "Saved successfully!");
         await loadCommunityData();
       } else {
-        Alert.alert(
-          "Error",
-          response.data.message || "Failed to save community configuration",
-        );
+        showError(res.data.message || "Failed to save");
       }
-    } catch (err) {
-      Alert.alert(
-        "Error",
-        err.response?.data?.message ||
-          err.message ||
-          "Failed to save community configuration",
-      );
+    } catch (e) {
+      showError(e.response?.data?.message || "Failed to save");
     } finally {
       setLoading(false);
     }
   };
 
-  const enabledCount = Object.values(facilities).filter(
-    (f) => f.enabled,
-  ).length;
+  const enabledCount = Object.values(facilities).filter(f => f.enabled).length;
 
   if (initialLoad) {
     return (
-      <View
-        style={[
-          styles.container,
-          styles.centerContent,
-          { backgroundColor: bg },
-        ]}
-      >
+      <View style={[styles.center, { backgroundColor: bg }]}>
         <ActivityIndicator size="large" color={tint} />
-        <Text style={[styles.loadingText, { color: textColor }]}>
-          Loading configuration...
-        </Text>
+        <Text style={[styles.loadingText, { color: muted }]}>Loading configuration...</Text>
       </View>
     );
   }
 
+  const selFac = selectedFacility;
+  const selConfig = selFac ? (facilities[selFac.id] || {}) : {};
+  const selColor = selFac ? FACILITY_COLORS[FACILITY_TYPES.findIndex(f => f.id === selFac.id) % FACILITY_COLORS.length] : tint;
+  const [startTime, endTime] = (selConfig.operatingHours || "09:00-21:00").split("-");
+
   return (
     <View style={[styles.container, { backgroundColor: bg }]}>
-      {/* Fixed Header */}
-      <View
-        style={[
-          styles.headerContainer,
-          {
-            paddingTop: Math.max(insets.top, 16),
-            backgroundColor: bg,
-            borderBottomColor: borderCol,
-          },
-        ]}
-      >
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={styles.backButton}
-            >
-              <Feather name="arrow-left" size={24} color={tint} />
-            </TouchableOpacity>
-            <View>
-              <Text style={[styles.title, { color: textColor }]}>
-                Community Configuration
-              </Text>
-              <Text style={[styles.subtitle, { color: muted }]}>
-                Configure details and facilities
-              </Text>
-            </View>
-          </View>
-          <TouchableOpacity
-            onPress={handleSave}
-            disabled={loading || !communityData.name.trim()}
-            style={[
-              styles.saveButton,
-              { backgroundColor: tint },
-              (loading || !communityData.name.trim()) && styles.disabledButton,
-            ]}
-          >
-            {loading ? (
-              <ActivityIndicator
-                size="small"
-                color={theme === "dark" ? "#11181C" : "#ffffff"}
-              />
-            ) : (
-              <Feather
-                name="save"
-                size={20}
-                color={theme === "dark" ? "#11181C" : "#ffffff"}
-              />
-            )}
+      <Toast {...toast} onHide={hideToast} />
+
+      {/* Header */}
+      <View style={[styles.headerBar, { paddingTop: Math.max(insets.top, 20), borderBottomColor: borderCol, backgroundColor: bg }]}>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity onPress={() => router.back()} style={[styles.backBtn, { borderColor: borderCol }]}>
+            <Feather name="arrow-left" size={18} color={textColor} />
           </TouchableOpacity>
+          <View>
+            <Text style={[styles.screenTitle, { color: textColor }]}>Community Config</Text>
+            <Text style={[styles.screenSub, { color: muted }]}>{enabledCount} facilities enabled</Text>
+          </View>
         </View>
+        <TouchableOpacity onPress={handleSave} disabled={loading || !communityData.name.trim()} style={[styles.saveBtn, { backgroundColor: tint, opacity: (loading || !communityData.name.trim()) ? 0.5 : 1 }]}>
+          {loading ? <ActivityIndicator size="small" color="#fff" /> : <><Feather name="save" size={14} color="#fff" /><Text style={styles.saveBtnText}>Save</Text></>}
+        </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.scrollView}>
-        <View style={styles.content}>
-          {/* Community Details */}
-          <View
-            style={[
-              styles.card,
-              { backgroundColor: cardBg, borderColor: borderCol },
-            ]}
-          >
-            <View style={styles.cardHeader}>
-              <Feather name="map-pin" size={20} color={tint} />
-              <Text style={[styles.cardTitle, { color: textColor }]}>
-                Community Details
-              </Text>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        {/* Community Details */}
+        <View style={[styles.section, { backgroundColor: cardBg, borderColor: borderCol }]}>
+          <View style={styles.sectionHead}>
+            <View style={[styles.sectionIcon, { backgroundColor: tint + "1A" }]}>
+              <Feather name="map-pin" size={16} color={tint} />
             </View>
+            <Text style={[styles.sectionTitle, { color: textColor }]}>Community Details</Text>
+          </View>
 
-            <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: textColor }]}>
-                Community Name <Text style={styles.required}>*</Text>
-              </Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: theme === "dark" ? "#181818" : "#f3f4f6",
-                    color: textColor,
-                    borderColor: borderCol,
-                  },
-                ]}
-                value={communityData.name}
-                onChangeText={(value) => updateCommunityData("name", value)}
-                placeholder="Enter community name"
-                placeholderTextColor={muted}
-              />
+          {[
+            { label: "Community Name", field: "name", placeholder: "Enter community name", multiline: false, icon: "home" },
+            { label: "Description", field: "description", placeholder: "Brief description", multiline: true, icon: "file-text" },
+            { label: "Address", field: "address", placeholder: "Community address", multiline: true, icon: "map-pin" },
+          ].map(({ label, field, placeholder, multiline, icon }) => (
+            <View key={field} style={styles.fieldWrap}>
+              <Text style={[styles.fieldLabel, { color: muted }]}>{label}{field === "name" ? " *" : ""}</Text>
+              <View style={[styles.fieldRow, { borderColor: borderCol, backgroundColor: isDark ? "#111111" : "#F8FAFC", alignItems: multiline ? "flex-start" : "center" }]}>
+                <Feather name={icon} size={16} color={muted} style={multiline ? { marginTop: 2 } : {}} />
+                <TextInput
+                  style={[styles.fieldInput, { color: textColor }, multiline && { height: 72, textAlignVertical: "top" }]}
+                  placeholder={placeholder}
+                  placeholderTextColor={muted}
+                  value={communityData[field]}
+                  onChangeText={v => setCommunityData(p => ({ ...p, [field]: v }))}
+                  multiline={multiline}
+                />
+              </View>
             </View>
+          ))}
+        </View>
 
-            <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: textColor }]}>
-                Description
-              </Text>
-              <TextInput
-                style={[
-                  styles.textarea,
-                  {
-                    backgroundColor: theme === "dark" ? "#181818" : "#f3f4f6",
-                    color: textColor,
-                    borderColor: borderCol,
-                  },
-                ]}
-                value={communityData.description}
-                onChangeText={(value) =>
-                  updateCommunityData("description", value)
-                }
-                placeholder="Brief description of your community"
-                placeholderTextColor={muted}
-                multiline
-                numberOfLines={3}
-              />
+        {/* Facilities */}
+        <View style={[styles.section, { backgroundColor: cardBg, borderColor: borderCol }]}>
+          <View style={styles.sectionHead}>
+            <View style={[styles.sectionIcon, { backgroundColor: "#10B9811A" }]}>
+              <Feather name="settings" size={16} color="#10B981" />
             </View>
-
-            <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: textColor }]}>Address</Text>
-              <TextInput
-                style={[
-                  styles.textarea,
-                  {
-                    backgroundColor: theme === "dark" ? "#181818" : "#f3f4f6",
-                    color: textColor,
-                    borderColor: borderCol,
-                  },
-                ]}
-                value={communityData.address}
-                onChangeText={(value) => updateCommunityData("address", value)}
-                placeholder="Community address"
-                placeholderTextColor={muted}
-                multiline
-                numberOfLines={2}
-              />
+            <View>
+              <Text style={[styles.sectionTitle, { color: textColor }]}>Facilities & Amenities</Text>
+              <Text style={[styles.sectionSub, { color: muted }]}>Tap to configure · {enabledCount} enabled</Text>
             </View>
           </View>
 
-          {/* Facilities Configuration */}
-          <View
-            style={[
-              styles.card,
-              { backgroundColor: cardBg, borderColor: borderCol },
-            ]}
-          >
-            <View style={styles.cardHeader}>
-              <Feather name="settings" size={20} color={tint} />
-              <Text style={[styles.cardTitle, { color: textColor }]}>
-                Facilities & Amenities
-              </Text>
-            </View>
-            <Text style={[styles.cardSubtitle, { color: muted }]}>
-              Tap on a facility to configure • {enabledCount} enabled
-            </Text>
-
-            <View style={styles.facilityGrid}>
-              {FACILITY_TYPES.map((facilityType) => {
-                const config = facilities[facilityType.id] || {};
-                const isEnabled = config.enabled;
-
-                return (
-                  <TouchableOpacity
-                    key={facilityType.id}
-                    onPress={() => setSelectedFacility(facilityType)}
-                    style={[
-                      styles.facilityCard,
-                      {
-                        backgroundColor: isEnabled
-                          ? theme === "dark"
-                            ? "#1a3a2e"
-                            : "#d1fae5"
-                          : theme === "dark"
-                            ? "#181818"
-                            : "#f3f4f6",
-                        borderColor: isEnabled ? "#10b981" : borderCol,
-                      },
-                    ]}
-                  >
-                    {isEnabled && (
-                      <View style={styles.enabledBadge}>
-                        <Feather name="check-circle" size={14} color="#fff" />
-                      </View>
-                    )}
-                    <Text style={styles.facilityIcon}>{facilityType.icon}</Text>
-                    <Text
-                      style={[styles.facilityName, { color: textColor }]}
-                      numberOfLines={1}
-                    >
-                      {facilityType.name}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.facilityStatus,
-                        {
-                          color: isEnabled ? "#10b981" : muted,
-                        },
-                      ]}
-                    >
-                      {isEnabled ? "Enabled" : "Disabled"}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+          <View style={styles.facilityGrid}>
+            {FACILITY_TYPES.map((ft, i) => {
+              const fc = facilities[ft.id] || {};
+              const isOn = fc.enabled;
+              const color = FACILITY_COLORS[i % FACILITY_COLORS.length];
+              return (
+                <TouchableOpacity key={ft.id} onPress={() => setSelectedFacility(ft)}
+                  style={[styles.facilityCard, {
+                    backgroundColor: isOn ? (color + "15") : (isDark ? "#111" : "#F8FAFC"),
+                    borderColor: isOn ? color + "50" : borderCol,
+                  }]}
+                >
+                  {isOn && (
+                    <View style={[styles.facilityCheck, { backgroundColor: color }]}>
+                      <Feather name="check" size={8} color="#fff" />
+                    </View>
+                  )}
+                  <View style={[styles.facilityIconWrap, { backgroundColor: isOn ? color + "20" : (isDark ? "#1A1A1A" : "#EEEEEE") }]}>
+                    <Feather name={ft.icon} size={18} color={isOn ? color : muted} />
+                  </View>
+                  <Text style={[styles.facilityName, { color: isOn ? color : textColor }]} numberOfLines={2}>{ft.name}</Text>
+                  <Text style={[styles.facilityStatus, { color: isOn ? color : muted }]}>{isOn ? "On" : "Off"}</Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
       </ScrollView>
 
-      {/* Facility Configuration Modal */}
-      {selectedFacility && (
-        <Modal
-          visible={!!selectedFacility}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setSelectedFacility(null)}
-        >
-          <View style={styles.modalOverlay}>
-            <View
-              style={[
-                styles.modalContainer,
-                { backgroundColor: cardBg, borderColor: borderCol },
-              ]}
-            >
-              {/* Modal Header */}
-              <View
-                style={[
-                  styles.modalHeader,
-                  { backgroundColor: cardBg, borderBottomColor: borderCol },
-                ]}
-              >
-                <View style={styles.modalHeaderLeft}>
-                  <Text style={styles.modalIcon}>{selectedFacility.icon}</Text>
-                  <View>
-                    <Text style={[styles.modalTitle, { color: textColor }]}>
-                      {selectedFacility.name}
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() =>
-                        updateFacility(
-                          selectedFacility.id,
-                          "enabled",
-                          !facilities[selectedFacility.id]?.enabled,
-                        )
-                      }
-                      style={styles.toggleButton}
-                    >
-                      <Feather
-                        name={
-                          facilities[selectedFacility.id]?.enabled
-                            ? "toggle-right"
-                            : "toggle-left"
-                        }
-                        size={20}
-                        color={
-                          facilities[selectedFacility.id]?.enabled
-                            ? "#10b981"
-                            : "#ef4444"
-                        }
-                      />
-                      <Text
-                        style={[
-                          styles.toggleText,
-                          {
-                            color: facilities[selectedFacility.id]?.enabled
-                              ? "#10b981"
-                              : "#ef4444",
-                          },
-                        ]}
-                      >
-                        {facilities[selectedFacility.id]?.enabled
-                          ? "Enabled"
-                          : "Disabled"}
-                      </Text>
-                    </TouchableOpacity>
+      {/* Facility Config Modal */}
+      <Modal visible={!!selectedFacility} animationType="slide" transparent onRequestClose={() => setSelectedFacility(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, { backgroundColor: cardBg }]}>
+            {selFac && (
+              <>
+                <View style={[styles.modalHeader, { borderBottomColor: borderCol }]}>
+                  <View style={styles.modalHeaderLeft}>
+                    <View style={[styles.modalFacIcon, { backgroundColor: selColor + "1A" }]}>
+                      <Feather name={selFac.icon} size={20} color={selColor} />
+                    </View>
+                    <View>
+                      <Text style={[styles.modalTitle, { color: textColor }]}>{selFac.name}</Text>
+                      <TouchableOpacity onPress={() => updateFacility(selFac.id, "enabled", !selConfig.enabled)} style={[styles.togglePill, { backgroundColor: selConfig.enabled ? "#10B98120" : "#EF444420" }]}>
+                        <Feather name={selConfig.enabled ? "toggle-right" : "toggle-left"} size={14} color={selConfig.enabled ? "#10B981" : "#EF4444"} />
+                        <Text style={[styles.toggleText, { color: selConfig.enabled ? "#10B981" : "#EF4444" }]}>{selConfig.enabled ? "Enabled" : "Disabled"}</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
+                  <TouchableOpacity onPress={() => setSelectedFacility(null)} style={[styles.modalClose, { borderColor: borderCol }]}>
+                    <Feather name="x" size={16} color={textColor} />
+                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity
-                  onPress={() => setSelectedFacility(null)}
-                  style={styles.closeButton}
-                >
-                  <Feather name="x" size={24} color={muted} />
-                </TouchableOpacity>
-              </View>
 
-              {/* Modal Body */}
-              <ScrollView style={styles.modalBody}>
-                {(() => {
-                  const config = facilities[selectedFacility.id] || {};
+                <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+                  {/* Quantity */}
+                  <View style={styles.modalRow}>
+                    <Text style={[styles.modalRowLabel, { color: textColor }]}>Quantity</Text>
+                    <View style={styles.counterRow}>
+                      <TouchableOpacity onPress={() => updateFacility(selFac.id, "quantity", Math.max(1, (selConfig.quantity || 1) - 1))} style={[styles.counterBtn, { borderColor: borderCol }]}>
+                        <Feather name="minus" size={14} color={textColor} />
+                      </TouchableOpacity>
+                      <Text style={[styles.counterVal, { color: textColor }]}>{selConfig.quantity || 1}</Text>
+                      <TouchableOpacity onPress={() => updateFacility(selFac.id, "quantity", Math.min(50, (selConfig.quantity || 1) + 1))} style={[styles.counterBtn, { borderColor: borderCol }]}>
+                        <Feather name="plus" size={14} color={textColor} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
 
-                  return (
-                    <View style={styles.modalContent}>
-                      {/* Quantity & Capacity */}
-                      <View style={styles.row}>
-                        <View style={styles.rowItem}>
-                          <Text style={[styles.label, { color: textColor }]}>
-                            Quantity
-                          </Text>
-                          <View style={styles.counterRow}>
-                            <TouchableOpacity
-                              onPress={() =>
-                                adjustQuantity(selectedFacility.id, -1)
-                              }
-                              style={[
-                                styles.counterButton,
-                                { backgroundColor: borderCol },
-                              ]}
-                            >
-                              <Feather
-                                name="minus"
-                                size={18}
-                                color={textColor}
-                              />
-                            </TouchableOpacity>
-                            <Text
-                              style={[
-                                styles.counterValue,
-                                { color: textColor },
-                              ]}
-                            >
-                              {config.quantity}
-                            </Text>
-                            <TouchableOpacity
-                              onPress={() =>
-                                adjustQuantity(selectedFacility.id, 1)
-                              }
-                              style={[
-                                styles.counterButton,
-                                { backgroundColor: borderCol },
-                              ]}
-                            >
-                              <Feather
-                                name="plus"
-                                size={18}
-                                color={textColor}
-                              />
-                            </TouchableOpacity>
-                          </View>
-                        </View>
+                  {/* Max Capacity */}
+                  <View style={styles.modalRow}>
+                    <Text style={[styles.modalRowLabel, { color: textColor }]}>Max Capacity</Text>
+                    <View style={styles.counterRow}>
+                      <TouchableOpacity onPress={() => updateFacility(selFac.id, "maxCapacity", Math.max(1, (selConfig.maxCapacity || 10) - 1))} style={[styles.counterBtn, { borderColor: borderCol }]}>
+                        <Feather name="minus" size={14} color={textColor} />
+                      </TouchableOpacity>
+                      <Text style={[styles.counterVal, { color: textColor }]}>{selConfig.maxCapacity || 10}</Text>
+                      <TouchableOpacity onPress={() => updateFacility(selFac.id, "maxCapacity", Math.min(1000, (selConfig.maxCapacity || 10) + 1))} style={[styles.counterBtn, { borderColor: borderCol }]}>
+                        <Feather name="plus" size={14} color={textColor} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
 
-                        <View style={styles.rowItem}>
-                          <Text style={[styles.label, { color: textColor }]}>
-                            Max Capacity
-                          </Text>
-                          <View style={styles.counterRow}>
-                            <TouchableOpacity
-                              onPress={() =>
-                                adjustCapacity(selectedFacility.id, -1)
-                              }
-                              style={[
-                                styles.counterButton,
-                                { backgroundColor: borderCol },
-                              ]}
-                            >
-                              <Feather
-                                name="minus"
-                                size={18}
-                                color={textColor}
-                              />
-                            </TouchableOpacity>
-                            <Text
-                              style={[
-                                styles.counterValue,
-                                { color: textColor },
-                              ]}
-                            >
-                              {config.maxCapacity}
-                            </Text>
-                            <TouchableOpacity
-                              onPress={() =>
-                                adjustCapacity(selectedFacility.id, 1)
-                              }
-                              style={[
-                                styles.counterButton,
-                                { backgroundColor: borderCol },
-                              ]}
-                            >
-                              <Feather
-                                name="plus"
-                                size={18}
-                                color={textColor}
-                              />
-                            </TouchableOpacity>
-                          </View>
-                        </View>
+                  {/* Operating Hours */}
+                  <View style={styles.modalSection}>
+                    <Text style={[styles.modalSectionTitle, { color: muted }]}>Operating Hours</Text>
+                    <View style={styles.hoursRow}>
+                      <View style={[styles.pickerWrap, { borderColor: borderCol, backgroundColor: isDark ? "#111" : "#F8FAFC" }]}>
+                        <Picker selectedValue={startTime} onValueChange={v => updateFacility(selFac.id, "operatingHours", `${v}-${endTime}`)} style={{ color: textColor }} dropdownIconColor={muted}>
+                          {TIME_OPTIONS_START.map(o => <Picker.Item key={o.value} label={o.label} value={o.value} />)}
+                        </Picker>
                       </View>
-
-                      {/* Payment Toggle */}
-                      <View style={styles.formGroup}>
-                        <Text style={[styles.label, { color: textColor }]}>
-                          Payment Type
-                        </Text>
-                        <TouchableOpacity
-                          onPress={() =>
-                            updateFacility(
-                              selectedFacility.id,
-                              "isPaid",
-                              !config.isPaid,
-                            )
-                          }
-                          style={[
-                            styles.paymentButton,
-                            {
-                              backgroundColor: config.isPaid
-                                ? "#d1fae5"
-                                : borderCol,
-                              borderColor: config.isPaid
-                                ? "#10b981"
-                                : borderCol,
-                            },
-                          ]}
-                        >
-                          {config.isPaid && (
-                            <Feather
-                              name="dollar-sign"
-                              size={18}
-                              color="#10b981"
-                            />
-                          )}
-                          <Text
-                            style={[
-                              styles.paymentButtonText,
-                              {
-                                color: config.isPaid ? "#10b981" : textColor,
-                              },
-                            ]}
-                          >
-                            {config.isPaid ? "Paid" : "Free"}
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-
-                      {/* Price Configuration */}
-                      {config.isPaid && (
-                        <View style={styles.row}>
-                          <View style={styles.rowItem}>
-                            <Text style={[styles.label, { color: textColor }]}>
-                              Price
-                            </Text>
-                            <TextInput
-                              style={[
-                                styles.input,
-                                {
-                                  backgroundColor:
-                                    theme === "dark" ? "#181818" : "#f3f4f6",
-                                  color: textColor,
-                                  borderColor: borderCol,
-                                },
-                              ]}
-                              value={String(config.price)}
-                              onChangeText={(value) =>
-                                updateFacility(
-                                  selectedFacility.id,
-                                  "price",
-                                  parseFloat(value) || 0,
-                                )
-                              }
-                              keyboardType="numeric"
-                              placeholder="0"
-                              placeholderTextColor={muted}
-                            />
-                          </View>
-
-                          <View style={styles.rowItem}>
-                            <Text style={[styles.label, { color: textColor }]}>
-                              Price Type
-                            </Text>
-                            <View
-                              style={[
-                                styles.pickerContainer,
-                                {
-                                  backgroundColor:
-                                    theme === "dark" ? "#181818" : "#f3f4f6",
-                                  borderColor: borderCol,
-                                },
-                              ]}
-                            >
-                              <Picker
-                                selectedValue={config.priceType}
-                                onValueChange={(value) =>
-                                  updateFacility(
-                                    selectedFacility.id,
-                                    "priceType",
-                                    value,
-                                  )
-                                }
-                                style={{ color: textColor }}
-                              >
-                                {PRICE_TYPES.map((type) => (
-                                  <Picker.Item
-                                    key={type.id}
-                                    label={type.name}
-                                    value={type.id}
-                                  />
-                                ))}
-                              </Picker>
-                            </View>
-                          </View>
-                        </View>
-                      )}
-
-                      {/* Operating Hours */}
-                      <View style={styles.row}>
-                        <View style={styles.rowItem}>
-                          <Text style={[styles.label, { color: textColor }]}>
-                            Start Time
-                          </Text>
-                          <View
-                            style={[
-                              styles.pickerContainer,
-                              {
-                                backgroundColor:
-                                  theme === "dark" ? "#181818" : "#f3f4f6",
-                                borderColor: borderCol,
-                              },
-                            ]}
-                          >
-                            <Picker
-                              selectedValue={
-                                config.operatingHours.split("-")[0] || "09:00"
-                              }
-                              onValueChange={(value) => {
-                                const end =
-                                  config.operatingHours.split("-")[1] ||
-                                  "21:00";
-                                updateFacility(
-                                  selectedFacility.id,
-                                  "operatingHours",
-                                  `${value}-${end}`,
-                                );
-                              }}
-                              style={{ color: textColor }}
-                            >
-                              {TIME_OPTIONS_START.map((time) => (
-                                <Picker.Item
-                                  key={time.value}
-                                  label={time.label}
-                                  value={time.value}
-                                />
-                              ))}
-                            </Picker>
-                          </View>
-                        </View>
-
-                        <View style={styles.rowItem}>
-                          <Text style={[styles.label, { color: textColor }]}>
-                            End Time
-                          </Text>
-                          <View
-                            style={[
-                              styles.pickerContainer,
-                              {
-                                backgroundColor:
-                                  theme === "dark" ? "#181818" : "#f3f4f6",
-                                borderColor: borderCol,
-                              },
-                            ]}
-                          >
-                            <Picker
-                              selectedValue={
-                                config.operatingHours.split("-")[1] || "21:00"
-                              }
-                              onValueChange={(value) => {
-                                const start =
-                                  config.operatingHours.split("-")[0] ||
-                                  "09:00";
-                                updateFacility(
-                                  selectedFacility.id,
-                                  "operatingHours",
-                                  `${start}-${value}`,
-                                );
-                              }}
-                              style={{ color: textColor }}
-                            >
-                              {TIME_OPTIONS_END.map((time) => (
-                                <Picker.Item
-                                  key={time.value}
-                                  label={time.label}
-                                  value={time.value}
-                                />
-                              ))}
-                            </Picker>
-                          </View>
-                        </View>
-                      </View>
-
-                      {/* Rules */}
-                      <View style={styles.formGroup}>
-                        <Text style={[styles.label, { color: textColor }]}>
-                          Rules & Guidelines
-                        </Text>
-                        <TextInput
-                          style={[
-                            styles.textarea,
-                            {
-                              backgroundColor:
-                                theme === "dark" ? "#181818" : "#f3f4f6",
-                              color: textColor,
-                              borderColor: borderCol,
-                            },
-                          ]}
-                          value={config.rules}
-                          onChangeText={(value) =>
-                            updateFacility(selectedFacility.id, "rules", value)
-                          }
-                          placeholder="Specific rules for this facility..."
-                          placeholderTextColor={muted}
-                          multiline
-                          numberOfLines={3}
-                        />
+                      <Text style={[styles.hoursSep, { color: muted }]}>to</Text>
+                      <View style={[styles.pickerWrap, { borderColor: borderCol, backgroundColor: isDark ? "#111" : "#F8FAFC" }]}>
+                        <Picker selectedValue={endTime} onValueChange={v => updateFacility(selFac.id, "operatingHours", `${startTime}-${v}`)} style={{ color: textColor }} dropdownIconColor={muted}>
+                          {TIME_OPTIONS_END.map(o => <Picker.Item key={o.value} label={o.label} value={o.value} />)}
+                        </Picker>
                       </View>
                     </View>
-                  );
-                })()}
-              </ScrollView>
-            </View>
+                  </View>
+
+                  {/* Paid toggle */}
+                  <View style={styles.modalRow}>
+                    <View>
+                      <Text style={[styles.modalRowLabel, { color: textColor }]}>Paid Facility</Text>
+                      <Text style={[styles.modalRowSub, { color: muted }]}>Charge residents for booking</Text>
+                    </View>
+                    <Switch value={selConfig.isPaid || false} onValueChange={v => updateFacility(selFac.id, "isPaid", v)} trackColor={{ false: borderCol, true: selColor + "80" }} thumbColor={selConfig.isPaid ? selColor : muted} />
+                  </View>
+
+                  {selConfig.isPaid && (
+                    <View style={styles.modalSection}>
+                      <Text style={[styles.modalSectionTitle, { color: muted }]}>Pricing</Text>
+                      <View style={[styles.fieldRow, { borderColor: borderCol, backgroundColor: isDark ? "#111" : "#F8FAFC", marginBottom: 10 }]}>
+                        <Text style={[styles.currencyLabel, { color: muted }]}>₹</Text>
+                        <TextInput style={[styles.fieldInput, { color: textColor }]} placeholder="0" placeholderTextColor={muted} value={String(selConfig.price || "")} onChangeText={v => updateFacility(selFac.id, "price", parseFloat(v) || 0)} keyboardType="decimal-pad" />
+                      </View>
+                      <View style={[styles.pickerWrap, { borderColor: borderCol, backgroundColor: isDark ? "#111" : "#F8FAFC" }]}>
+                        <Picker selectedValue={selConfig.priceType || "per_hour"} onValueChange={v => updateFacility(selFac.id, "priceType", v)} style={{ color: textColor }} dropdownIconColor={muted}>
+                          {PRICE_TYPES.map(p => <Picker.Item key={p.id} label={p.name} value={p.id} />)}
+                        </Picker>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Rules */}
+                  <View style={styles.fieldWrap}>
+                    <Text style={[styles.fieldLabel, { color: muted }]}>Rules & Guidelines</Text>
+                    <View style={[styles.fieldRow, { borderColor: borderCol, backgroundColor: isDark ? "#111" : "#F8FAFC", alignItems: "flex-start", paddingVertical: 10 }]}>
+                      <Feather name="list" size={16} color={muted} style={{ marginTop: 2 }} />
+                      <TextInput style={[styles.fieldInput, { color: textColor, height: 80, textAlignVertical: "top" }]} placeholder="Any rules for this facility..." placeholderTextColor={muted} value={selConfig.rules || ""} onChangeText={v => updateFacility(selFac.id, "rules", v)} multiline />
+                    </View>
+                  </View>
+                </ScrollView>
+
+                <View style={[styles.modalFooter, { borderTopColor: borderCol }]}>
+                  <TouchableOpacity onPress={() => setSelectedFacility(null)} style={[styles.cancelBtn, { borderColor: borderCol }]}>
+                    <Text style={[styles.cancelBtnText, { color: muted }]}>Done</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
           </View>
-        </Modal>
-      )}
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  centerContent: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-  },
-  headerContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  content: {
-    padding: 16,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    flex: 1,
-  },
-  backButton: {
-    padding: 8,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "700",
-  },
-  subtitle: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  saveButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  disabledButton: {
-    opacity: 0.5,
-  },
-  card: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 16,
-    marginBottom: 16,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 16,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  cardSubtitle: {
-    fontSize: 12,
-    marginBottom: 16,
-  },
-  formGroup: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 8,
-  },
-  required: {
-    color: "#ef4444",
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-  },
-  textarea: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    textAlignVertical: "top",
-    minHeight: 80,
-  },
-  facilityGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-  },
-  facilityCard: {
-    width: "30%",
-    borderRadius: 12,
-    borderWidth: 2,
-    padding: 12,
-    alignItems: "center",
-    position: "relative",
-  },
-  enabledBadge: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: "#10b981",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  facilityIcon: {
-    fontSize: 32,
-    marginBottom: 8,
-  },
-  facilityName: {
-    fontSize: 11,
-    fontWeight: "600",
-    textAlign: "center",
-    marginBottom: 4,
-  },
-  facilityStatus: {
-    fontSize: 10,
-    fontWeight: "500",
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "flex-end",
-  },
-  modalContainer: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: "90%",
-    borderWidth: 1,
-    borderBottomWidth: 0,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    borderBottomWidth: 1,
-  },
-  modalHeaderLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    flex: 1,
-  },
-  modalIcon: {
-    fontSize: 36,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  toggleButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginTop: 4,
-  },
-  toggleText: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  closeButton: {
-    padding: 8,
-  },
-  modalBody: {
-    maxHeight: "80%",
-  },
-  modalContent: {
-    padding: 16,
-  },
-  row: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 16,
-  },
-  rowItem: {
-    flex: 1,
-  },
-  counterRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  counterButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  counterValue: {
-    fontSize: 18,
-    fontWeight: "600",
-    minWidth: 40,
-    textAlign: "center",
-  },
-  paymentButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  paymentButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  pickerContainer: {
-    borderWidth: 1,
-    borderRadius: 8,
-    overflow: "hidden",
-  },
+  container: { flex: 1 },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
+  loadingText: { fontSize: 14 },
+  headerBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
+  headerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
+  backBtn: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  screenTitle: { fontSize: 18, fontWeight: "700", letterSpacing: -0.3 },
+  screenSub: { fontSize: 12, fontWeight: "500", marginTop: 1 },
+  saveBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
+  saveBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
+  scroll: { padding: 16, paddingBottom: 40, gap: 12 },
+  section: { borderRadius: 18, borderWidth: 1, padding: 18, gap: 14 },
+  sectionHead: { flexDirection: "row", alignItems: "center", gap: 10 },
+  sectionIcon: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  sectionTitle: { fontSize: 15, fontWeight: "700" },
+  sectionSub: { fontSize: 12, marginTop: 1 },
+  fieldWrap: { gap: 6 },
+  fieldLabel: { fontSize: 12, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5 },
+  fieldRow: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12 },
+  fieldInput: { flex: 1, fontSize: 15 },
+  facilityGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  facilityCard: { width: "30%", borderRadius: 12, borderWidth: 1, padding: 12, alignItems: "center", gap: 6, position: "relative" },
+  facilityCheck: { position: "absolute", top: 6, right: 6, width: 16, height: 16, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  facilityIconWrap: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  facilityName: { fontSize: 11, fontWeight: "600", textAlign: "center" },
+  facilityStatus: { fontSize: 10, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.3 },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+  modalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: "90%", paddingBottom: 32 },
+  modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 20, borderBottomWidth: 1 },
+  modalHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
+  modalFacIcon: { width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  modalTitle: { fontSize: 17, fontWeight: "700" },
+  togglePill: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, marginTop: 4 },
+  toggleText: { fontSize: 12, fontWeight: "700" },
+  modalClose: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  modalBody: { padding: 20 },
+  modalFooter: { padding: 20, borderTopWidth: 1 },
+  modalRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 18 },
+  modalRowLabel: { fontSize: 14, fontWeight: "600" },
+  modalRowSub: { fontSize: 12, marginTop: 2 },
+  modalSection: { marginBottom: 18 },
+  modalSectionTitle: { fontSize: 12, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 },
+  counterRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  counterBtn: { width: 32, height: 32, borderRadius: 10, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  counterVal: { fontSize: 18, fontWeight: "700", minWidth: 32, textAlign: "center" },
+  hoursRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  hoursSep: { fontSize: 13, fontWeight: "500" },
+  pickerWrap: { flex: 1, borderRadius: 12, borderWidth: 1, overflow: "hidden" },
+  currencyLabel: { fontSize: 16, fontWeight: "700" },
+  cancelBtn: { borderWidth: 1, borderRadius: 12, alignItems: "center", justifyContent: "center", paddingVertical: 13 },
+  cancelBtnText: { fontSize: 14, fontWeight: "600" },
 });

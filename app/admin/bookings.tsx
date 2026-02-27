@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import React, { useEffect, useState } from "react";
 import {
   StyleSheet,
@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   ScrollView,
   RefreshControl,
-  Alert,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -18,160 +17,130 @@ import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { getToken, getCommunityId } from "@/lib/auth";
 import { config } from "@/lib/config";
+import Toast from "@/components/Toast";
+import { useToast } from "@/hooks/useToast";
 
-// Booking Card Component
-function BookingCard({ booking, theme, textColor, muted }) {
-  const getStatusBadge = (status) => {
-    let backgroundColor, color;
+function getStatusPill(status) {
+  const s = status?.toUpperCase();
+  if (s === "CONFIRMED") return { bg: "#D1FAE5", text: "#065F46" };
+  if (s === "PENDING") return { bg: "#FEF3C7", text: "#92400E" };
+  if (s === "CANCELLED") return { bg: "#FEE2E2", text: "#991B1B" };
+  return { bg: "#F3F4F6", text: "#374151" };
+}
 
-    switch (status?.toUpperCase()) {
-      case "CONFIRMED":
-        backgroundColor = "#dcfce7";
-        color = "#16a34a";
-        break;
-      case "PENDING":
-        backgroundColor = "#fef3c7";
-        color = "#d97706";
-        break;
-      case "CANCELLED":
-        backgroundColor = "#fee2e2";
-        color = "#dc2626";
-        break;
-      default:
-        backgroundColor = theme === "dark" ? "#374151" : "#f3f4f6";
-        color = theme === "dark" ? "#d1d5db" : "#6b7280";
-    }
+// --- Booking Card ---
+function BookingCard({ booking, theme, textColor, muted, borderCol }) {
+  const isDark = theme === "dark";
+  const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
+  const pill = getStatusPill(booking.status);
 
-    return (
-      <View style={[styles.badge, { backgroundColor }]}>
-        <Text style={[styles.badgeText, { color }]}>{status || "Unknown"}</Text>
-      </View>
-    );
-  };
-
-  const formatDateTime = (dateString) => {
-    const date = new Date(dateString);
+  const fmt = (d) => {
+    const dt = new Date(d);
     return {
-      date: date.toLocaleDateString(),
-      time: date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      date: dt.toLocaleDateString(),
+      time: dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     };
   };
-
-  const startDateTime = formatDateTime(booking.startsAt);
-  const endDateTime = booking.endsAt ? formatDateTime(booking.endsAt) : null;
+  const start = fmt(booking.startsAt);
+  const end = booking.endsAt ? fmt(booking.endsAt) : null;
 
   return (
     <View
       style={[
-        styles.bookingCard,
-        {
-          backgroundColor: theme === "dark" ? "#1F1F1F" : "#ffffff",
-          borderColor:
-            theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)",
-        },
+        styles.bookCard,
+        { backgroundColor: cardBg, borderColor: borderCol },
       ]}
     >
-      <View style={styles.cardHeader}>
-        <View style={styles.cardTitle}>
-          <Text style={[styles.titleText, { color: textColor }]}>
-            {booking.facility?.name || "Amenity Booking"}
-          </Text>
+      <View style={styles.bookCardTop}>
+        <View style={[styles.bookIconWrap, { backgroundColor: "#EEF2FF" }]}>
+          <Feather name="calendar" size={15} color="#6366F1" />
         </View>
-        {getStatusBadge(booking.status)}
-      </View>
-
-      <View style={styles.cardContent}>
-        <View style={styles.cardDetail}>
-          <Feather name="user" size={12} color={muted} />
-          <Text style={[styles.detailText, { color: muted }]}>
-            {booking.user?.name || "Unknown User"}
-          </Text>
-        </View>
-
-        <View style={styles.cardDetail}>
-          <Feather name="calendar" size={12} color={muted} />
-          <Text style={[styles.detailText, { color: muted }]}>
-            {startDateTime.date}
-          </Text>
-        </View>
-
-        <View style={styles.cardDetail}>
-          <Feather name="clock" size={12} color={muted} />
-          <Text style={[styles.detailText, { color: muted }]}>
-            {startDateTime.time}
-            {endDateTime && ` - ${endDateTime.time}`}
-          </Text>
-        </View>
-
-        {booking.description && (
+        <View style={styles.bookCardInfo}>
           <Text
-            style={[styles.description, { color: textColor }]}
-            numberOfLines={2}
+            style={[styles.bookCardTitle, { color: textColor }]}
+            numberOfLines={1}
           >
-            {booking.description}
+            {booking.facility?.name || "Facility Booking"}
           </Text>
-        )}
-
-        <View style={styles.cardFooter}>
-          <View style={styles.cardDetail}>
-            <Feather name="calendar" size={12} color={muted} />
-            <Text style={[styles.detailText, { color: muted }]}>
-              Created: {new Date(booking.createdAt).toLocaleDateString()}
+          <View style={styles.bookMetaRow}>
+            <Feather name="user" size={11} color={muted} />
+            <Text style={[styles.bookMeta, { color: muted }]}>
+              {booking.user?.name || "Unknown"}
             </Text>
           </View>
-          {booking.amount && (
-            <View style={styles.cardDetail}>
-              <Feather name="dollar-sign" size={12} color={muted} />
-              <Text style={[styles.detailText, { color: muted }]}>
-                ₹{booking.amount}
-              </Text>
-            </View>
-          )}
         </View>
+        <View style={[styles.pill, { backgroundColor: pill.bg }]}>
+          <Text style={[styles.pillText, { color: pill.text }]}>
+            {booking.status}
+          </Text>
+        </View>
+      </View>
+
+      <View style={[styles.bookCardFooter, { borderTopColor: borderCol }]}>
+        <View style={styles.bookMetaItem}>
+          <Feather name="calendar" size={11} color={muted} />
+          <Text style={[styles.bookMeta, { color: muted }]}>{start.date}</Text>
+        </View>
+        <View style={styles.bookMetaItem}>
+          <Feather name="clock" size={11} color={muted} />
+          <Text style={[styles.bookMeta, { color: muted }]}>
+            {start.time}
+            {end ? ` - ${end.time}` : ""}
+          </Text>
+        </View>
+        {booking.amount && (
+          <View style={styles.bookMetaItem}>
+            <Feather name="credit-card" size={11} color={muted} />
+            <Text style={[styles.bookMeta, { color: muted }]}>
+              INR {booking.amount}
+            </Text>
+          </View>
+        )}
       </View>
     </View>
   );
 }
 
-// Stat Card Component
+// --- Stat Card ---
 function StatCard({
   icon,
   title,
   value,
-  color = "#6366f1",
+  color = "#6366F1",
   theme,
   textColor,
   muted,
 }) {
+  const isDark = theme === "dark";
   return (
     <View
       style={[
         styles.statCard,
         {
-          backgroundColor: theme === "dark" ? "#1F1F1F" : "#ffffff",
-          borderColor:
-            theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)",
+          backgroundColor: isDark ? "#1A1A1A" : "#FFFFFF",
+          borderColor: isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)",
         },
       ]}
     >
-      <View style={styles.statTop}>
-        <View style={[styles.statIcon, { backgroundColor: `${color}20` }]}>
-          <Feather name={icon} size={16} color={color} />
-        </View>
-        <Text style={[styles.statTitle, { color: muted }]}>{title}</Text>
+      <View style={[styles.statIconWrap, { backgroundColor: color + "1A" }]}>
+        <Feather name={icon} size={16} color={color} />
       </View>
       <Text style={[styles.statValue, { color: textColor }]}>{value}</Text>
+      <Text style={[styles.statLabel, { color: muted }]}>{title}</Text>
     </View>
   );
 }
 
+// --- Main Component ---
 export default function AdminBookings() {
   const theme = useColorScheme() ?? "light";
+  const isDark = theme === "dark";
   const bg = useThemeColor({}, "background");
   const textColor = useThemeColor({}, "text");
   const tint = useThemeColor({}, "tint");
-  const iconColor = useThemeColor({}, "icon");
-  const muted = iconColor;
+  const muted = isDark ? "#94A3B8" : "#64748B";
+  const borderCol = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)";
+  const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
   const insets = useSafeAreaInsets();
 
   const [bookings, setBookings] = useState([]);
@@ -179,6 +148,7 @@ export default function AdminBookings() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
 
+  const { toast, showError, hideToast } = useToast();
   const url = config.backendUrl;
 
   useEffect(() => {
@@ -189,25 +159,17 @@ export default function AdminBookings() {
     try {
       const token = await getToken();
       const communityId = await getCommunityId();
-
       if (!communityId) {
-        Alert.alert(
-          "Error",
-          "Community information not found. Please login again.",
-        );
+        showError("Community information not found.");
         return;
       }
-
       const res = await axios.get(`${url}/admin/bookings`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        params: { communityId: communityId },
+        headers: { Authorization: `Bearer ${token}` },
+        params: { communityId },
       });
       setBookings(res.data.bookings || []);
-    } catch (error) {
-      console.error("Error fetching bookings:", error);
-      Alert.alert("Error", "Failed to load bookings data.");
+    } catch (e) {
+      showError("Failed to load bookings.");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -219,34 +181,20 @@ export default function AdminBookings() {
     fetchBookings();
   };
 
-  const getFilteredBookings = () => {
-    switch (activeTab) {
-      case "confirmed":
-        return bookings.filter((b) => b.status === "CONFIRMED");
-      case "cancelled":
-        return bookings.filter((b) => b.status === "CANCELLED");
-      default:
-        return bookings;
-    }
+  const getFiltered = () => {
+    if (activeTab === "confirmed")
+      return bookings.filter((b) => b.status === "CONFIRMED");
+    if (activeTab === "cancelled")
+      return bookings.filter((b) => b.status === "CANCELLED");
+    return bookings;
   };
 
-  const getStats = () => {
-    const confirmed = bookings.filter((b) => b.status === "CONFIRMED").length;
-    const cancelled = bookings.filter((b) => b.status === "CANCELLED").length;
-    const totalRevenue = bookings
-      .filter((b) => b.status === "CONFIRMED" && b.amount)
-      .reduce((sum, b) => sum + (b.amount || 0), 0);
-
-    return {
-      total: bookings.length,
-      confirmed,
-      cancelled,
-      totalRevenue,
-    };
-  };
-
-  const stats = getStats();
-  const filteredBookings = getFilteredBookings();
+  const confirmed = bookings.filter((b) => b.status === "CONFIRMED").length;
+  const cancelled = bookings.filter((b) => b.status === "CANCELLED").length;
+  const totalRevenue = bookings
+    .filter((b) => b.status === "CONFIRMED" && b.amount)
+    .reduce((sum, b) => sum + (b.amount || 0), 0);
+  const stats = { total: bookings.length, confirmed, cancelled, totalRevenue };
 
   const tabs = [
     { key: "all", label: "All Bookings", count: stats.total },
@@ -254,69 +202,81 @@ export default function AdminBookings() {
     { key: "cancelled", label: "Cancelled", count: stats.cancelled },
   ];
 
+  const filteredBookings = getFiltered();
+
   if (loading) {
     return (
       <View
         style={[
           styles.container,
-          styles.centerContent,
-          { backgroundColor: bg },
+          {
+            backgroundColor: bg,
+            alignItems: "center",
+            justifyContent: "center",
+          },
         ]}
       >
-        <Feather name="loader" size={32} color={tint} />
-        <Text style={[styles.loadingText, { color: textColor }]}>
-          Loading bookings...
-        </Text>
+        <Feather
+          name="calendar"
+          size={32}
+          color={tint}
+          style={{ opacity: 0.5, marginBottom: 12 }}
+        />
+        <Text style={{ fontSize: 14, color: muted }}>Loading bookings...</Text>
       </View>
     );
   }
 
   return (
     <View style={[styles.container, { backgroundColor: bg }]}>
-      {/* Fixed Header */}
+      {/* Header */}
       <View
         style={[
-          styles.headerContainer,
+          styles.headerBar,
           {
-            paddingTop: Math.max(insets.top, 16),
+            paddingTop: Math.max(insets.top, 20),
+            borderBottomColor: borderCol,
             backgroundColor: bg,
-            borderBottomColor:
-              theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)",
           },
         ]}
       >
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={styles.backButton}
-            >
-              <Feather name="arrow-left" size={24} color={tint} />
-            </TouchableOpacity>
-            <View>
-              <Text style={[styles.title, { color: textColor }]}>Bookings</Text>
-              <Text style={[styles.subtitle, { color: muted }]}>
-                Manage facility bookings
-              </Text>
-            </View>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={[styles.backBtn, { borderColor: borderCol }]}
+          >
+            <Feather name="arrow-left" size={18} color={textColor} />
+          </TouchableOpacity>
+          <View>
+            <Text style={[styles.headerTitle, { color: textColor }]}>
+              Bookings
+            </Text>
+            <Text style={[styles.headerSub, { color: muted }]}>
+              Facility reservations
+            </Text>
           </View>
         </View>
       </View>
 
       <ScrollView
-        style={styles.scrollView}
+        style={styles.scroll}
+        showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={tint}
+          />
         }
       >
         <View style={styles.content}>
-          {/* Stats Cards */}
+          {/* Stats */}
           <View style={styles.statsGrid}>
             <StatCard
               icon="calendar"
-              title="Total Bookings"
+              title="Total"
               value={stats.total}
-              color="#6366f1"
+              color="#6366F1"
               theme={theme}
               textColor={textColor}
               muted={muted}
@@ -325,7 +285,7 @@ export default function AdminBookings() {
               icon="check-circle"
               title="Confirmed"
               value={stats.confirmed}
-              color="#10b981"
+              color="#10B981"
               theme={theme}
               textColor={textColor}
               muted={muted}
@@ -334,137 +294,108 @@ export default function AdminBookings() {
               icon="x-circle"
               title="Cancelled"
               value={stats.cancelled}
-              color="#ef4444"
-              theme={theme}
-              textColor={textColor}
-              muted={muted}
-            />
-            <StatCard
-              icon="dollar-sign"
-              title="Revenue"
-              value={`₹${stats.totalRevenue.toLocaleString()}`}
-              color="#8b5cf6"
+              color="#EF4444"
               theme={theme}
               textColor={textColor}
               muted={muted}
             />
           </View>
 
-          {/* Filter Tabs */}
+          {/* Tabs */}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            style={styles.tabsContainer}
+            style={{ marginBottom: 4 }}
           >
-            <View style={styles.tabs}>
-              {tabs.map((tab) => (
-                <TouchableOpacity
-                  key={tab.key}
-                  style={[
-                    styles.tab,
-                    {
-                      backgroundColor:
-                        activeTab === tab.key ? tint : "transparent",
-                      borderColor:
-                        activeTab === tab.key
-                          ? tint
-                          : theme === "dark"
-                            ? "rgba(255,255,255,0.2)"
-                            : "rgba(0,0,0,0.2)",
-                    },
-                  ]}
-                  onPress={() => setActiveTab(tab.key)}
-                >
-                  <Text
+            <View style={{ flexDirection: "row", gap: 8, paddingBottom: 4 }}>
+              {tabs.map((tab) => {
+                const isActive = activeTab === tab.key;
+                return (
+                  <TouchableOpacity
+                    key={tab.key}
                     style={[
-                      styles.tabText,
+                      styles.tab,
                       {
-                        color:
-                          activeTab === tab.key
-                            ? theme === "dark"
-                              ? "#11181C"
-                              : "#ffffff"
-                            : textColor,
+                        backgroundColor: isActive ? tint : "transparent",
+                        borderColor: isActive ? tint : borderCol,
                       },
                     ]}
+                    onPress={() => setActiveTab(tab.key)}
                   >
-                    {tab.label}
-                  </Text>
-                  {tab.count > 0 && (
-                    <View
+                    <Text
                       style={[
-                        styles.tabBadge,
-                        {
-                          backgroundColor:
-                            activeTab === tab.key
-                              ? theme === "dark"
-                                ? "#11181C33"
-                                : "#ffffff33"
-                              : tint,
-                        },
+                        styles.tabText,
+                        { color: isActive ? "#ffffff" : muted },
                       ]}
                     >
-                      <Text
+                      {tab.label}
+                    </Text>
+                    {tab.count > 0 && (
+                      <View
                         style={[
-                          styles.tabBadgeText,
+                          styles.tabCount,
                           {
-                            color:
-                              activeTab === tab.key
-                                ? theme === "dark"
-                                  ? "#11181C"
-                                  : "#ffffff"
-                                : "#ffffff",
+                            backgroundColor: isActive
+                              ? "rgba(255,255,255,0.25)"
+                              : tint + "20",
                           },
                         ]}
                       >
-                        {tab.count}
-                      </Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              ))}
+                        <Text
+                          style={[
+                            styles.tabCountText,
+                            { color: isActive ? "#ffffff" : tint },
+                          ]}
+                        >
+                          {tab.count}
+                        </Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </ScrollView>
 
-          {/* Bookings List */}
+          {/* List */}
           <View
             style={[
               styles.card,
-              {
-                backgroundColor: theme === "dark" ? "#1F1F1F" : "#ffffff",
-                borderColor:
-                  theme === "dark"
-                    ? "rgba(255,255,255,0.08)"
-                    : "rgba(0,0,0,0.08)",
-              },
+              { backgroundColor: cardBg, borderColor: borderCol },
             ]}
           >
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionLeft}>
-                <Feather name="calendar" size={20} color={tint} />
-                <Text style={[styles.sectionTitle, { color: textColor }]}>
-                  {activeTab === "all" && "All Bookings"}
-                  {activeTab === "confirmed" && "Confirmed Bookings"}
-                  {activeTab === "cancelled" && "Cancelled Bookings"}
+            <View style={styles.listHeader}>
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+              >
+                <Feather name="calendar" size={16} color={tint} />
+                <Text style={[styles.listHeaderTitle, { color: textColor }]}>
+                  {activeTab === "all"
+                    ? "All Bookings"
+                    : activeTab === "confirmed"
+                      ? "Confirmed"
+                      : "Cancelled"}
                 </Text>
               </View>
-              <Text style={[styles.countText, { color: muted }]}>
-                {filteredBookings.length} booking
-                {filteredBookings.length !== 1 ? "s" : ""}
+              <Text style={[styles.listCount, { color: muted }]}>
+                {filteredBookings.length}
               </Text>
             </View>
 
             {filteredBookings.length === 0 ? (
-              <View style={styles.emptyContainer}>
-                <Feather name="calendar" size={48} color={muted} />
+              <View style={styles.emptyState}>
+                <Feather
+                  name="calendar"
+                  size={36}
+                  color={muted}
+                  style={{ opacity: 0.3 }}
+                />
                 <Text style={[styles.emptyText, { color: muted }]}>
-                  {activeTab === "all" && "No bookings found."}
-                  {activeTab === "confirmed" && "No confirmed bookings."}
-                  {activeTab === "cancelled" && "No cancelled bookings."}
+                  No bookings found
                 </Text>
               </View>
             ) : (
-              <View style={styles.bookingsList}>
+              <View style={{ gap: 10 }}>
                 {filteredBookings.map((booking) => (
                   <BookingCard
                     key={booking.id}
@@ -472,6 +403,7 @@ export default function AdminBookings() {
                     theme={theme}
                     textColor={textColor}
                     muted={muted}
+                    borderCol={borderCol}
                   />
                 ))}
               </View>
@@ -479,209 +411,126 @@ export default function AdminBookings() {
           </View>
         </View>
       </ScrollView>
+
+      <Toast
+        visible={toast.visible}
+        message={toast.message}
+        type={toast.type}
+        onHide={hideToast}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  headerContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  centerContent: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  content: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 16,
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-  },
-  header: {
+  container: { flex: 1 },
+  headerBar: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
   },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    flex: 1,
-  },
-  backButton: {
-    padding: 8,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "700",
-  },
-  subtitle: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  statsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-    marginBottom: 24,
-  },
-  statCard: {
-    width: "48%",
-    borderRadius: 12,
+  headerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     borderWidth: 1,
-    padding: 16,
-  },
-  statTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 12,
-  },
-  statIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
   },
-  statTitle: {
-    fontSize: 11,
-    fontWeight: "600",
-    flex: 1,
+  headerTitle: { fontSize: 20, fontWeight: "700", letterSpacing: -0.3 },
+  headerSub: { fontSize: 12, marginTop: 1 },
+  scroll: { flex: 1 },
+  content: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 32,
+    gap: 12,
   },
-  statValue: {
-    fontSize: 18,
-    fontWeight: "700",
+  statsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  statCard: {
+    width: "48%",
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 14,
+    gap: 6,
   },
-  tabsContainer: {
-    marginBottom: 16,
+  statIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
   },
-  tabs: {
-    flexDirection: "row",
-    gap: 8,
-    paddingRight: 16,
-  },
+  statValue: { fontSize: 22, fontWeight: "700", letterSpacing: -0.5 },
+  statLabel: { fontSize: 12, fontWeight: "500" },
   tab: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
     gap: 6,
   },
-  tabText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  tabBadge: {
-    paddingHorizontal: 6,
+  tabText: { fontSize: 13, fontWeight: "600" },
+  tabCount: {
+    paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 10,
-    minWidth: 20,
     alignItems: "center",
   },
-  tabBadgeText: {
-    fontSize: 10,
-    fontWeight: "600",
-  },
-  card: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 16,
-  },
-  sectionHeader: {
+  tabCountText: { fontSize: 10, fontWeight: "700" },
+  card: { borderRadius: 16, borderWidth: 1, padding: 16 },
+  listHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 16,
+    marginBottom: 14,
   },
-  sectionLeft: {
+  listHeaderTitle: { fontSize: 15, fontWeight: "600" },
+  listCount: { fontSize: 12, fontWeight: "600" },
+  emptyState: { alignItems: "center", paddingVertical: 32, gap: 10 },
+  emptyText: { fontSize: 13 },
+  bookCard: { borderRadius: 14, borderWidth: 1, padding: 14 },
+  bookCardTop: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 12,
+    marginBottom: 12,
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  countText: {
-    fontSize: 12,
-  },
-  emptyContainer: {
+  bookIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 40,
   },
-  emptyText: {
-    textAlign: "center",
-    fontSize: 14,
-    marginTop: 12,
-  },
-  bookingsList: {
-    gap: 12,
-  },
-  bookingCard: {
-    borderRadius: 8,
-    borderWidth: 1,
-    padding: 12,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  cardTitle: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    flex: 1,
-  },
-  titleText: {
-    fontSize: 14,
-    fontWeight: "600",
-    flex: 1,
-  },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  badgeText: {
-    fontSize: 10,
-    fontWeight: "600",
-  },
-  cardContent: {
-    gap: 6,
-  },
-  cardDetail: {
+  bookCardInfo: { flex: 1 },
+  bookCardTitle: { fontSize: 14, fontWeight: "600" },
+  bookMetaRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
+    marginTop: 2,
   },
-  detailText: {
-    fontSize: 12,
+  bookMeta: { fontSize: 12 },
+  pill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  pillText: {
+    fontSize: 10,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
   },
-  description: {
-    fontSize: 13,
-    lineHeight: 18,
-    marginVertical: 4,
-  },
-  cardFooter: {
+  bookCardFooter: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 4,
+    gap: 14,
+    paddingTop: 10,
+    borderTopWidth: 1,
   },
+  bookMetaItem: { flexDirection: "row", alignItems: "center", gap: 4 },
 });

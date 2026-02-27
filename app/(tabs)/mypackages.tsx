@@ -1,74 +1,81 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import React, { useEffect, useState } from "react";
 import {
   ScrollView,
-  StyleSheet,
   Text,
-  TouchableOpacity,
   View,
+  Pressable,
   ActivityIndicator,
   Image,
-  Modal,
-  Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import axios from "axios";
-
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
-import { getToken, getUser } from "@/lib/auth";
+import { getUser, getToken } from "@/lib/auth";
 import { config } from "@/lib/config";
+import Toast from "@/components/Toast";
+import { useToast } from "@/hooks/useToast";
 
-export default function ResidentPackagesScreen() {
-  const insets = useSafeAreaInsets();
+const STATUS_COLORS = {
+  PENDING: "#F59E0B",
+  PICKED: "#10B981",
+  DELIVERED: "#3B82F6",
+  RETURNED: "#EF4444",
+};
+const STATUS_LABELS = {
+  PENDING: "PNDG",
+  PICKED: "PKCD",
+  DELIVERED: "DLVD",
+  RETURNED: "RTND",
+};
+
+export default function MyPackages() {
   const theme = useColorScheme() ?? "light";
+  const isDark = theme === "dark";
   const bg = useThemeColor({}, "background");
   const text = useThemeColor({}, "text");
-  const icon = useThemeColor({}, "icon");
   const tint = useThemeColor({}, "tint");
-  const card = theme === "dark" ? "#111111" : "#ffffff";
-  const border = theme === "dark" ? "#262626" : "#E5E7EB";
+  const insets = useSafeAreaInsets();
+  const muted = isDark ? "#94A3B8" : "#64748B";
+  const borderCol = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)";
+  const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
+  const fieldBg = isDark ? "#111111" : "#F8FAFC";
 
-  const backendUrl = config.backendUrl;
-
+  const [loading, setLoading] = useState(true);
   const [packages, setPackages] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [selectedImage, setSelectedImage] = useState(null);
-  const [token, setToken] = useState(null);
-  const [user, setUser] = useState(null);
-
-  // Date picker states
-  const [showFromPicker, setShowFromPicker] = useState(false);
-  const [showToPicker, setShowToPicker] = useState(false);
   const [dateRange, setDateRange] = useState({
-    from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+    from: new Date(Date.now() - 30 * 864e5),
     to: new Date(),
   });
+  const [showFromPicker, setShowFromPicker] = useState(false);
+  const [showToPicker, setShowToPicker] = useState(false);
+  const [expandedId, setExpandedId] = useState(null);
+  const [user, setUserState] = useState(null);
+  const [token, setTokenState] = useState(null);
+  const { toast, showError, hideToast } = useToast();
 
   useEffect(() => {
-    (async () => {
-      const [t, u] = await Promise.all([getToken(), getUser()]);
-      setToken(t);
-      setUser(u);
-    })();
+    const init = async () => {
+      const u = await getUser();
+      const t = await getToken();
+      setUserState(u);
+      setTokenState(t);
+    };
+    init();
   }, []);
 
   useEffect(() => {
-    if (token && user) {
-      load();
-    }
-  }, [token, user]);
+    if (user && token) load();
+  }, [user, token]);
 
   const load = async () => {
     if (!token || !user) return;
-
     setLoading(true);
-    setError("");
     try {
-      const res = await axios.get(`${backendUrl}/resident/packages`, {
+      const res = await axios.get(`${config.backendUrl}/resident/packages`, {
         headers: { Authorization: `Bearer ${token}` },
         params: {
           communityId: user.communityId,
@@ -79,670 +86,369 @@ export default function ResidentPackagesScreen() {
       });
       setPackages(res.data || []);
     } catch (err) {
-      console.error("Error loading packages:", err);
-      setError(err.response?.data?.error || "Failed to load packages");
+      showError(err.response?.data?.error || "Failed to load packages");
     } finally {
       setLoading(false);
     }
   };
 
-  const formatDate = (date) => {
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  };
+  const fmtShort = (d) =>
+    new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
-  const onFromDateChange = (event, selectedDate) => {
-    setShowFromPicker(false);
-    if (event.type === "set" && selectedDate) {
-      setDateRange((prev) => ({ ...prev, from: selectedDate }));
-    }
+  const stats = {
+    total: packages.length,
+    pending: packages.filter((p) => p.status === "PENDING").length,
+    collected: packages.filter((p) => p.status === "PICKED").length,
   };
-
-  const onToDateChange = (event, selectedDate) => {
-    setShowToPicker(false);
-    if (event.type === "set" && selectedDate) {
-      setDateRange((prev) => ({ ...prev, to: selectedDate }));
-    }
-  };
-
-  const stats = React.useMemo(
-    () => ({
-      total: packages.length,
-      pending: packages.filter((p) => p.status === "PENDING").length,
-      collected: packages.filter((p) => p.status === "PICKED").length,
-    }),
-    [packages],
-  );
 
   return (
     <View style={{ flex: 1, backgroundColor: bg }}>
-      {/* Fixed Header */}
+      {/* Header */}
       <View
-        style={[
-          styles.headerContainer,
-          {
-            paddingTop: Math.max(insets.top, 16),
-            backgroundColor: bg,
-            borderBottomColor: border,
-          },
-        ]}
+        style={{
+          paddingTop: Math.max(insets.top, 16),
+          paddingBottom: 14,
+          paddingHorizontal: 20,
+          backgroundColor: bg,
+          borderBottomWidth: 1,
+          borderBottomColor: borderCol,
+        }}
       >
-        <View style={styles.headerRow}>
-          <View style={styles.headerLeft}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
             <View
-              style={[
-                styles.headerIcon,
-                { backgroundColor: theme === "dark" ? "#1a1a2e" : "#EEF2FF" },
-              ]}
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 10,
+                backgroundColor: tint + "18",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
             >
-              <Feather name="package" size={20} color={tint} />
+              <Feather name="package" size={18} color={tint} />
             </View>
             <View>
-              <Text style={[styles.title, { color: text }]}>My Packages</Text>
-              <Text style={[styles.subtitle, { color: icon as any }]}>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: text }}>
+                My Packages
+              </Text>
+              <Text style={{ fontSize: 12, color: muted }}>
                 Delivery history
               </Text>
             </View>
           </View>
-          <TouchableOpacity
+          <Pressable
             onPress={load}
             disabled={loading}
-            style={styles.refreshBtn}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              backgroundColor: tint + "15",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
           >
             {loading ? (
               <ActivityIndicator size="small" color={tint} />
             ) : (
-              <Feather name="refresh-cw" size={18} color={tint} />
+              <Feather name="refresh-cw" size={16} color={tint} />
             )}
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </View>
 
       <ScrollView
         contentContainerStyle={{
           padding: 16,
-          gap: 16,
-          paddingBottom: insets.bottom + 20,
-          paddingTop: 8,
+          gap: 14,
+          paddingBottom: insets.bottom + 24,
         }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Date Filter */}
+        {/* Date filter */}
         <View
-          style={[styles.card, { backgroundColor: card, borderColor: border }]}
+          style={{
+            backgroundColor: cardBg,
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: borderCol,
+            padding: 14,
+            gap: 10,
+          }}
         >
           <Text
             style={{
-              color: text,
-              fontSize: 16,
-              fontWeight: "800",
-              marginBottom: 16,
+              fontSize: 12,
+              color: muted,
+              fontWeight: "600",
+              textTransform: "uppercase",
+              letterSpacing: 0.5,
             }}
           >
-            Date Filter
+            Date Range
           </Text>
-
-          <View style={{ gap: 16 }}>
-            {/* From Date */}
-            <View>
-              <Text style={[styles.label, { color: text }]}>From Date</Text>
-              {Platform.OS === "ios" ? (
-                <View
-                  style={{
-                    borderWidth: 1,
-                    borderColor: border,
-                    borderRadius: 8,
-                    overflow: "hidden",
-                    backgroundColor: bg,
-                  }}
-                >
-                  <DateTimePicker
-                    value={dateRange.from}
-                    mode="date"
-                    display="compact"
-                    onChange={onFromDateChange}
-                    maximumDate={new Date()}
-                    style={{ width: "100%" }}
-                  />
-                </View>
-              ) : (
-                <TouchableOpacity
-                  onPress={() => setShowFromPicker(true)}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    borderWidth: 1,
-                    borderColor: border,
-                    borderRadius: 8,
-                    padding: 12,
-                    backgroundColor: bg,
-                  }}
-                >
-                  <Text style={{ color: text, fontSize: 14 }}>
-                    {formatDate(dateRange.from)}
-                  </Text>
-                  <Feather name="calendar" size={16} color={icon as any} />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* To Date */}
-            <View>
-              <Text style={[styles.label, { color: text }]}>To Date</Text>
-              {Platform.OS === "ios" ? (
-                <View
-                  style={{
-                    borderWidth: 1,
-                    borderColor: border,
-                    borderRadius: 8,
-                    overflow: "hidden",
-                    backgroundColor: bg,
-                  }}
-                >
-                  <DateTimePicker
-                    value={dateRange.to}
-                    mode="date"
-                    display="compact"
-                    onChange={onToDateChange}
-                    maximumDate={new Date()}
-                    style={{ width: "100%" }}
-                  />
-                </View>
-              ) : (
-                <TouchableOpacity
-                  onPress={() => setShowToPicker(true)}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    borderWidth: 1,
-                    borderColor: border,
-                    borderRadius: 8,
-                    padding: 12,
-                    backgroundColor: bg,
-                  }}
-                >
-                  <Text style={{ color: text, fontSize: 14 }}>
-                    {formatDate(dateRange.to)}
-                  </Text>
-                  <Feather name="calendar" size={16} color={icon as any} />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Apply Button */}
-            <TouchableOpacity
-              onPress={load}
-              disabled={loading}
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <Pressable
+              onPress={() => setShowFromPicker(true)}
               style={{
+                flex: 1,
                 flexDirection: "row",
                 alignItems: "center",
-                justifyContent: "center",
                 gap: 8,
-                backgroundColor: loading ? "#93C5FD" : tint,
-                padding: 13,
+                backgroundColor: fieldBg,
                 borderRadius: 10,
+                borderWidth: 1,
+                borderColor: borderCol,
+                padding: 10,
               }}
             >
-              {loading ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Feather name="search" size={15} color="#fff" />
-              )}
-              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>
-                {loading ? "Loading..." : "Apply"}
+              <Feather name="calendar" size={14} color={muted} />
+              <Text style={{ flex: 1, fontSize: 13, color: text }}>
+                {fmtShort(dateRange.from)}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
+            <View style={{ alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ color: muted, fontSize: 12 }}>to</Text>
+            </View>
+            <Pressable
+              onPress={() => setShowToPicker(true)}
+              style={{
+                flex: 1,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+                backgroundColor: fieldBg,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: borderCol,
+                padding: 10,
+              }}
+            >
+              <Feather name="calendar" size={14} color={muted} />
+              <Text style={{ flex: 1, fontSize: 13, color: text }}>
+                {fmtShort(dateRange.to)}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={load}
+              style={{
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                borderRadius: 10,
+                backgroundColor: tint,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Text style={{ fontSize: 13, fontWeight: "600", color: "#fff" }}>
+                Go
+              </Text>
+            </Pressable>
           </View>
         </View>
 
-        {/* Date Pickers - Only show on Android, iOS uses inline picker */}
-        {Platform.OS === "android" && showFromPicker && (
-          <DateTimePicker
-            value={dateRange.from}
-            mode="date"
-            display="default"
-            onChange={onFromDateChange}
-            maximumDate={new Date()}
-          />
-        )}
-        {Platform.OS === "android" && showToPicker && (
-          <DateTimePicker
-            value={dateRange.to}
-            mode="date"
-            display="default"
-            onChange={onToDateChange}
-            maximumDate={new Date()}
-          />
-        )}
-
-        {/* Error Message */}
-        {!!error && (
-          <View
-            style={[
-              styles.card,
-              {
-                backgroundColor: theme === "dark" ? "#2a0b0b" : "#fef2f2",
-                borderColor: theme === "dark" ? "#3d1212" : "#fecaca",
-              },
-            ]}
-          >
+        {/* Stats */}
+        <View style={{ flexDirection: "row", gap: 10 }}>
+          {[
+            { label: "Total", value: stats.total, color: tint },
+            { label: "Pending", value: stats.pending, color: "#F59E0B" },
+            { label: "Collected", value: stats.collected, color: "#10B981" },
+          ].map((s) => (
             <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-            >
-              <Feather
-                name="alert-circle"
-                size={16}
-                color={theme === "dark" ? "#fca5a5" : "#b91c1c"}
-              />
-              <Text
-                style={{
-                  color: theme === "dark" ? "#fca5a5" : "#b91c1c",
-                  fontSize: 14,
-                  flex: 1,
-                }}
-              >
-                {error}
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {/* Stats Summary */}
-        {packages.length > 0 && (
-          <View
-            style={[
-              styles.card,
-              { backgroundColor: card, borderColor: border },
-            ]}
-          >
-            <Text
+              key={s.label}
               style={{
-                color: text,
-                fontSize: 16,
-                fontWeight: "800",
-                marginBottom: 16,
+                flex: 1,
+                backgroundColor: cardBg,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: borderCol,
+                padding: 12,
+                alignItems: "center",
               }}
             >
-              Summary
-            </Text>
-            <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
-              {[
-                { label: "Total", value: stats.total, color: tint },
-                { label: "Pending", value: stats.pending, color: "#F59E0B" },
-                {
-                  label: "Collected",
-                  value: stats.collected,
-                  color: "#10B981",
-                },
-              ].map((s) => (
-                <View
-                  key={s.label}
-                  style={[
-                    styles.statChip,
-                    {
-                      backgroundColor: theme === "dark" ? "#1a1a1a" : "#F9FAFB",
-                      borderColor: border,
-                      flex: 1,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={{ color: s.color, fontSize: 22, fontWeight: "800" }}
-                  >
-                    {s.value}
-                  </Text>
-                  <Text
-                    style={{ color: icon as any, fontSize: 12, marginTop: 2 }}
-                  >
-                    {s.label}
-                  </Text>
-                </View>
-              ))}
+              <Text style={{ fontSize: 22, fontWeight: "700", color: s.color }}>
+                {s.value}
+              </Text>
+              <Text style={{ fontSize: 11, color: muted, marginTop: 2 }}>
+                {s.label}
+              </Text>
             </View>
+          ))}
+        </View>
+
+        {/* List */}
+        {loading ? (
+          <View style={{ alignItems: "center", paddingVertical: 40 }}>
+            <ActivityIndicator size="large" color={tint} />
           </View>
-        )}
-
-        {/* Packages List */}
-        <View
-          style={[styles.card, { backgroundColor: card, borderColor: border }]}
-        >
-          <Text
-            style={{
-              color: text,
-              fontSize: 16,
-              fontWeight: "800",
-              marginBottom: 16,
-            }}
-          >
-            Package History ({packages.length})
-          </Text>
-
-          {loading && packages.length === 0 ? (
-            <View style={{ paddingVertical: 40, alignItems: "center" }}>
-              <ActivityIndicator size="large" color={tint} />
-              <Text style={{ color: icon as any, marginTop: 12 }}>
-                Loading packages...
-              </Text>
-            </View>
-          ) : packages.length === 0 ? (
+        ) : packages.length === 0 ? (
+          <View style={{ alignItems: "center", paddingVertical: 40, gap: 8 }}>
             <View
-              style={{ paddingVertical: 40, alignItems: "center", gap: 10 }}
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: 28,
+                backgroundColor: tint + "15",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
             >
-              <View
-                style={{
-                  width: 56,
-                  height: 56,
-                  backgroundColor: theme === "dark" ? "#1a1a1a" : "#F3F4F6",
-                  borderRadius: 28,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Feather name="package" size={28} color={icon as any} />
-              </View>
-              <Text style={{ color: text, fontSize: 15, fontWeight: "600" }}>
-                No packages found
-              </Text>
-              <Text
-                style={{
-                  color: icon as any,
-                  fontSize: 13,
-                  textAlign: "center",
-                }}
-              >
-                No deliveries in the selected date range
-              </Text>
+              <Feather name="package" size={24} color={tint} />
             </View>
-          ) : (
-            <View style={{ gap: 16 }}>
-              {packages.map((pkg) => (
+            <Text style={{ fontSize: 16, fontWeight: "600", color: text }}>
+              No Packages
+            </Text>
+            <Text style={{ fontSize: 13, color: muted, textAlign: "center" }}>
+              No deliveries found for this date range.
+            </Text>
+          </View>
+        ) : (
+          packages.map((pkg) => {
+            const sc = STATUS_COLORS[pkg.status] || muted;
+            const isExpanded = expandedId === pkg.id;
+            return (
+              <Pressable
+                key={pkg.id}
+                onPress={() => setExpandedId(isExpanded ? null : pkg.id)}
+                style={({ pressed }) => ({
+                  backgroundColor: cardBg,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: isExpanded ? tint + "60" : borderCol,
+                  opacity: pressed ? 0.9 : 1,
+                  overflow: "hidden",
+                })}
+              >
                 <View
-                  key={pkg.id}
                   style={{
-                    backgroundColor: bg,
-                    borderColor: border,
-                    borderWidth: 1,
-                    borderRadius: 16,
-                    padding: 16,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 12,
+                    padding: 14,
                   }}
                 >
-                  <View style={{ flexDirection: "row", gap: 12 }}>
-                    {/* Status Icon */}
+                  <View
+                    style={{
+                      width: 42,
+                      height: 42,
+                      borderRadius: 10,
+                      backgroundColor: sc + "18",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Feather name="package" size={20} color={sc} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{ fontSize: 14, fontWeight: "600", color: text }}
+                      numberOfLines={1}
+                    >
+                      {pkg.name || "Package"}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: muted, marginTop: 2 }}>
+                      {pkg.image ? "Tap to view photo" : "No photo"}
+                    </Text>
+                  </View>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
                     <View
                       style={{
-                        width: 44,
-                        height: 44,
-                        borderRadius: 22,
-                        backgroundColor:
-                          pkg.status === "PENDING"
-                            ? theme === "dark"
-                              ? "#2d1d00"
-                              : "#FEF3C7"
-                            : theme === "dark"
-                              ? "#052e1f"
-                              : "#D1FAE5",
-                        alignItems: "center",
-                        justifyContent: "center",
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
+                        borderRadius: 8,
+                        backgroundColor: sc + "20",
                       }}
                     >
-                      <Feather
-                        name={
-                          pkg.status === "PENDING" ? "clock" : "check-circle"
-                        }
-                        size={20}
-                        color={pkg.status === "PENDING" ? "#F59E0B" : "#10B981"}
-                      />
-                    </View>
-
-                    {/* Content */}
-                    <View style={{ flex: 1 }}>
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          justifyContent: "space-between",
-                          marginBottom: 8,
-                        }}
+                      <Text
+                        style={{ fontSize: 10, fontWeight: "700", color: sc }}
                       >
-                        <View style={{ flex: 1 }}>
-                          <Text
-                            style={{
-                              color: text,
-                              fontSize: 16,
-                              fontWeight: "700",
-                              marginBottom: 4,
-                            }}
-                          >
-                            {pkg.name}
-                          </Text>
-                          <Text style={{ color: icon as any, fontSize: 13 }}>
-                            {pkg.status === "PENDING"
-                              ? "Waiting for pickup"
-                              : "Collected"}
-                          </Text>
-                        </View>
-
-                        {/* Status Badge */}
-                        <View
-                          style={{
-                            paddingHorizontal: 10,
-                            paddingVertical: 4,
-                            borderRadius: 999,
-                            backgroundColor:
-                              pkg.status === "PENDING"
-                                ? theme === "dark"
-                                  ? "#2d1d00"
-                                  : "#FEF3C7"
-                                : theme === "dark"
-                                  ? "#052e1f"
-                                  : "#D1FAE5",
-                            borderWidth: 1,
-                            borderColor:
-                              pkg.status === "PENDING"
-                                ? theme === "dark"
-                                  ? "#92400e"
-                                  : "#FCD34D"
-                                : theme === "dark"
-                                  ? "#065f46"
-                                  : "#6EE7B7",
-                            alignSelf: "flex-start",
-                          }}
-                        >
-                          <Text
-                            style={{
-                              fontSize: 11,
-                              fontWeight: "700",
-                              color:
-                                pkg.status === "PENDING"
-                                  ? theme === "dark"
-                                    ? "#fbbf24"
-                                    : "#B45309"
-                                  : theme === "dark"
-                                    ? "#34d399"
-                                    : "#059669",
-                            }}
-                          >
-                            {pkg.status === "PENDING" ? "Pending" : "Collected"}
-                          </Text>
-                        </View>
-                      </View>
-
-                      {/* Actions */}
-                      <View
-                        style={{ flexDirection: "row", gap: 8, marginTop: 8 }}
-                      >
-                        {pkg.receivedAt && (
-                          <View
-                            style={{
-                              flexDirection: "row",
-                              alignItems: "center",
-                              gap: 6,
-                              paddingHorizontal: 10,
-                              paddingVertical: 6,
-                              backgroundColor: card,
-                              borderRadius: 8,
-                              borderWidth: 1,
-                              borderColor: border,
-                            }}
-                          >
-                            <Feather
-                              name="truck"
-                              size={12}
-                              color={icon as any}
-                            />
-                            <Text
-                              style={{
-                                color: icon as any,
-                                fontSize: 11,
-                              }}
-                            >
-                              {new Date(pkg.receivedAt).toLocaleDateString()}
-                            </Text>
-                          </View>
-                        )}
-
-                        {pkg.image && (
-                          <TouchableOpacity
-                            onPress={() => setSelectedImage(pkg.image)}
-                            style={{
-                              flexDirection: "row",
-                              alignItems: "center",
-                              gap: 5,
-                              paddingHorizontal: 10,
-                              paddingVertical: 6,
-                              borderWidth: 1,
-                              borderColor: border,
-                              borderRadius: 8,
-                              alignSelf: "flex-start",
-                              marginTop: 8,
-                            }}
-                          >
-                            <Feather name="image" size={12} color={tint} />
-                            <Text
-                              style={{
-                                color: tint,
-                                fontSize: 12,
-                                fontWeight: "600",
-                              }}
-                            >
-                              View Image
-                            </Text>
-                          </TouchableOpacity>
-                        )}
-                      </View>
+                        {STATUS_LABELS[pkg.status] || pkg.status}
+                      </Text>
                     </View>
+                    <Feather
+                      name={isExpanded ? "chevron-up" : "chevron-down"}
+                      size={15}
+                      color={muted}
+                    />
                   </View>
                 </View>
-              ))}
-            </View>
-          )}
-        </View>
+                {isExpanded && (
+                  <View
+                    style={{
+                      borderTopWidth: 1,
+                      borderTopColor: borderCol,
+                      padding: 14,
+                    }}
+                  >
+                    {pkg.image ? (
+                      <Image
+                        source={{ uri: pkg.image }}
+                        style={{ width: "100%", height: 200, borderRadius: 10 }}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View
+                        style={{
+                          height: 100,
+                          borderRadius: 10,
+                          backgroundColor: fieldBg,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 6,
+                        }}
+                      >
+                        <Feather name="image" size={24} color={muted} />
+                        <Text style={{ fontSize: 12, color: muted }}>
+                          No photo available
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+              </Pressable>
+            );
+          })
+        )}
       </ScrollView>
 
-      {/* Image Modal */}
-      <Modal visible={!!selectedImage} transparent animationType="fade">
-        <TouchableOpacity
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.75)",
-            justifyContent: "center",
-            alignItems: "center",
-            padding: 20,
+      {showFromPicker && (
+        <DateTimePicker
+          value={dateRange.from}
+          mode="date"
+          maximumDate={dateRange.to}
+          onChange={(e, d) => {
+            setShowFromPicker(false);
+            if (e.type === "set" && d) setDateRange((p) => ({ ...p, from: d }));
           }}
-          activeOpacity={1}
-          onPress={() => setSelectedImage(null)}
-        >
-          <View
-            style={{
-              backgroundColor: card,
-              borderRadius: 16,
-              overflow: "hidden",
-              position: "relative",
-            }}
-          >
-            <TouchableOpacity
-              style={{
-                position: "absolute",
-                top: 12,
-                right: 12,
-                zIndex: 10,
-                borderWidth: 1,
-                borderColor: border,
-                borderRadius: 20,
-                padding: 6,
-                backgroundColor: "rgba(0,0,0,0.4)",
-              }}
-              onPress={() => setSelectedImage(null)}
-            >
-              <Feather name="x" size={18} color={text} />
-            </TouchableOpacity>
-            <Image
-              source={{ uri: selectedImage }}
-              style={{ width: 340, height: 340 }}
-              resizeMode="contain"
-            />
-          </View>
-        </TouchableOpacity>
-      </Modal>
+        />
+      )}
+      {showToPicker && (
+        <DateTimePicker
+          value={dateRange.to}
+          mode="date"
+          minimumDate={dateRange.from}
+          maximumDate={new Date()}
+          onChange={(e, d) => {
+            setShowToPicker(false);
+            if (e.type === "set" && d) setDateRange((p) => ({ ...p, to: d }));
+          }}
+        />
+      )}
+
+      <Toast {...toast} onHide={hideToast} />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  headerContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    flex: 1,
-  },
-  headerIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "700",
-  },
-  subtitle: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  refreshBtn: {
-    padding: 8,
-  },
-  card: {
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 16,
-  },
-  statChip: {
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  label: {
-    fontSize: 12,
-    fontWeight: "600",
-    marginBottom: 6,
-    textTransform: "uppercase",
-    letterSpacing: 0.3,
-  },
-});

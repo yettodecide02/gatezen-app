@@ -1,9 +1,10 @@
 import { useState, useCallback } from "react";
+import type { ToastType } from "@/components/Toast";
 
 interface ToastState {
   visible: boolean;
   message: string;
-  type: "error" | "success";
+  type: ToastType;
 }
 
 export const useToast = () => {
@@ -14,43 +15,40 @@ export const useToast = () => {
   });
 
   const showToast = useCallback(
-    (message: string, type: "error" | "success" = "success") => {
-      setToast({
-        visible: true,
-        message,
-        type,
-      });
+    (message: string, type: ToastType = "success") => {
+      setToast({ visible: true, message, type });
     },
-    []
+    [],
   );
 
   const hideToast = useCallback(() => {
-    setToast((prev) => ({
-      ...prev,
-      visible: false,
-    }));
+    setToast((prev) => ({ ...prev, visible: false }));
   }, []);
 
   const showError = useCallback(
-    (message: string) => {
-      showToast(message, "error");
-    },
-    [showToast]
+    (msg: string) => showToast(msg, "error"),
+    [showToast],
   );
-
   const showSuccess = useCallback(
-    (message: string) => {
-      showToast(message, "success");
-    },
-    [showToast]
+    (msg: string) => showToast(msg, "success"),
+    [showToast],
+  );
+  const showWarning = useCallback(
+    (msg: string) => showToast(msg, "warning"),
+    [showToast],
+  );
+  const showInfo = useCallback(
+    (msg: string) => showToast(msg, "info"),
+    [showToast],
   );
 
   return {
-    toast, 
+    toast,
     showToast,
     hideToast,
     showError,
     showSuccess,
+    showWarning,
+    showInfo,
   };
 };
-

@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   ScrollView,
   RefreshControl,
-  Alert,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -18,8 +17,22 @@ import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { getToken, getCommunityId } from "@/lib/auth";
 import { config } from "@/lib/config";
+import Toast from "@/components/Toast";
+import { useToast } from "@/hooks/useToast";
 
-// Resident Card Component
+// ─── Status pill helper ─────────────────────────────
+function statusPill(status) {
+  const s = status?.toUpperCase();
+  if (s === "APPROVED")
+    return { bg: "#D1FAE5", text: "#065F46", label: "Approved" };
+  if (s === "PENDING")
+    return { bg: "#FEF3C7", text: "#92400E", label: "Pending" };
+  if (s === "REJECTED")
+    return { bg: "#FEE2E2", text: "#991B1B", label: "Rejected" };
+  return { bg: "#F3F4F6", text: "#374151", label: status || "Unknown" };
+}
+
+// ─── Resident Card ───────────────────────────────────
 function ResidentCard({
   resident,
   onAction,
@@ -29,156 +42,144 @@ function ResidentCard({
   muted,
   tint,
 }) {
-  const getStatusBadge = (status) => {
-    const statusUpper = status?.toUpperCase();
-    let backgroundColor, color, borderColor;
-
-    switch (statusUpper) {
-      case "APPROVED":
-        backgroundColor = "#dcfce7";
-        color = "#16a34a";
-        borderColor = "#bbf7d0";
-        break;
-      case "PENDING":
-        backgroundColor = "#fef3c7";
-        color = "#d97706";
-        borderColor = "#fde68a";
-        break;
-      case "REJECTED":
-        backgroundColor = "#fee2e2";
-        color = "#dc2626";
-        borderColor = "#fecaca";
-        break;
-      default:
-        backgroundColor = theme === "dark" ? "#374151" : "#f3f4f6";
-        color = theme === "dark" ? "#d1d5db" : "#6b7280";
-        borderColor = theme === "dark" ? "#4b5563" : "#d1d5db";
-    }
-
-    return (
-      <View style={[styles.badge, { backgroundColor, borderColor }]}>
-        <Text style={[styles.badgeText, { color }]}>
-          {statusUpper === "APPROVED"
-            ? "Approved"
-            : statusUpper === "PENDING"
-              ? "Pending"
-              : "Rejected"}
-        </Text>
-      </View>
-    );
-  };
+  const isDark = theme === "dark";
+  const pill = statusPill(resident.status);
+  const initials = resident.name
+    ?.split(" ")
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+  const canApprove =
+    showActions &&
+    (resident.status === "PENDING" || resident.status === "REJECTED");
+  const canReject = showActions && resident.status === "PENDING";
 
   return (
     <View
       style={[
         styles.residentCard,
         {
-          backgroundColor: theme === "dark" ? "#1F1F1F" : "#ffffff",
-          borderColor:
-            theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)",
+          backgroundColor: isDark ? "#1A1A1A" : "#fff",
+          borderColor: isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)",
         },
       ]}
     >
-      <View style={styles.residentCardContent}>
+      <View style={styles.residentRow}>
+        <View
+          style={[
+            styles.avatar,
+            { backgroundColor: isDark ? "#252525" : "#EEF2FF" },
+          ]}
+        >
+          <Text style={[styles.avatarText, { color: "#6366F1" }]}>
+            {initials}
+          </Text>
+        </View>
         <View style={styles.residentInfo}>
           <Text style={[styles.residentName, { color: textColor }]}>
             {resident.name}
           </Text>
-          <View style={styles.residentDetail}>
-            <Feather name="mail" size={12} color={muted} />
-            <Text style={[styles.residentEmail, { color: muted }]}>
-              {resident.email}
+          <Text style={[styles.residentMeta, { color: muted }]}>
+            {resident.email}
+          </Text>
+          <Text style={[styles.residentMeta, { color: muted }]}>
+            Joined {new Date(resident.createdAt).toLocaleDateString()}
+          </Text>
+          {resident.unit && (
+            <Text style={[styles.residentMeta, { color: muted }]}>
+              Unit: {resident.unit?.number}
             </Text>
-          </View>
-          <View style={styles.residentDetail}>
-            <Feather name="calendar" size={12} color={muted} />
-            <Text style={[styles.residentDate, { color: muted }]}>
-              Joined: {new Date(resident.createdAt).toLocaleDateString()}
-            </Text>
-          </View>
+          )}
         </View>
-        <View style={styles.residentActions}>
-          {getStatusBadge(resident.status)}
-          {showActions && resident.status === "PENDING" && (
-            <View style={styles.actionButtons}>
-              <TouchableOpacity
-                style={[styles.actionButton, { backgroundColor: "#22c55e" }]}
-                onPress={() => onAction(resident.id, "approve")}
-              >
-                <Feather name="check" size={14} color="#ffffff" />
-                <Text style={styles.actionButtonText}>Approve</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionButton, { backgroundColor: "#ef4444" }]}
-                onPress={() => onAction(resident.id, "reject")}
-              >
-                <Feather name="x" size={14} color="#ffffff" />
-                <Text style={styles.actionButtonText}>Reject</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-          {showActions && resident.status === "REJECTED" && (
-            <View style={styles.actionButtons}>
-              <TouchableOpacity
-                style={[styles.actionButton, { backgroundColor: "#22c55e" }]}
-                onPress={() => onAction(resident.id, "approve")}
-              >
-                <Feather name="check" size={14} color="#ffffff" />
-                <Text style={styles.actionButtonText}>Approve</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+        <View style={[styles.statusPill, { backgroundColor: pill.bg }]}>
+          <Text style={[styles.statusPillText, { color: pill.text }]}>
+            {pill.label}
+          </Text>
         </View>
       </View>
+      {(canApprove || canReject) && (
+        <View
+          style={[
+            styles.residentBtns,
+            {
+              borderTopColor: isDark
+                ? "rgba(255,255,255,0.07)"
+                : "rgba(0,0,0,0.06)",
+            },
+          ]}
+        >
+          {canApprove && (
+            <TouchableOpacity
+              style={styles.approveBtn}
+              onPress={() => onAction(resident.id, "approve")}
+            >
+              <Feather name="check" size={13} color="#ffffff" />
+              <Text style={styles.approveBtnText}>Approve</Text>
+            </TouchableOpacity>
+          )}
+          {canReject && (
+            <TouchableOpacity
+              style={styles.rejectBtn}
+              onPress={() => onAction(resident.id, "reject")}
+            >
+              <Feather name="x" size={13} color="#ffffff" />
+              <Text style={styles.rejectBtnText}>Reject</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
     </View>
   );
 }
 
-// Stat Card Component
+// ─── Stat Card ───────────────────────────────────────
 function StatCard({
   icon,
   title,
   value,
-  color = "#6366f1",
+  color = "#6366F1",
   theme,
   textColor,
   muted,
 }) {
+  const isDark = theme === "dark";
   return (
     <View
       style={[
         styles.statCard,
         {
-          backgroundColor: theme === "dark" ? "#1F1F1F" : "#ffffff",
-          borderColor:
-            theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)",
+          backgroundColor: isDark ? "#1A1A1A" : "#ffffff",
+          borderColor: isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)",
         },
       ]}
     >
-      <View style={styles.statTop}>
-        <View style={[styles.statIcon, { backgroundColor: `${color}20` }]}>
-          <Feather name={icon} size={16} color={color} />
-        </View>
-        <Text style={[styles.statTitle, { color: muted }]}>{title}</Text>
+      <View style={[styles.statIconWrap, { backgroundColor: `${color}1A` }]}>
+        <Feather name={icon} size={16} color={color} />
       </View>
       <Text style={[styles.statValue, { color: textColor }]}>{value}</Text>
+      <Text style={[styles.statTitle, { color: muted }]}>{title}</Text>
     </View>
   );
 }
 
 export default function AdminResidents() {
   const theme = useColorScheme() ?? "light";
+  const isDark = theme === "dark";
   const bg = useThemeColor({}, "background");
   const textColor = useThemeColor({}, "text");
   const tint = useThemeColor({}, "tint");
-  const iconColor = useThemeColor({}, "icon");
-  const muted = iconColor;
+  const muted = isDark ? "#94A3B8" : "#64748B";
+  const borderCol = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)";
+  const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
   const insets = useSafeAreaInsets();
 
   const [residents, setResidents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
+
+  const { toast, showError, showSuccess, hideToast } = useToast();
 
   const url = config.backendUrl;
 
@@ -192,10 +193,7 @@ export default function AdminResidents() {
       const communityId = await getCommunityId();
 
       if (!communityId) {
-        Alert.alert(
-          "Error",
-          "Community information not found. Please login again.",
-        );
+        showError("Community information not found. Please login again.");
         return;
       }
 
@@ -208,7 +206,7 @@ export default function AdminResidents() {
       setResidents(res.data.residents || []);
     } catch (error) {
       console.error("Error fetching residents:", error);
-      Alert.alert("Error", "Failed to load residents data.");
+      showError("Failed to load residents data.");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -239,16 +237,15 @@ export default function AdminResidents() {
         },
       );
 
-      Alert.alert(
-        "Success",
-        `Resident has been ${
+      showSuccess(
+        `Resident ${
           action === "approve" ? "approved" : "rejected"
         } successfully.`,
       );
       fetchResidents();
     } catch (error) {
       console.error(`Error ${action}ing resident:`, error);
-      Alert.alert("Error", `Failed to ${action} resident. Please try again.`);
+      showError(`Failed to ${action} resident. Please try again.`);
     }
   };
 
@@ -287,12 +284,17 @@ export default function AdminResidents() {
       <View
         style={[
           styles.container,
-          styles.centerContent,
-          { backgroundColor: bg },
+          {
+            backgroundColor: bg,
+            alignItems: "center",
+            justifyContent: "center",
+          },
         ]}
       >
-        <Feather name="loader" size={32} color={tint} />
-        <Text style={[styles.loadingText, { color: textColor }]}>
+        <View style={[styles.loadingIcon, { backgroundColor: `${tint}15` }]}>
+          <Feather name="users" size={28} color={tint} />
+        </View>
+        <Text style={[styles.loadingText, { color: muted }]}>
           Loading residents...
         </Text>
       </View>
@@ -301,61 +303,63 @@ export default function AdminResidents() {
 
   return (
     <View style={[styles.container, { backgroundColor: bg }]}>
-      {/* Fixed Header */}
+      {/* Header */}
       <View
         style={[
-          styles.headerContainer,
+          styles.headerBar,
           {
-            paddingTop: Math.max(insets.top, 16),
+            paddingTop: Math.max(insets.top, 20),
+            borderBottomColor: borderCol,
             backgroundColor: bg,
-            borderBottomColor:
-              theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)",
           },
         ]}
       >
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={styles.backButton}
-            >
-              <Feather name="arrow-left" size={24} color={tint} />
-            </TouchableOpacity>
-            <View>
-              <Text style={[styles.title, { color: textColor }]}>
-                Residents
-              </Text>
-              <Text style={[styles.subtitle, { color: muted }]}>
-                Manage community residents
-              </Text>
-            </View>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={[styles.backBtn, { borderColor: borderCol }]}
+          >
+            <Feather name="arrow-left" size={18} color={textColor} />
+          </TouchableOpacity>
+          <View>
+            <Text style={[styles.pageTitle, { color: textColor }]}>
+              Residents
+            </Text>
+            <Text style={[styles.pageSub, { color: muted }]}>
+              Manage community residents
+            </Text>
           </View>
         </View>
       </View>
 
       <ScrollView
-        style={styles.scrollView}
+        style={styles.scroll}
+        showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={tint}
+          />
         }
       >
         <View style={styles.content}>
-          {/* Stats Cards */}
+          {/* Stats */}
           <View style={styles.statsGrid}>
             <StatCard
               icon="users"
-              title="Total Residents"
+              title="Total"
               value={stats.total}
-              color="#6366f1"
+              color="#6366F1"
               theme={theme}
               textColor={textColor}
               muted={muted}
             />
             <StatCard
               icon="clock"
-              title="Pending Approval"
+              title="Pending"
               value={stats.pending}
-              color="#f59e0b"
+              color="#F59E0B"
               theme={theme}
               textColor={textColor}
               muted={muted}
@@ -364,7 +368,7 @@ export default function AdminResidents() {
               icon="user-check"
               title="Approved"
               value={stats.approved}
-              color="#10b981"
+              color="#10B981"
               theme={theme}
               textColor={textColor}
               muted={muted}
@@ -373,7 +377,7 @@ export default function AdminResidents() {
               icon="user-x"
               title="Rejected"
               value={stats.rejected}
-              color="#ef4444"
+              color="#EF4444"
               theme={theme}
               textColor={textColor}
               muted={muted}
@@ -384,115 +388,100 @@ export default function AdminResidents() {
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            style={styles.tabsContainer}
+            style={styles.tabsScroll}
           >
-            <View style={styles.tabs}>
-              {tabs.map((tab) => (
-                <TouchableOpacity
-                  key={tab.key}
-                  style={[
-                    styles.tab,
-                    {
-                      backgroundColor:
-                        activeTab === tab.key ? tint : "transparent",
-                      borderColor:
-                        activeTab === tab.key
-                          ? tint
-                          : theme === "dark"
-                            ? "rgba(255,255,255,0.2)"
-                            : "rgba(0,0,0,0.2)",
-                    },
-                  ]}
-                  onPress={() => setActiveTab(tab.key)}
-                >
-                  <Text
+            <View style={styles.tabsRow}>
+              {tabs.map((tab) => {
+                const isActive = activeTab === tab.key;
+                return (
+                  <TouchableOpacity
+                    key={tab.key}
                     style={[
-                      styles.tabText,
+                      styles.tab,
                       {
-                        color:
-                          activeTab === tab.key
-                            ? theme === "dark"
-                              ? "#11181C"
-                              : "#ffffff"
-                            : textColor,
+                        backgroundColor: isActive ? tint : "transparent",
+                        borderColor: isActive ? tint : borderCol,
                       },
                     ]}
+                    onPress={() => setActiveTab(tab.key)}
                   >
-                    {tab.label}
-                  </Text>
-                  {tab.count > 0 && (
-                    <View
+                    <Text
                       style={[
-                        styles.tabBadge,
-                        {
-                          backgroundColor:
-                            activeTab === tab.key
-                              ? theme === "dark"
-                                ? "#11181C33"
-                                : "#ffffff33"
-                              : tint,
-                        },
+                        styles.tabText,
+                        { color: isActive ? "#ffffff" : muted },
                       ]}
                     >
-                      <Text
+                      {tab.label}
+                    </Text>
+                    {tab.count > 0 && (
+                      <View
                         style={[
-                          styles.tabBadgeText,
+                          styles.tabCount,
                           {
-                            color:
-                              activeTab === tab.key
-                                ? theme === "dark"
-                                  ? "#11181C"
-                                  : "#ffffff"
-                                : "#ffffff",
+                            backgroundColor: isActive
+                              ? "rgba(255,255,255,0.25)"
+                              : `${tint}20`,
                           },
                         ]}
                       >
-                        {tab.count}
-                      </Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              ))}
+                        <Text
+                          style={[
+                            styles.tabCountText,
+                            { color: isActive ? "#ffffff" : tint },
+                          ]}
+                        >
+                          {tab.count}
+                        </Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </ScrollView>
 
-          {/* Residents List */}
+          {/* List */}
           <View
             style={[
               styles.card,
-              {
-                backgroundColor: theme === "dark" ? "#1F1F1F" : "#ffffff",
-                borderColor:
-                  theme === "dark"
-                    ? "rgba(255,255,255,0.08)"
-                    : "rgba(0,0,0,0.08)",
-              },
+              { backgroundColor: cardBg, borderColor: borderCol },
             ]}
           >
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionLeft}>
-                <Feather name="users" size={20} color={tint} />
-                <Text style={[styles.sectionTitle, { color: textColor }]}>
-                  {activeTab === "all" && "All Residents"}
-                  {activeTab === "pending" && "Pending Approvals"}
-                  {activeTab === "approved" && "Approved Residents"}
-                  {activeTab === "rejected" && "Rejected Applications"}
+            <View style={styles.listHeader}>
+              <View style={styles.listHeaderLeft}>
+                <Feather name="users" size={16} color={tint} />
+                <Text style={[styles.listHeaderTitle, { color: textColor }]}>
+                  {activeTab === "all"
+                    ? "All Residents"
+                    : activeTab === "pending"
+                      ? "Pending Approvals"
+                      : activeTab === "approved"
+                        ? "Approved"
+                        : "Rejected"}
                 </Text>
               </View>
-              <Text style={[styles.countText, { color: muted }]}>
+              <Text style={[styles.listCount, { color: muted }]}>
                 {filteredResidents.length} resident
                 {filteredResidents.length !== 1 ? "s" : ""}
               </Text>
             </View>
 
             {filteredResidents.length === 0 ? (
-              <View style={styles.emptyContainer}>
-                <Feather name="users" size={48} color={muted} />
+              <View style={styles.emptyState}>
+                <Feather
+                  name="users"
+                  size={36}
+                  color={muted}
+                  style={{ opacity: 0.3 }}
+                />
                 <Text style={[styles.emptyText, { color: muted }]}>
-                  {activeTab === "all" && "No residents found."}
-                  {activeTab === "pending" && "No pending approvals."}
-                  {activeTab === "approved" && "No approved residents."}
-                  {activeTab === "rejected" && "No rejected applications."}
+                  {activeTab === "all"
+                    ? "No residents found"
+                    : activeTab === "pending"
+                      ? "No pending approvals"
+                      : activeTab === "approved"
+                        ? "No approved residents"
+                        : "No rejected applications"}
                 </Text>
               </View>
             ) : (
@@ -518,218 +507,157 @@ export default function AdminResidents() {
           </View>
         </View>
       </ScrollView>
+
+      <Toast
+        visible={toast.visible}
+        message={toast.message}
+        type={toast.type}
+        onHide={hideToast}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  headerContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  centerContent: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  content: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 16,
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-  },
-  header: {
+  container: { flex: 1 },
+  headerBar: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
   },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    flex: 1,
-  },
-  backButton: {
-    padding: 8,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "700",
-  },
-  subtitle: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  statsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-    marginBottom: 24,
-  },
-  statCard: {
-    width: "48%",
-    borderRadius: 12,
+  headerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     borderWidth: 1,
-    padding: 16,
-  },
-  statTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 12,
-  },
-  statIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
   },
-  statTitle: {
-    fontSize: 11,
-    fontWeight: "600",
-    flex: 1,
+  pageTitle: { fontSize: 20, fontWeight: "700", letterSpacing: -0.3 },
+  pageSub: { fontSize: 12, marginTop: 1 },
+  scroll: { flex: 1 },
+  content: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 32,
+    gap: 12,
   },
-  statValue: {
-    fontSize: 18,
-    fontWeight: "700",
+  loadingIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
   },
-  tabsContainer: {
-    marginBottom: 16,
+  loadingText: { fontSize: 14 },
+  // Stats
+  statsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  statCard: {
+    width: "48%",
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 14,
+    gap: 6,
   },
-  tabs: {
-    flexDirection: "row",
-    gap: 8,
-    paddingRight: 16,
+  statIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
   },
+  statValue: { fontSize: 22, fontWeight: "700", letterSpacing: -0.5 },
+  statTitle: { fontSize: 12, fontWeight: "500" },
+  // Tabs
+  tabsScroll: { marginBottom: 4 },
+  tabsRow: { flexDirection: "row", gap: 8, paddingBottom: 4 },
   tab: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
     gap: 6,
   },
-  tabText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  tabBadge: {
-    paddingHorizontal: 6,
+  tabText: { fontSize: 13, fontWeight: "600" },
+  tabCount: {
+    paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 10,
     minWidth: 20,
     alignItems: "center",
   },
-  tabBadgeText: {
-    fontSize: 10,
-    fontWeight: "600",
-  },
-  card: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 16,
-  },
-  sectionHeader: {
+  tabCountText: { fontSize: 10, fontWeight: "700" },
+  // Card + list header
+  card: { borderRadius: 16, borderWidth: 1, padding: 16 },
+  listHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 16,
+    marginBottom: 14,
   },
-  sectionLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  countText: {
-    fontSize: 12,
-  },
-  emptyContainer: {
+  listHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
+  listHeaderTitle: { fontSize: 15, fontWeight: "600" },
+  listCount: { fontSize: 12 },
+  // Empty state
+  emptyState: { alignItems: "center", paddingVertical: 32, gap: 10 },
+  emptyText: { fontSize: 13 },
+  // Resident cards
+  residentsList: { gap: 10 },
+  residentCard: { borderRadius: 12, borderWidth: 1, padding: 14 },
+  residentRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 40,
   },
-  emptyText: {
-    textAlign: "center",
-    fontSize: 14,
-    marginTop: 12,
-  },
-  residentsList: {
-    gap: 12,
-  },
-  residentCard: {
-    borderRadius: 8,
-    borderWidth: 1,
-    padding: 12,
-  },
-  residentCardContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  residentInfo: {
-    flex: 1,
-  },
-  residentName: {
-    fontSize: 14,
+  avatarText: { fontSize: 14, fontWeight: "700" },
+  residentInfo: { flex: 1, gap: 2 },
+  residentName: { fontSize: 14, fontWeight: "600" },
+  residentMeta: { fontSize: 12 },
+  statusPill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  statusPillText: {
+    fontSize: 10,
     fontWeight: "600",
-    marginBottom: 4,
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
   },
-  residentDetail: {
+  residentBtns: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginBottom: 2,
-  },
-  residentEmail: {
-    fontSize: 12,
-  },
-  residentDate: {
-    fontSize: 12,
-  },
-  residentActions: {
-    alignItems: "flex-end",
     gap: 8,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
   },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  badgeText: {
-    fontSize: 10,
-    fontWeight: "600",
-  },
-  actionButtons: {
-    flexDirection: "row",
-    gap: 6,
-  },
-  actionButton: {
+  approveBtn: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    justifyContent: "center",
+    gap: 5,
+    backgroundColor: "#10B981",
+    paddingVertical: 9,
+    borderRadius: 10,
   },
-  actionButtonText: {
-    color: "#ffffff",
-    fontSize: 10,
-    fontWeight: "600",
+  approveBtnText: { color: "#ffffff", fontSize: 13, fontWeight: "600" },
+  rejectBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    backgroundColor: "#EF4444",
+    paddingVertical: 9,
+    borderRadius: 10,
   },
+  rejectBtnText: { color: "#ffffff", fontSize: 13, fontWeight: "600" },
 });

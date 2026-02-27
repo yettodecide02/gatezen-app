@@ -1,573 +1,179 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import React, { useEffect, useState, useMemo } from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-  ScrollView,
-  Pressable,
-  Alert,
-  Switch,
-  ActivityIndicator,
-  TouchableOpacity,
-} from "react-native";
-import { Feather } from "@expo/vector-icons";
+import { ScrollView, Text, View, Pressable, ActivityIndicator, Switch } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import axios from "axios";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { getToken, getUser } from "@/lib/auth";
 import { config } from "@/lib/config";
+import Toast from "@/components/Toast";
+import { useToast } from "@/hooks/useToast";
 
-type PaymentItem = {
-  id: string;
-  description: string;
-  amount: number;
-  currency: string;
-  status: "due" | "paid" | "failed";
-  createdAt: string;
-  paidAt?: string;
+const mapStatus = (s) => {
+  switch (s?.toUpperCase()) {
+    case "COMPLETED": return "paid";
+    case "FAILED": return "failed";
+    default: return "due";
+  }
 };
-
-type AutopaySettings = {
-  autopay: boolean;
-  provider: string;
-  last4: string;
-};
+const STATUS_MAP = { paid: { color: "#10B981", label: "PAID" }, failed: { color: "#EF4444", label: "FAIL" }, due: { color: "#F59E0B", label: "DUE" } };
 
 export default function Payments() {
-  const insets = useSafeAreaInsets();
   const theme = useColorScheme() ?? "light";
+  const isDark = theme === "dark";
   const bg = useThemeColor({}, "background");
   const text = useThemeColor({}, "text");
   const tint = useThemeColor({}, "tint");
-  const muted = useThemeColor({}, "icon");
-  const cardBg = theme === "dark" ? "#1F1F1F" : "#ffffff";
-  const borderCol =
-    theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
+  const insets = useSafeAreaInsets();
+  const muted = isDark ? "#94A3B8" : "#64748B";
+  const borderCol = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)";
+  const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
 
-  const [items, setItems] = useState<PaymentItem[]>([]);
-  const [busy, setBusy] = useState(false);
+  const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [provider, setProvider] = useState("mock");
-  const [autopay, setAutopay] = useState<AutopaySettings>({
-    autopay: false,
-    provider: "mock",
-    last4: "0000",
-  });
-  const [token, setToken] = useState<string | null>(null);
-  const [user, setUserData] = useState<any>(null);
+  const [autopay, setAutopay] = useState(false);
+  const { toast, showInfo, showError, hideToast } = useToast();
+
+  const due = useMemo(() => items.filter(i => i.status === "due"), [items]);
+  const history = useMemo(() => items.filter(i => i.status !== "due"), [items]);
 
   useEffect(() => {
     (async () => {
-      const [t, u] = await Promise.all([getToken(), getUser()]);
-      setToken(t);
-      setUserData(u);
+      try {
+        const [t, u] = await Promise.all([getToken(), getUser()]);
+        if (!t || !u?.communityId) return;
+        const res = await axios.get(`${config.backendUrl}/resident/payments`, { params: { communityId: u.communityId }, headers: { Authorization: `Bearer ${t}` } });
+        const raw = res.data?.data ?? res.data ?? [];
+        setItems((Array.isArray(raw) ? raw : []).map(p => ({ id: p.id, description: p.description, amount: p.amount, currency: p.currency || "INR", status: mapStatus(p.status), createdAt: p.createdAt, paidAt: p.paidAt })));
+      } catch { showError("Failed to load payments"); }
+      finally { setLoading(false); }
     })();
   }, []);
 
-  const due = useMemo(() => items.filter((i) => i.status === "due"), [items]);
-  const history = useMemo(
-    () => items.filter((i) => i.status !== "due"),
-    [items],
-  );
+  const fmt = (d) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const fmtAmt = (amt, cur) => `${cur === "INR" ? "₹" : "$"}${Number(amt).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
 
-  // Map backend PaymentStatus enum to frontend status strings
-  const mapStatus = (s: string): "due" | "paid" | "failed" => {
-    switch (s?.toUpperCase()) {
-      case "COMPLETED":
-        return "paid";
-      case "FAILED":
-        return "failed";
-      default:
-        return "due"; // PENDING, OVERDUE
-    }
-  };
-
-  const load = async () => {
-    try {
-      setLoading(true);
-      const [t, u] = await Promise.all([getToken(), getUser()]);
-      if (!t || !u?.communityId) return;
-      const res = await axios.get(`${config.backendUrl}/resident/payments`, {
-        params: { communityId: u.communityId },
-        headers: { Authorization: `Bearer ${t}` },
-      });
-      const raw = res.data?.data ?? res.data ?? [];
-      setItems(
-        (Array.isArray(raw) ? raw : []).map((p: any) => ({
-          id: p.id,
-          description: p.description,
-          amount: p.amount,
-          currency: p.currency || "INR",
-          status: mapStatus(p.status),
-          createdAt: p.createdAt,
-          paidAt: p.paidAt,
-        })),
-      );
-    } catch (error) {
-      console.error("Failed to load payments:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    load();
-  }, []);
-
-  const payNow = async (id: string) => {
-    try {
-      setBusy(true);
-      // Payment processing is handled externally (e.g. Razorpay/Stripe gateway);
-      // mark the payment as completed on the backend once the gateway callback is received.
-      Alert.alert(
-        "Coming Soon",
-        "Online payment processing will be available soon. Please contact your admin to record manual payment.",
-        [{ text: "OK" }],
-      );
-    } catch (error) {
-      Alert.alert("Error", "Please try again later.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const toggleAutopay = async () => {
-    const newValue = !autopay.autopay;
-    setAutopay((prev) => ({ ...prev, autopay: newValue }));
-  };
-
-  const downloadReceipt = (id: string) => {
-    Alert.alert("Receipt", "Receipt download feature will be available soon.");
-  };
-
-  if (loading) {
+  const PaymentCard = ({ item }) => {
+    const sc = STATUS_MAP[item.status] || STATUS_MAP.due;
     return (
-      <View
-        style={[
-          styles.container,
-          styles.centered,
-          { backgroundColor: bg, paddingTop: insets.top },
-        ]}
-      >
-        <ActivityIndicator size="large" color="#6366F1" />
-        <Text style={[styles.loadingText, { color: text }]}>
-          Loading payments...
-        </Text>
+      <View style={{ backgroundColor: cardBg, borderRadius: 14, borderWidth: 1, borderColor: borderCol, padding: 14, gap: 10 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: sc.color + "1A", alignItems: "center", justifyContent: "center" }}>
+            <Feather name="credit-card" size={18} color={sc.color} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <Text style={{ fontSize: 14, fontWeight: "600", color: text, flex: 1, marginRight: 8 }} numberOfLines={1}>{item.description || "Payment"}</Text>
+              <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, backgroundColor: sc.color + "20" }}>
+                <Text style={{ fontSize: 10, fontWeight: "700", color: sc.color }}>{sc.label}</Text>
+              </View>
+            </View>
+            <Text style={{ fontSize: 12, color: muted, marginTop: 2 }}>{fmt(item.createdAt)}{item.paidAt ? ` · Paid ${fmt(item.paidAt)}` : ""}</Text>
+          </View>
+          <Text style={{ fontSize: 16, fontWeight: "700", color: sc.color }}>{fmtAmt(item.amount, item.currency)}</Text>
+        </View>
+        {item.status === "due" && (
+          <Pressable onPress={() => showInfo("Online payment will be available soon. Please contact admin for manual payment.")}
+            style={({ pressed }) => ({ alignSelf: "flex-end", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, backgroundColor: pressed ? tint + "CC" : tint })}>
+            <Text style={{ fontSize: 13, fontWeight: "600", color: "#fff" }}>Pay Now</Text>
+          </Pressable>
+        )}
+        {item.status === "paid" && (
+          <Pressable onPress={() => showInfo("Receipt download coming soon.")} style={{ alignSelf: "flex-end", flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <Feather name="download" size={13} color={tint} />
+            <Text style={{ fontSize: 12, color: tint, fontWeight: "500" }}>Receipt</Text>
+          </Pressable>
+        )}
       </View>
     );
-  }
+  };
 
   return (
-    <View style={[styles.container, { backgroundColor: bg }]}>
-      {/* Fixed Header */}
-      <View
-        style={[
-          styles.headerContainer,
-          {
-            paddingTop: Math.max(insets.top, 16),
-            backgroundColor: bg,
-            borderBottomColor: borderCol,
-          },
-        ]}
-      >
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={styles.backButton}
-            >
-              <Feather name="arrow-left" size={24} color={tint} />
-            </TouchableOpacity>
-            <View>
-              <Text style={[styles.title, { color: text }]}>Payments</Text>
-              <Text style={[styles.subtitle, { color: muted }]}>
-                Manage your payments and billing
-              </Text>
-            </View>
+    <View style={{ flex: 1, backgroundColor: bg }}>
+      {/* Header */}
+      <View style={{ paddingTop: Math.max(insets.top, 16), paddingBottom: 14, paddingHorizontal: 20, backgroundColor: bg, borderBottomWidth: 1, borderBottomColor: borderCol }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <Pressable onPress={() => router.back()} style={{ width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: borderCol, alignItems: "center", justifyContent: "center" }}>
+            <Feather name="arrow-left" size={18} color={text} />
+          </Pressable>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: text }}>Payments</Text>
+            <Text style={{ fontSize: 12, color: muted }}>Manage your bills</Text>
           </View>
         </View>
       </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={{ paddingTop: 0 }}
-      >
-        {/* Alert Banner */}
-        {due.length > 0 && (
-          <View style={styles.alertBanner}>
-            <Feather name="alert-circle" size={20} color="#DC2626" />
-            <Text style={styles.alertText}>
-              <Text style={styles.alertBold}>{due.length} invoice(s)</Text>{" "}
-              pending — settle now to avoid late fees.
-            </Text>
-          </View>
-        )}
+      {loading ? (
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}><ActivityIndicator size="large" color={tint} /></View>
+      ) : (
+        <ScrollView contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: insets.bottom + 24 }} showsVerticalScrollIndicator={false}>
 
-        {/* Provider & Autopay Settings */}
-        <View
-          style={[
-            styles.card,
-            { backgroundColor: cardBg, borderColor: borderCol },
-          ]}
-        >
-          <View style={styles.settingsRow}>
-            <Text style={[styles.label, { color: text }]}>
-              Payment Provider
-            </Text>
-            <Text style={[styles.providerText, { color: text }]}>
-              {provider} (demo)
-            </Text>
-          </View>
-
-          <View style={styles.autopayRow}>
-            <View style={styles.autopayInfo}>
-              <Feather name="repeat" size={20} color={text} />
-              <Text style={[styles.autopayLabel, { color: text }]}>
-                Auto-pay
-              </Text>
+          {/* Overdue banner */}
+          {due.length > 0 && (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#EF44440D", borderWidth: 1, borderColor: "#EF444430", borderRadius: 12, padding: 12 }}>
+              <Feather name="alert-circle" size={18} color="#EF4444" />
+              <Text style={{ flex: 1, fontSize: 13, color: "#EF4444", fontWeight: "500" }}>You have {due.length} pending payment{due.length !== 1 ? "s" : ""}. Please clear dues soon.</Text>
             </View>
-            <Switch
-              value={autopay.autopay}
-              onValueChange={toggleAutopay}
-              trackColor={{ false: "#767577", true: "#6366F1" }}
-              thumbColor={autopay.autopay ? "#ffffff" : "#f4f3f4"}
-            />
-          </View>
-          <Text style={[styles.autopayStatus, { color: text, opacity: 0.7 }]}>
-            {autopay.autopay
-              ? `On (${autopay.provider}, **** ${autopay.last4})`
-              : "Off"}
-          </Text>
-        </View>
-
-        {/* Outstanding Bills */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Feather name="credit-card" size={24} color={text} />
-            <Text style={[styles.sectionTitle, { color: text }]}>
-              Outstanding Bills
-            </Text>
-          </View>
-
-          {due.length === 0 ? (
-            <View
-              style={[
-                styles.emptyCard,
-                { backgroundColor: cardBg, borderColor: borderCol },
-              ]}
-            >
-              <Text style={[styles.emptyText, { color: text }]}>
-                No dues 🎉
-              </Text>
-            </View>
-          ) : (
-            due.map((bill) => (
-              <View
-                key={bill.id}
-                style={[
-                  styles.billCard,
-                  { backgroundColor: cardBg, borderColor: borderCol },
-                ]}
-              >
-                <View style={styles.billInfo}>
-                  <Text style={[styles.billTitle, { color: text }]}>
-                    {bill.description}
-                  </Text>
-                  <Text
-                    style={[styles.billDate, { color: text, opacity: 0.7 }]}
-                  >
-                    {new Date(bill.createdAt).toLocaleDateString()}
-                  </Text>
-                </View>
-                <Text style={[styles.billAmount, { color: text }]}>
-                  {bill.amount} {bill.currency || "INR"}
-                </Text>
-                <Pressable
-                  style={[styles.payButton, busy && styles.payButtonDisabled]}
-                  onPress={() => payNow(bill.id)}
-                  disabled={busy}
-                >
-                  <Feather name="zap" size={16} color="#ffffff" />
-                  <Text style={styles.payButtonText}>
-                    {busy ? "Processing..." : "Pay now"}
-                  </Text>
-                </Pressable>
-              </View>
-            ))
           )}
-        </View>
 
-        {/* Payment History */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Feather name="file-text" size={24} color={text} />
-            <Text style={[styles.sectionTitle, { color: text }]}>
-              Payment History
-            </Text>
+          {/* Stats */}
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            {[
+              { label: "Due", value: due.length, color: "#F59E0B" },
+              { label: "Paid", value: items.filter(i => i.status==="paid").length, color: "#10B981" },
+              { label: "Total", value: items.length, color: tint },
+            ].map(s => (
+              <View key={s.label} style={{ flex: 1, backgroundColor: cardBg, borderRadius: 12, borderWidth: 1, borderColor: borderCol, padding: 12, alignItems: "center" }}>
+                <Text style={{ fontSize: 22, fontWeight: "700", color: s.color }}>{s.value}</Text>
+                <Text style={{ fontSize: 11, color: muted, marginTop: 2 }}>{s.label}</Text>
+              </View>
+            ))}
           </View>
 
-          {history.length === 0 ? (
-            <View
-              style={[
-                styles.emptyCard,
-                { backgroundColor: cardBg, borderColor: borderCol },
-              ]}
-            >
-              <Text style={[styles.emptyText, { color: text }]}>
-                No previous payments
-              </Text>
+          {/* Autopay */}
+          <View style={{ backgroundColor: cardBg, borderRadius: 14, borderWidth: 1, borderColor: borderCol, padding: 14, flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: tint + "15", alignItems: "center", justifyContent: "center" }}>
+              <Feather name="repeat" size={18} color={tint} />
             </View>
-          ) : (
-            history.map((payment) => (
-              <View
-                key={payment.id}
-                style={[
-                  styles.historyCard,
-                  { backgroundColor: cardBg, borderColor: borderCol },
-                ]}
-              >
-                <View style={styles.historyInfo}>
-                  <Text style={[styles.historyTitle, { color: text }]}>
-                    {payment.description}
-                  </Text>
-                  <Text
-                    style={[styles.historyDate, { color: text, opacity: 0.7 }]}
-                  >
-                    {payment.status === "paid"
-                      ? `Paid on ${new Date(
-                          payment.paidAt!,
-                        ).toLocaleDateString()}`
-                      : payment.status.toUpperCase()}
-                  </Text>
-                </View>
-                <View
-                  style={[
-                    styles.statusChip,
-                    styles[`status_${payment.status}`],
-                  ]}
-                >
-                  <Feather
-                    name={
-                      payment.status === "paid" ? "check-circle" : "x-circle"
-                    }
-                    size={14}
-                    color={payment.status === "paid" ? "#065F46" : "#DC2626"}
-                  />
-                  <Text
-                    style={[
-                      styles.statusText,
-                      styles[`statusText_${payment.status}`],
-                    ]}
-                  >
-                    {payment.status}
-                  </Text>
-                </View>
-                <Pressable
-                  style={[
-                    styles.receiptButton,
-                    payment.status !== "paid" && styles.receiptButtonDisabled,
-                  ]}
-                  onPress={() => downloadReceipt(payment.id)}
-                  disabled={payment.status !== "paid"}
-                >
-                  <Feather
-                    name="file-text"
-                    size={16}
-                    color={payment.status === "paid" ? "#6366F1" : "#9CA3AF"}
-                  />
-                  <Text
-                    style={[
-                      styles.receiptButtonText,
-                      {
-                        color:
-                          payment.status === "paid" ? "#6366F1" : "#9CA3AF",
-                      },
-                    ]}
-                  >
-                    Receipt
-                  </Text>
-                </Pressable>
-              </View>
-            ))
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 14, fontWeight: "600", color: text }}>Autopay</Text>
+              <Text style={{ fontSize: 12, color: muted, marginTop: 1 }}>Auto-process monthly dues</Text>
+            </View>
+            <Switch value={autopay} onValueChange={setAutopay} trackColor={{ false: borderCol, true: tint + "60" }} thumbColor={autopay ? tint : muted} />
+          </View>
+
+          {/* Due section */}
+          {due.length > 0 && (
+            <View style={{ gap: 10 }}>
+              <Text style={{ fontSize: 13, fontWeight: "600", color: muted, textTransform: "uppercase", letterSpacing: 0.5 }}>Pending</Text>
+              {due.map(item => <PaymentCard key={item.id} item={item} />)}
+            </View>
           )}
-        </View>
-      </ScrollView>
+
+          {/* History */}
+          {history.length > 0 && (
+            <View style={{ gap: 10 }}>
+              <Text style={{ fontSize: 13, fontWeight: "600", color: muted, textTransform: "uppercase", letterSpacing: 0.5 }}>History</Text>
+              {history.map(item => <PaymentCard key={item.id} item={item} />)}
+            </View>
+          )}
+
+          {items.length === 0 && (
+            <View style={{ alignItems: "center", paddingVertical: 40, gap: 8 }}>
+              <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: tint + "15", alignItems: "center", justifyContent: "center" }}>
+                <Feather name="credit-card" size={24} color={tint} />
+              </View>
+              <Text style={{ fontSize: 16, fontWeight: "600", color: text }}>No Payments</Text>
+              <Text style={{ fontSize: 13, color: muted }}>All clear — no bills due.</Text>
+            </View>
+          )}
+
+        </ScrollView>
+      )}
+      <Toast {...toast} onHide={hideToast} />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  centered: { alignItems: "center", justifyContent: "center" },
-  loadingText: { marginTop: 12, fontSize: 16 },
-
-  headerContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    flex: 1,
-  },
-  backButton: {
-    padding: 8,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "700",
-  },
-  subtitle: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-
-  scrollView: {
-    flex: 1,
-  },
-
-  alertBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    backgroundColor: "#FEF2F2",
-    borderColor: "#FECACA",
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 0,
-  },
-  alertText: { flex: 1, color: "#DC2626", fontSize: 14 },
-  alertBold: { fontWeight: "700" },
-
-  card: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 16,
-    margin: 16,
-    gap: 12,
-  },
-
-  settingsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  label: { fontSize: 16, fontWeight: "600" },
-  providerText: { fontSize: 14, opacity: 0.8 },
-
-  autopayRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  autopayInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  autopayLabel: { fontSize: 16, fontWeight: "500" },
-  autopayStatus: { fontSize: 12, textAlign: "right" },
-
-  section: { margin: 16 },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 16,
-  },
-  sectionTitle: { fontSize: 20, fontWeight: "700" },
-
-  emptyCard: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 24,
-    alignItems: "center",
-  },
-  emptyText: { fontSize: 16, opacity: 0.7 },
-
-  billCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    gap: 12,
-  },
-  billInfo: { flex: 1 },
-  billTitle: { fontSize: 16, fontWeight: "600" },
-  billDate: { fontSize: 12, marginTop: 4 },
-  billAmount: { fontSize: 16, fontWeight: "700", marginRight: 8 },
-
-  payButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "#6366F1",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  payButtonDisabled: { opacity: 0.6 },
-  payButtonText: { color: "#ffffff", fontWeight: "600" },
-
-  historyCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    gap: 12,
-  },
-  historyInfo: { flex: 1 },
-  historyTitle: { fontSize: 16, fontWeight: "600" },
-  historyDate: { fontSize: 12, marginTop: 4 },
-
-  statusChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  status_paid: {
-    backgroundColor: "#ECFDF5",
-    borderColor: "#A7F3D0",
-  },
-  status_failed: {
-    backgroundColor: "#FEF2F2",
-    borderColor: "#FECACA",
-  },
-  statusText: { fontSize: 12, fontWeight: "600" },
-  statusText_paid: { color: "#065F46" },
-  statusText_failed: { color: "#DC2626" },
-
-  receiptButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: "#6366F1",
-  },
-  receiptButtonDisabled: { borderColor: "#9CA3AF" },
-  receiptButtonText: { fontSize: 12, fontWeight: "500" },
-});

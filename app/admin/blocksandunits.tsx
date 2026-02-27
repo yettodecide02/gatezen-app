@@ -1,1082 +1,399 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import React, { useEffect, useState } from "react";
 import {
-  StyleSheet,
-  Text,
-  View,
-  TouchableOpacity,
-  ScrollView,
-  TextInput,
-  ActivityIndicator,
-  RefreshControl,
-  Alert,
-  Modal,
+  StyleSheet, Text, View, TouchableOpacity, ScrollView,
+  TextInput, Modal, ActivityIndicator, RefreshControl,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import axios from "axios";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { getToken, getCommunityId } from "@/lib/auth";
 import { config } from "@/lib/config";
+import Toast from "@/components/Toast";
+import ConfirmModal from "@/components/ConfirmModal";
+import { useToast } from "@/hooks/useToast";
 
 export default function BlocksAndUnits() {
   const theme = useColorScheme() ?? "light";
   const bg = useThemeColor({}, "background");
   const textColor = useThemeColor({}, "text");
   const tint = useThemeColor({}, "tint");
-  const iconColor = useThemeColor({}, "icon");
-  const cardBg = theme === "dark" ? "#1F1F1F" : "#ffffff";
-  const borderCol =
-    theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
-  const muted = iconColor;
   const insets = useSafeAreaInsets();
+  const isDark = theme === "dark";
+  const muted = isDark ? "#94A3B8" : "#64748B";
+  const borderCol = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)";
+  const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
 
   const [blocks, setBlocks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [collapsedBlocks, setCollapsedBlocks] = useState({});
 
-  // Set blocks as collapsed by default when loaded
   useEffect(() => {
     if (blocks.length > 0) {
       const collapsed = {};
-      blocks.forEach((block) => {
-        if (collapsedBlocks[block.id] === undefined) {
-          collapsed[block.id] = true;
-        }
+      blocks.forEach((b) => {
+        if (collapsedBlocks[b.id] === undefined) collapsed[b.id] = true;
       });
-      if (Object.keys(collapsed).length > 0) {
-        setCollapsedBlocks((prev) => ({ ...prev, ...collapsed }));
-      }
+      if (Object.keys(collapsed).length > 0)
+        setCollapsedBlocks(prev => ({ ...prev, ...collapsed }));
     }
   }, [blocks.length]);
 
-  // Block Form State
   const [showBlockModal, setShowBlockModal] = useState(false);
   const [editingBlock, setEditingBlock] = useState(null);
   const [blockForm, setBlockForm] = useState({ name: "", description: "" });
   const [blockLoading, setBlockLoading] = useState(false);
 
-  // Unit Form State
   const [showUnitModal, setShowUnitModal] = useState(false);
   const [unitCreationStep, setUnitCreationStep] = useState(1);
-  const [unitsToCreate, setUnitsToCreate] = useState("");
+  const [unitsToCreate, setUnitsToCreate] = useState(1);
   const [currentUnitIndex, setCurrentUnitIndex] = useState(0);
   const [currentUnitNumber, setCurrentUnitNumber] = useState("");
   const [createdUnits, setCreatedUnits] = useState([]);
   const [unitBlockId, setUnitBlockId] = useState(null);
   const [unitLoading, setUnitLoading] = useState(false);
+  const [deleteBlockId, setDeleteBlockId] = useState(null);
+  const [deletingBlock, setDeletingBlock] = useState(false);
+  const [deleteUnitId, setDeleteUnitId] = useState(null);
+  const [deletingUnit, setDeletingUnit] = useState(false);
 
+  const { toast, showError, showSuccess, showInfo, hideToast } = useToast();
   const url = config.backendUrl;
 
-  useEffect(() => {
-    fetchBlocks();
-  }, []);
+  useEffect(() => { fetchBlocks(); }, []);
 
   const fetchBlocks = async () => {
     try {
       const token = await getToken();
       const communityId = await getCommunityId();
-
       const res = await axios.get(`${url}/admin/blocks`, {
         headers: { Authorization: `Bearer ${token}` },
         params: { communityId },
       });
-
-      const blocksData = res.data.blocks || res.data.data || res.data;
-      setBlocks(Array.isArray(blocksData) ? blocksData : []);
-    } catch (error) {
-      console.error("Error fetching blocks:", error);
-      Alert.alert("Error", "Failed to load blocks");
+      const data = res.data.blocks || res.data.data || res.data;
+      setBlocks(Array.isArray(data) ? data : []);
+    } catch {
+      showError("Failed to load blocks");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  const handleRefresh = () => {
-    setRefreshing(true);
-    fetchBlocks();
-  };
-
   const handleCreateBlock = async () => {
-    if (!blockForm.name.trim()) {
-      Alert.alert("Validation Error", "Block name is required");
-      return;
-    }
-
+    if (!blockForm.name.trim()) { showError("Block name is required"); return; }
     setBlockLoading(true);
     try {
       const token = await getToken();
       const communityId = await getCommunityId();
-
-      const payload = { ...blockForm, communityId };
-
-      await axios.post(`${url}/admin/blocks`, payload, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      Alert.alert("Success", "Block created successfully!");
-      setShowBlockModal(false);
-      setBlockForm({ name: "", description: "" });
-      fetchBlocks();
-    } catch (error) {
-      console.error("Error creating block:", error);
-      Alert.alert(
-        "Error",
-        error.response?.data?.message || "Failed to create block",
-      );
-    } finally {
-      setBlockLoading(false);
-    }
-  };
-
-  const handleUpdateBlock = async () => {
-    if (!blockForm.name.trim()) {
-      Alert.alert("Validation Error", "Block name is required");
-      return;
-    }
-
-    setBlockLoading(true);
-    try {
-      const token = await getToken();
-      const communityId = await getCommunityId();
-
-      const payload = { ...blockForm, communityId };
-
-      await axios.put(`${url}/admin/blocks/${editingBlock.id}`, payload, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      Alert.alert("Success", "Block updated successfully!");
+      const method = editingBlock ? "put" : "post";
+      const endpoint = editingBlock ? `${url}/admin/blocks/${editingBlock.id}` : `${url}/admin/blocks`;
+      await axios[method](endpoint, { ...blockForm, communityId }, { headers: { Authorization: `Bearer ${token}` } });
+      showSuccess(editingBlock ? "Block updated!" : "Block created!");
       setShowBlockModal(false);
       setBlockForm({ name: "", description: "" });
       setEditingBlock(null);
       fetchBlocks();
-    } catch (error) {
-      console.error("Error updating block:", error);
-      Alert.alert(
-        "Error",
-        error.response?.data?.message || "Failed to update block",
-      );
+    } catch (e) {
+      showError(e.response?.data?.message || "Failed to save block");
     } finally {
       setBlockLoading(false);
     }
   };
 
-  const handleDeleteBlock = async (blockId) => {
-    Alert.alert(
-      "Delete Block",
-      "Are you sure you want to delete this block? This action cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const token = await getToken();
-              await axios.delete(`${url}/admin/blocks/${blockId}`, {
-                headers: { Authorization: `Bearer ${token}` },
-              });
-              Alert.alert("Success", "Block deleted successfully!");
-              fetchBlocks();
-            } catch (error) {
-              console.error("Error deleting block:", error);
-              Alert.alert(
-                "Error",
-                error.response?.data?.message || "Failed to delete block",
-              );
-            }
-          },
-        },
-      ],
-    );
-  };
-
-  const startEditBlock = (block) => {
-    setEditingBlock(block);
-    setBlockForm({ name: block.name, description: block.description || "" });
-    setShowBlockModal(true);
-  };
-
-  const startCreateUnit = (blockId) => {
-    setUnitBlockId(blockId);
-    setUnitCreationStep(1);
-    setUnitsToCreate(1);
-    setCurrentUnitIndex(0);
-    setCurrentUnitNumber("");
-    setCreatedUnits([]);
-    setShowUnitModal(true);
-  };
-
-  const handleUnitCountSubmit = () => {
-    if (unitsToCreate < 1 || unitsToCreate > 50) {
-      Alert.alert("Invalid Count", "Please enter a number between 1 and 50");
-      return;
+  const confirmDeleteBlock = async () => {
+    setDeletingBlock(true);
+    try {
+      const token = await getToken();
+      await axios.delete(`${url}/admin/blocks/${deleteBlockId}`, { headers: { Authorization: `Bearer ${token}` } });
+      showSuccess("Block deleted!");
+      fetchBlocks();
+    } catch (e) {
+      showError(e.response?.data?.message || "Failed to delete block");
+    } finally {
+      setDeletingBlock(false);
+      setDeleteBlockId(null);
     }
-    setUnitCreationStep(2);
-    setCurrentUnitIndex(0);
-    setCurrentUnitNumber("");
+  };
+
+  const confirmDeleteUnit = async () => {
+    setDeletingUnit(true);
+    try {
+      const token = await getToken();
+      await axios.delete(`${url}/admin/units/${deleteUnitId}`, { headers: { Authorization: `Bearer ${token}` } });
+      showSuccess("Unit deleted!");
+      fetchBlocks();
+    } catch (e) {
+      showError(e.response?.data?.message || "Failed to delete unit");
+    } finally {
+      setDeletingUnit(false);
+      setDeleteUnitId(null);
+    }
   };
 
   const handleCreateUnit = async () => {
-    if (!currentUnitNumber.trim()) {
-      Alert.alert("Validation Error", "Unit number is required");
-      return;
-    }
-
+    if (!currentUnitNumber.trim()) { showError("Unit number required"); return; }
     setUnitLoading(true);
     try {
       const token = await getToken();
       const communityId = await getCommunityId();
-
-      const payload = {
-        number: currentUnitNumber.trim(),
-        blockId: unitBlockId,
-        communityId,
-      };
-
-      await axios.post(`${url}/admin/units`, payload, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      const newUnit = { number: currentUnitNumber.trim(), created: true };
-      setCreatedUnits((prev) => [...prev, newUnit]);
-
+      await axios.post(`${url}/admin/units`,
+        { number: currentUnitNumber.trim(), blockId: unitBlockId, communityId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setCreatedUnits(prev => [...prev, { number: currentUnitNumber.trim() }]);
       if (currentUnitIndex + 1 < unitsToCreate) {
-        Alert.alert(
-          "Success",
-          `Unit ${currentUnitNumber} created successfully!`,
-        );
-        setCurrentUnitIndex((prev) => prev + 1);
+        showSuccess(`Unit ${currentUnitNumber} created!`);
+        setCurrentUnitIndex(prev => prev + 1);
         setCurrentUnitNumber("");
       } else {
-        Alert.alert(
-          "All Units Created",
-          `Successfully created ${unitsToCreate} units!`,
-        );
-        resetUnitForm();
+        showSuccess(`All ${unitsToCreate} units created!`);
         setShowUnitModal(false);
+        resetUnitForm();
         fetchBlocks();
       }
-    } catch (error) {
-      console.error("Error creating unit:", error);
-      Alert.alert(
-        "Error",
-        error.response?.data?.message || "Failed to create unit",
-      );
+    } catch (e) {
+      showError(e.response?.data?.message || "Failed to create unit");
     } finally {
       setUnitLoading(false);
     }
   };
 
-  const handleDeleteUnit = async (unitId) => {
-    Alert.alert(
-      "Delete Unit",
-      "Are you sure you want to delete this unit? This action cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const token = await getToken();
-              await axios.delete(`${url}/admin/units/${unitId}`, {
-                headers: { Authorization: `Bearer ${token}` },
-              });
-              Alert.alert("Success", "Unit deleted successfully!");
-              fetchBlocks();
-            } catch (error) {
-              console.error("Error deleting unit:", error);
-              Alert.alert(
-                "Error",
-                error.response?.data?.message || "Failed to delete unit",
-              );
-            }
-          },
-        },
-      ],
-    );
-  };
-
   const resetUnitForm = () => {
-    setUnitCreationStep(1);
-    setUnitsToCreate(1);
-    setCurrentUnitIndex(0);
-    setCurrentUnitNumber("");
-    setCreatedUnits([]);
-    setUnitBlockId(null);
+    setUnitCreationStep(1); setUnitsToCreate(1); setCurrentUnitIndex(0);
+    setCurrentUnitNumber(""); setCreatedUnits([]); setUnitBlockId(null);
   };
 
-  const cancelBlockForm = () => {
-    setShowBlockModal(false);
-    setBlockForm({ name: "", description: "" });
-    setEditingBlock(null);
+  const startCreateUnit = (blockId) => {
+    setUnitBlockId(blockId); setUnitCreationStep(1); setUnitsToCreate(1);
+    setCurrentUnitIndex(0); setCurrentUnitNumber(""); setCreatedUnits([]);
+    setShowUnitModal(true);
   };
 
-  const cancelUnitForm = () => {
-    setShowUnitModal(false);
-    resetUnitForm();
-  };
+  const totalUnits = blocks.reduce((s, b) => s + (b.units?.length || 0), 0);
+  const occupiedUnits = blocks.reduce((s, b) => s + (b.units?.filter(u => u.residents?.length > 0).length || 0), 0);
 
-  // Calculate statistics
-  const stats = {
-    totalBlocks: blocks.length,
-    totalUnits: blocks.reduce(
-      (sum, block) => sum + (block.units?.length || 0),
-      0,
-    ),
-    occupiedUnits: blocks.reduce(
-      (sum, block) =>
-        sum +
-        (block.units?.filter((unit) => unit.residents?.length > 0).length || 0),
-      0,
-    ),
-  };
+  const stats = [
+    { label: "Total Blocks", value: blocks.length, icon: "grid", color: "#6366F1" },
+    { label: "Total Units", value: totalUnits, icon: "home", color: "#3B82F6" },
+    { label: "Occupied", value: occupiedUnits, icon: "users", color: "#10B981" },
+    { label: "Vacant", value: totalUnits - occupiedUnits, icon: "unlock", color: "#F59E0B" },
+  ];
 
   if (loading) {
     return (
-      <View
-        style={[
-          styles.container,
-          styles.centerContent,
-          { backgroundColor: bg },
-        ]}
-      >
+      <View style={[styles.center, { backgroundColor: bg }]}>
         <ActivityIndicator size="large" color={tint} />
-        <Text style={[styles.loadingText, { color: textColor }]}>
-          Loading blocks...
-        </Text>
+        <Text style={[styles.loadingText, { color: muted }]}>Loading blocks...</Text>
       </View>
     );
   }
 
   return (
     <View style={[styles.container, { backgroundColor: bg }]}>
-      {/* Fixed Header */}
-      <View
-        style={[
-          styles.headerContainer,
-          {
-            paddingTop: Math.max(insets.top, 16),
-            backgroundColor: bg,
-            borderBottomColor: borderCol,
-          },
-        ]}
-      >
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={styles.backButton}
-            >
-              <Feather name="arrow-left" size={24} color={tint} />
-            </TouchableOpacity>
-            <View>
-              <Text style={[styles.title, { color: textColor }]}>
-                Blocks & Units
-              </Text>
-              <Text style={[styles.subtitle, { color: muted }]}>
-                Manage blocks and units in your community
-              </Text>
-            </View>
+      <Toast {...toast} onHide={hideToast} />
+      <ConfirmModal visible={!!deleteBlockId} title="Delete Block" message="Delete this block and all its units?" onConfirm={confirmDeleteBlock} onCancel={() => setDeleteBlockId(null)} loading={deletingBlock} confirmText="Delete" confirmColor="#EF4444" />
+      <ConfirmModal visible={!!deleteUnitId} title="Delete Unit" message="Delete this unit?" onConfirm={confirmDeleteUnit} onCancel={() => setDeleteUnitId(null)} loading={deletingUnit} confirmText="Delete" confirmColor="#EF4444" />
+
+      {/* Header */}
+      <View style={[styles.headerBar, { paddingTop: Math.max(insets.top, 20), borderBottomColor: borderCol, backgroundColor: bg }]}>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity onPress={() => router.back()} style={[styles.backBtn, { borderColor: borderCol }]}>
+            <Feather name="arrow-left" size={18} color={textColor} />
+          </TouchableOpacity>
+          <View>
+            <Text style={[styles.screenTitle, { color: textColor }]}>Blocks & Units</Text>
+            <Text style={[styles.screenSub, { color: muted }]}>{blocks.length} blocks · {totalUnits} units</Text>
           </View>
         </View>
+        <TouchableOpacity onPress={() => { setEditingBlock(null); setBlockForm({ name: "", description: "" }); setShowBlockModal(true); }} style={[styles.addBtn, { backgroundColor: tint }]}>
+          <Feather name="plus" size={16} color="#fff" />
+          <Text style={styles.addBtnText}>Add Block</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView
-        style={styles.scrollView}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-        }
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scroll}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchBlocks(); }} tintColor={tint} />}
       >
-        <View style={styles.content}>
-          {/* Statistics Cards */}
-          <View style={styles.statsGrid}>
-            {[
-              {
-                label: "Total Blocks",
-                value: stats.totalBlocks,
-                icon: "home",
-                color: "#6366f1",
-              },
-              {
-                label: "Total Units",
-                value: stats.totalUnits,
-                icon: "grid",
-                color: "#06b6d4",
-              },
-              {
-                label: "Occupied",
-                value: stats.occupiedUnits,
-                icon: "users",
-                color: "#10b981",
-              },
-            ].map((item, index) => (
-              <View
-                key={index}
-                style={[
-                  styles.statCard,
-                  { backgroundColor: cardBg, borderColor: borderCol },
-                ]}
-              >
-                <View style={styles.statHeader}>
-                  <View
-                    style={[styles.statIcon, { backgroundColor: item.color }]}
-                  >
-                    <Feather name={item.icon} size={16} color="#ffffff" />
-                  </View>
-                  <Text style={[styles.statLabel, { color: muted }]}>
-                    {item.label}
-                  </Text>
-                </View>
-                <Text style={[styles.statValue, { color: textColor }]}>
-                  {item.value}
-                </Text>
+        {/* Stats */}
+        <View style={styles.statsGrid}>
+          {stats.map((s, i) => (
+            <View key={i} style={[styles.statCard, { backgroundColor: cardBg, borderColor: borderCol }]}>
+              <View style={[styles.statIconWrap, { backgroundColor: s.color + "1A" }]}>
+                <Feather name={s.icon} size={16} color={s.color} />
               </View>
-            ))}
-          </View>
-
-          {/* Create Block Button */}
-          <TouchableOpacity
-            style={[styles.createButton, { backgroundColor: tint }]}
-            onPress={() => setShowBlockModal(true)}
-          >
-            <Feather
-              name="plus"
-              size={16}
-              color={theme === "dark" ? "#11181C" : "#ffffff"}
-            />
-            <Text
-              style={[
-                styles.createButtonText,
-                { color: theme === "dark" ? "#11181C" : "#ffffff" },
-              ]}
-            >
-              Create New Block
-            </Text>
-          </TouchableOpacity>
-
-          {/* Blocks List */}
-          {blocks.length === 0 ? (
-            <View
-              style={[
-                styles.emptyState,
-                { backgroundColor: cardBg, borderColor: borderCol },
-              ]}
-            >
-              <View style={[styles.emptyIcon, { backgroundColor: borderCol }]}>
-                <Feather name="home" size={32} color={muted} />
-              </View>
-              <Text style={[styles.emptyTitle, { color: textColor }]}>
-                No blocks found
-              </Text>
-              <Text style={[styles.emptyDesc, { color: muted }]}>
-                Create your first block to get started
-              </Text>
-              <TouchableOpacity
-                style={[styles.emptyButton, { backgroundColor: tint }]}
-                onPress={() => setShowBlockModal(true)}
-              >
-                <Feather
-                  name="plus"
-                  size={16}
-                  color={theme === "dark" ? "#11181C" : "#ffffff"}
-                />
-                <Text
-                  style={[
-                    styles.emptyButtonText,
-                    { color: theme === "dark" ? "#11181C" : "#ffffff" },
-                  ]}
-                >
-                  Create Block
-                </Text>
-              </TouchableOpacity>
+              <Text style={[styles.statValue, { color: textColor }]}>{s.value}</Text>
+              <Text style={[styles.statLabel, { color: muted }]}>{s.label}</Text>
             </View>
-          ) : (
-            <View style={styles.blocksList}>
-              {blocks.map((block) => (
-                <View
-                  key={block.id}
-                  style={[
-                    styles.blockCard,
-                    { backgroundColor: cardBg, borderColor: borderCol },
-                  ]}
-                >
-                  {/* Block Header */}
-                  <View style={styles.blockHeader}>
-                    <View style={styles.blockHeaderLeft}>
-                      <View
-                        style={[
-                          styles.blockIcon,
-                          {
-                            backgroundColor:
-                              theme === "dark" ? "#3b4f7a" : "#eef2ff",
-                          },
-                        ]}
-                      >
-                        <Feather
-                          name="home"
-                          size={20}
-                          color={theme === "dark" ? "#6366f1" : "#4f46e5"}
-                        />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.blockName, { color: textColor }]}>
-                          Block {block.name}
-                        </Text>
-                        {block.description && (
-                          <Text style={[styles.blockDesc, { color: muted }]}>
-                            {block.description}
-                          </Text>
-                        )}
-                      </View>
+          ))}
+        </View>
+
+        {/* Blocks */}
+        {blocks.length === 0 ? (
+          <View style={[styles.emptyCard, { backgroundColor: cardBg, borderColor: borderCol }]}>
+            <View style={[styles.emptyIcon, { backgroundColor: tint + "1A" }]}>
+              <Feather name="grid" size={28} color={tint} />
+            </View>
+            <Text style={[styles.emptyTitle, { color: textColor }]}>No blocks yet</Text>
+            <Text style={[styles.emptyMsg, { color: muted }]}>Create your first block to get started</Text>
+          </View>
+        ) : (
+          blocks.map((block) => {
+            const isCollapsed = collapsedBlocks[block.id] !== false;
+            const units = block.units || [];
+            return (
+              <View key={block.id} style={[styles.blockCard, { backgroundColor: cardBg, borderColor: borderCol }]}>
+                {/* Block header row */}
+                <View style={styles.blockTopRow}>
+                  <TouchableOpacity style={styles.blockTitleRow} onPress={() => setCollapsedBlocks(prev => ({ ...prev, [block.id]: !isCollapsed }))}>
+                    <View style={[styles.blockIcon, { backgroundColor: "#6366F11A" }]}>
+                      <Feather name="grid" size={16} color="#6366F1" />
                     </View>
-                    <View style={styles.blockActions}>
-                      <TouchableOpacity
-                        onPress={() => startEditBlock(block)}
-                        style={[
-                          styles.iconButton,
-                          { backgroundColor: borderCol },
-                        ]}
-                      >
-                        <Feather name="edit-2" size={16} color={textColor} />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => handleDeleteBlock(block.id)}
-                        style={[
-                          styles.iconButton,
-                          {
-                            backgroundColor:
-                              theme === "dark"
-                                ? "rgba(239, 68, 68, 0.2)"
-                                : "#fef2f2",
-                          },
-                        ]}
-                      >
-                        <Feather name="trash-2" size={16} color="#ef4444" />
-                      </TouchableOpacity>
+                    <View style={styles.blockTitleWrap}>
+                      <Text style={[styles.blockName, { color: textColor }]}>{block.name}</Text>
+                      <Text style={[styles.blockMeta, { color: muted }]}>{units.length} unit{units.length !== 1 ? "s" : ""}</Text>
                     </View>
+                    <Feather name={isCollapsed ? "chevron-down" : "chevron-up"} size={16} color={muted} />
+                  </TouchableOpacity>
+                  <View style={styles.blockActions}>
+                    <TouchableOpacity onPress={() => startCreateUnit(block.id)} style={[styles.iconBtn, { backgroundColor: tint + "1A" }]}>
+                      <Feather name="plus" size={14} color={tint} />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => { setEditingBlock(block); setBlockForm({ name: block.name, description: block.description || "" }); setShowBlockModal(true); }} style={[styles.iconBtn, { backgroundColor: "#F59E0B1A" }]}>
+                      <Feather name="edit-2" size={14} color="#F59E0B" />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => setDeleteBlockId(block.id)} style={[styles.iconBtn, { backgroundColor: "#EF44441A" }]}>
+                      <Feather name="trash-2" size={14} color="#EF4444" />
+                    </TouchableOpacity>
                   </View>
+                </View>
 
-                  {/* Units Section */}
-                  <View
-                    style={[styles.unitsSection, { borderTopColor: borderCol }]}
-                  >
-                    <View style={styles.unitsSectionHeader}>
-                      <TouchableOpacity
-                        onPress={() =>
-                          setCollapsedBlocks((prev) => ({
-                            ...prev,
-                            [block.id]: !prev[block.id],
-                          }))
-                        }
-                        style={styles.unitsSectionTitle}
-                      >
-                        <Feather name="grid" size={16} color="#06b6d4" />
-                        <Text
-                          style={[
-                            styles.unitsSectionText,
-                            { color: textColor },
-                          ]}
-                        >
-                          Units ({block.units?.length || 0})
-                        </Text>
-                        <Feather
-                          name={
-                            collapsedBlocks[block.id]
-                              ? "chevron-down"
-                              : "chevron-up"
-                          }
-                          size={16}
-                          color={muted}
-                        />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => startCreateUnit(block.id)}
-                        style={[
-                          styles.addUnitButton,
-                          { backgroundColor: tint },
-                        ]}
-                      >
-                        <Feather
-                          name="plus"
-                          size={14}
-                          color={theme === "dark" ? "#11181C" : "#ffffff"}
-                        />
-                        <Text
-                          style={[
-                            styles.addUnitText,
-                            { color: theme === "dark" ? "#11181C" : "#ffffff" },
-                          ]}
-                        >
-                          Add Unit
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    {!collapsedBlocks[block.id] && (
-                      <>
-                        {block.units?.length > 0 ? (
-                          <View style={styles.unitsGrid}>
-                            {block.units.map((unit) => (
-                              <View
-                                key={unit.id}
-                                style={[
-                                  styles.unitCard,
-                                  {
-                                    backgroundColor:
-                                      theme === "dark" ? "#181818" : "#f9fafb",
-                                    borderColor: borderCol,
-                                  },
-                                ]}
-                              >
-                                <View style={styles.unitHeader}>
-                                  <View style={{ flex: 1 }}>
-                                    <Text
-                                      style={[
-                                        styles.unitNumber,
-                                        { color: textColor },
-                                      ]}
-                                    >
-                                      Unit {unit.number}
-                                    </Text>
-                                    {unit.residents?.length > 0 ? (
-                                      <View style={styles.residentInfo}>
-                                        <Feather
-                                          name="users"
-                                          size={10}
-                                          color="#059669"
-                                        />
-                                        <Text
-                                          style={[
-                                            styles.residentText,
-                                            { color: "#059669" },
-                                          ]}
-                                          numberOfLines={1}
-                                        >
-                                          {unit.residents[0].name}
-                                          {unit.residents.length > 1 &&
-                                            ` +${unit.residents.length - 1}`}
-                                        </Text>
-                                      </View>
-                                    ) : (
-                                      <Text
-                                        style={[
-                                          styles.vacantText,
-                                          { color: muted },
-                                        ]}
-                                      >
-                                        Vacant
-                                      </Text>
-                                    )}
-                                  </View>
-                                  <TouchableOpacity
-                                    onPress={() => handleDeleteUnit(unit.id)}
-                                    style={[
-                                      styles.deleteUnitButton,
-                                      {
-                                        backgroundColor:
-                                          theme === "dark"
-                                            ? "rgba(239, 68, 68, 0.2)"
-                                            : "#fef2f2",
-                                      },
-                                    ]}
-                                  >
-                                    <Feather
-                                      name="trash-2"
-                                      size={12}
-                                      color="#ef4444"
-                                    />
-                                  </TouchableOpacity>
-                                </View>
-                              </View>
-                            ))}
-                          </View>
-                        ) : (
-                          <View
-                            style={[
-                              styles.emptyUnits,
-                              {
-                                backgroundColor:
-                                  theme === "dark" ? "#181818" : "#f9fafb",
-                                borderColor: borderCol,
-                              },
-                            ]}
-                          >
-                            <Text
-                              style={[styles.emptyUnitsText, { color: muted }]}
-                            >
-                              No units in this block yet. Click "Add Unit" to
-                              create one.
-                            </Text>
-                          </View>
-                        )}
-                      </>
+                {/* Units grid */}
+                {!isCollapsed && (
+                  <View style={[styles.unitsSection, { borderTopColor: borderCol }]}>
+                    {units.length === 0 ? (
+                      <Text style={[styles.noUnitsText, { color: muted }]}>No units — tap + to add units</Text>
+                    ) : (
+                      <View style={styles.unitsGrid}>
+                        {units.map((unit) => {
+                          const occupied = unit.residents?.length > 0;
+                          return (
+                            <View key={unit.id} style={[styles.unitChip, { backgroundColor: occupied ? "#10B98115" : borderCol, borderColor: occupied ? "#10B98140" : borderCol }]}>
+                              <Text style={[styles.unitNum, { color: occupied ? "#10B981" : muted }]}>{unit.number}</Text>
+                              <TouchableOpacity onPress={() => setDeleteUnitId(unit.id)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                                <Feather name="x" size={10} color={occupied ? "#10B981" : muted} />
+                              </TouchableOpacity>
+                            </View>
+                          );
+                        })}
+                      </View>
                     )}
                   </View>
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
+                )}
+              </View>
+            );
+          })
+        )}
       </ScrollView>
 
-      {/* Block Form Modal */}
-      <Modal
-        visible={showBlockModal}
-        transparent
-        animationType="fade"
-        onRequestClose={cancelBlockForm}
-      >
+      {/* Block Modal */}
+      <Modal visible={showBlockModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View
-            style={[
-              styles.modalContent,
-              { backgroundColor: cardBg, borderColor: borderCol },
-            ]}
-          >
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: textColor }]}>
-                {editingBlock ? "Edit Block" : "Create New Block"}
-              </Text>
-              <TouchableOpacity onPress={cancelBlockForm}>
-                <Feather name="x" size={24} color={muted} />
+          <View style={[styles.modalSheet, { backgroundColor: cardBg }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: borderCol }]}>
+              <Text style={[styles.modalTitle, { color: textColor }]}>{editingBlock ? "Edit Block" : "Create Block"}</Text>
+              <TouchableOpacity onPress={() => { setShowBlockModal(false); setBlockForm({ name: "", description: "" }); setEditingBlock(null); }} style={[styles.modalClose, { borderColor: borderCol }]}>
+                <Feather name="x" size={16} color={textColor} />
               </TouchableOpacity>
             </View>
-
             <View style={styles.modalBody}>
-              <View style={styles.formGroup}>
-                <Text style={[styles.label, { color: textColor }]}>
-                  Block Name <Text style={{ color: "#ef4444" }}>*</Text>
-                </Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      backgroundColor: theme === "dark" ? "#181818" : "#f9fafb",
-                      color: textColor,
-                      borderColor: borderCol,
-                    },
-                  ]}
-                  value={blockForm.name}
-                  onChangeText={(text) =>
-                    setBlockForm({ ...blockForm, name: text })
-                  }
-                  placeholder="e.g., A, B, Tower 1"
-                  placeholderTextColor={muted}
-                />
+              <View style={styles.fieldWrap}>
+                <Text style={[styles.fieldLabel, { color: muted }]}>Block Name</Text>
+                <View style={[styles.fieldRow, { borderColor: borderCol, backgroundColor: isDark ? "#111111" : "#F8FAFC" }]}>
+                  <Feather name="grid" size={16} color={muted} />
+                  <TextInput style={[styles.fieldInput, { color: textColor }]} placeholder="e.g. Block A, Tower 1" placeholderTextColor={muted} value={blockForm.name} onChangeText={v => setBlockForm(p => ({ ...p, name: v }))} />
+                </View>
               </View>
-
-              <View style={styles.formGroup}>
-                <Text style={[styles.label, { color: textColor }]}>
-                  Description
-                </Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    styles.textArea,
-                    {
-                      backgroundColor: theme === "dark" ? "#181818" : "#f9fafb",
-                      color: textColor,
-                      borderColor: borderCol,
-                    },
-                  ]}
-                  value={blockForm.description}
-                  onChangeText={(text) =>
-                    setBlockForm({ ...blockForm, description: text })
-                  }
-                  placeholder="Optional description"
-                  placeholderTextColor={muted}
-                  multiline
-                  numberOfLines={3}
-                  textAlignVertical="top"
-                />
+              <View style={styles.fieldWrap}>
+                <Text style={[styles.fieldLabel, { color: muted }]}>Description (Optional)</Text>
+                <View style={[styles.fieldRow, { borderColor: borderCol, backgroundColor: isDark ? "#111111" : "#F8FAFC", alignItems: "flex-start", paddingVertical: 10 }]}>
+                  <Feather name="file-text" size={16} color={muted} style={{ marginTop: 2 }} />
+                  <TextInput style={[styles.fieldInput, { color: textColor }]} placeholder="Brief description" placeholderTextColor={muted} value={blockForm.description} onChangeText={v => setBlockForm(p => ({ ...p, description: v }))} multiline numberOfLines={3} />
+                </View>
               </View>
-
-              <View style={styles.modalActions}>
-                <TouchableOpacity
-                  onPress={cancelBlockForm}
-                  style={[
-                    styles.modalButton,
-                    styles.cancelButton,
-                    { borderColor: borderCol },
-                  ]}
-                >
-                  <Text style={[styles.cancelButtonText, { color: textColor }]}>
-                    Cancel
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={editingBlock ? handleUpdateBlock : handleCreateBlock}
-                  style={[
-                    styles.modalButton,
-                    styles.submitButton,
-                    { backgroundColor: tint },
-                  ]}
-                  disabled={blockLoading}
-                >
-                  {blockLoading ? (
-                    <ActivityIndicator
-                      size="small"
-                      color={theme === "dark" ? "#11181C" : "#ffffff"}
-                    />
-                  ) : (
-                    <>
-                      <Feather
-                        name="save"
-                        size={16}
-                        color={theme === "dark" ? "#11181C" : "#ffffff"}
-                      />
-                      <Text
-                        style={[
-                          styles.submitButtonText,
-                          { color: theme === "dark" ? "#11181C" : "#ffffff" },
-                        ]}
-                      >
-                        {editingBlock ? "Update Block" : "Create Block"}
-                      </Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </View>
+            </View>
+            <View style={[styles.modalFooter, { borderTopColor: borderCol }]}>
+              <TouchableOpacity onPress={() => { setShowBlockModal(false); setBlockForm({ name: "", description: "" }); setEditingBlock(null); }} style={[styles.cancelBtn, { borderColor: borderCol }]}>
+                <Text style={[styles.cancelBtnText, { color: muted }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleCreateBlock} disabled={blockLoading} style={[styles.submitBtn, { backgroundColor: tint, opacity: blockLoading ? 0.6 : 1 }]}>
+                {blockLoading ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.submitBtnText}>{editingBlock ? "Save Changes" : "Create Block"}</Text>}
+              </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* Unit Form Modal */}
-      <Modal
-        visible={showUnitModal}
-        transparent
-        animationType="fade"
-        onRequestClose={cancelUnitForm}
-      >
+      {/* Unit Modal */}
+      <Modal visible={showUnitModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View
-            style={[
-              styles.modalContent,
-              { backgroundColor: cardBg, borderColor: borderCol },
-            ]}
-          >
-            <View style={styles.modalHeader}>
+          <View style={[styles.modalSheet, { backgroundColor: cardBg }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: borderCol }]}>
               <Text style={[styles.modalTitle, { color: textColor }]}>
-                {unitCreationStep === 1
-                  ? "Create Units"
-                  : `Create Unit ${currentUnitIndex + 1} of ${unitsToCreate}`}
+                {unitCreationStep === 1 ? "How many units?" : `Unit ${currentUnitIndex + 1} of ${unitsToCreate}`}
               </Text>
-              <TouchableOpacity onPress={cancelUnitForm}>
-                <Feather name="x" size={24} color={muted} />
+              <TouchableOpacity onPress={() => { setShowUnitModal(false); resetUnitForm(); }} style={[styles.modalClose, { borderColor: borderCol }]}>
+                <Feather name="x" size={16} color={textColor} />
               </TouchableOpacity>
             </View>
-
             <View style={styles.modalBody}>
               {unitCreationStep === 1 ? (
-                <>
-                  <View style={styles.formGroup}>
-                    <Text style={[styles.label, { color: textColor }]}>
-                      How many units do you want to create?{" "}
-                      <Text style={{ color: "#ef4444" }}>*</Text>
-                    </Text>
-                    <TextInput
-                      style={[
-                        styles.input,
-                        {
-                          backgroundColor:
-                            theme === "dark" ? "#181818" : "#f9fafb",
-                          color: textColor,
-                          borderColor: borderCol,
-                        },
-                      ]}
-                      value={String(unitsToCreate)}
-                      onChangeText={(text) =>
-                        setUnitsToCreate(parseInt(text) || "")
-                      }
-                      keyboardType="number-pad"
-                      placeholder="Enter number of units"
-                      placeholderTextColor={muted}
-                    />
-                    <Text style={[styles.helperText, { color: muted }]}>
-                      You can create up to 50 units at once
-                    </Text>
+                <View style={styles.fieldWrap}>
+                  <Text style={[styles.fieldLabel, { color: muted }]}>Number of Units to Create</Text>
+                  <View style={[styles.fieldRow, { borderColor: borderCol, backgroundColor: isDark ? "#111111" : "#F8FAFC" }]}>
+                    <Feather name="hash" size={16} color={muted} />
+                    <TextInput style={[styles.fieldInput, { color: textColor }]} placeholder="1–50" placeholderTextColor={muted} value={String(unitsToCreate)} onChangeText={v => setUnitsToCreate(parseInt(v) || 1)} keyboardType="numeric" />
                   </View>
-
-                  <View style={styles.modalActions}>
-                    <TouchableOpacity
-                      onPress={cancelUnitForm}
-                      style={[
-                        styles.modalButton,
-                        styles.cancelButton,
-                        { borderColor: borderCol },
-                      ]}
-                    >
-                      <Text
-                        style={[styles.cancelButtonText, { color: textColor }]}
-                      >
-                        Cancel
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={handleUnitCountSubmit}
-                      style={[
-                        styles.modalButton,
-                        styles.submitButton,
-                        { backgroundColor: tint },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.submitButtonText,
-                          { color: theme === "dark" ? "#11181C" : "#ffffff" },
-                        ]}
-                      >
-                        Next
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </>
+                </View>
               ) : (
                 <>
                   {createdUnits.length > 0 && (
-                    <View
-                      style={[
-                        styles.createdUnitsBox,
-                        {
-                          backgroundColor:
-                            theme === "dark"
-                              ? "rgba(16, 185, 129, 0.2)"
-                              : "#d1fae5",
-                          borderColor: theme === "dark" ? "#065f46" : "#a7f3d0",
-                        },
-                      ]}
-                    >
-                      <View style={styles.createdUnitsHeader}>
-                        <Feather
-                          name="check-circle"
-                          size={16}
-                          color="#059669"
-                        />
-                        <Text
-                          style={[
-                            styles.createdUnitsTitle,
-                            { color: "#059669" },
-                          ]}
-                        >
-                          Created Units:
-                        </Text>
-                      </View>
-                      <View style={styles.createdUnitsList}>
-                        {createdUnits.map((unit, index) => (
-                          <View key={index} style={styles.createdUnitBadge}>
-                            <Text
-                              style={[
-                                styles.createdUnitText,
-                                { color: "#059669" },
-                              ]}
-                            >
-                              {unit.number}
-                            </Text>
-                          </View>
-                        ))}
-                      </View>
+                    <View style={styles.createdWrap}>
+                      {createdUnits.map((u, i) => (
+                        <View key={i} style={[styles.createdChip, { backgroundColor: "#10B98115", borderColor: "#10B98140" }]}>
+                          <Feather name="check" size={10} color="#10B981" />
+                          <Text style={[styles.createdNum, { color: "#10B981" }]}>{u.number}</Text>
+                        </View>
+                      ))}
                     </View>
                   )}
-
-                  <View style={styles.formGroup}>
-                    <Text style={[styles.label, { color: textColor }]}>
-                      Unit {currentUnitIndex + 1} Number{" "}
-                      <Text style={{ color: "#ef4444" }}>*</Text>
-                    </Text>
-                    <TextInput
-                      style={[
-                        styles.input,
-                        {
-                          backgroundColor:
-                            theme === "dark" ? "#181818" : "#f9fafb",
-                          color: textColor,
-                          borderColor: borderCol,
-                        },
-                      ]}
-                      value={currentUnitNumber}
-                      onChangeText={setCurrentUnitNumber}
-                      placeholder="e.g., 101, A-01, 1A"
-                      placeholderTextColor={muted}
-                      autoFocus
-                    />
-                    <Text style={[styles.helperText, { color: muted }]}>
-                      Press OK to create this unit
-                    </Text>
-                  </View>
-
-                  <View style={styles.modalActions}>
-                    <TouchableOpacity
-                      onPress={() => {
-                        if (createdUnits.length > 0) {
-                          Alert.alert(
-                            "Units Created",
-                            `Created ${createdUnits.length} units successfully`,
-                          );
-                          resetUnitForm();
-                          setShowUnitModal(false);
-                          fetchBlocks();
-                        } else {
-                          setUnitCreationStep(1);
-                        }
-                      }}
-                      style={[
-                        styles.modalButton,
-                        styles.cancelButton,
-                        { borderColor: borderCol },
-                      ]}
-                    >
-                      <Text
-                        style={[styles.cancelButtonText, { color: textColor }]}
-                      >
-                        {createdUnits.length > 0 ? "Finish" : "Back"}
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={handleCreateUnit}
-                      style={[
-                        styles.modalButton,
-                        styles.submitButton,
-                        { backgroundColor: tint },
-                      ]}
-                      disabled={unitLoading}
-                    >
-                      {unitLoading ? (
-                        <ActivityIndicator
-                          size="small"
-                          color={theme === "dark" ? "#11181C" : "#ffffff"}
-                        />
-                      ) : (
-                        <>
-                          <Feather
-                            name="save"
-                            size={16}
-                            color={theme === "dark" ? "#11181C" : "#ffffff"}
-                          />
-                          <Text
-                            style={[
-                              styles.submitButtonText,
-                              {
-                                color: theme === "dark" ? "#11181C" : "#ffffff",
-                              },
-                            ]}
-                          >
-                            OK
-                          </Text>
-                        </>
-                      )}
-                    </TouchableOpacity>
+                  <View style={styles.fieldWrap}>
+                    <Text style={[styles.fieldLabel, { color: muted }]}>Unit Number</Text>
+                    <View style={[styles.fieldRow, { borderColor: borderCol, backgroundColor: isDark ? "#111111" : "#F8FAFC" }]}>
+                      <Feather name="home" size={16} color={muted} />
+                      <TextInput style={[styles.fieldInput, { color: textColor }]} placeholder="e.g. 101, A-01" placeholderTextColor={muted} value={currentUnitNumber} onChangeText={setCurrentUnitNumber} autoFocus />
+                    </View>
                   </View>
                 </>
               )}
+            </View>
+            <View style={[styles.modalFooter, { borderTopColor: borderCol }]}>
+              <TouchableOpacity onPress={() => { setShowUnitModal(false); resetUnitForm(); }} style={[styles.cancelBtn, { borderColor: borderCol }]}>
+                <Text style={[styles.cancelBtnText, { color: muted }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={unitCreationStep === 1 ? () => { if(unitsToCreate<1||unitsToCreate>50){showError("Enter 1–50");return;} setUnitCreationStep(2); } : handleCreateUnit}
+                disabled={unitLoading}
+                style={[styles.submitBtn, { backgroundColor: tint, opacity: unitLoading ? 0.6 : 1 }]}
+              >
+                {unitLoading ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.submitBtnText}>{unitCreationStep === 1 ? "Next" : currentUnitIndex + 1 < unitsToCreate ? `Add Unit (${currentUnitIndex + 1}/${unitsToCreate})` : "Finish"}</Text>}
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -1086,371 +403,56 @@ export default function BlocksAndUnits() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  centerContent: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-  },
-  headerContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  content: {
-    padding: 16,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    flex: 1,
-  },
-  backButton: {
-    padding: 8,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "700",
-  },
-  subtitle: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  statsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-    marginBottom: 16,
-  },
-  statCard: {
-    width: "31%",
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 12,
-  },
-  statHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 8,
-  },
-  statIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  statLabel: {
-    fontSize: 10,
-    fontWeight: "600",
-    flex: 1,
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: "700",
-  },
-  createButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  createButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  emptyState: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 48,
-    alignItems: "center",
-  },
-  emptyIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16,
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 8,
-  },
-  emptyDesc: {
-    fontSize: 14,
-    textAlign: "center",
-    marginBottom: 24,
-  },
-  emptyButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  emptyButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  blocksList: {
-    gap: 16,
-  },
-  blockCard: {
-    borderRadius: 12,
-    borderWidth: 1,
-    overflow: "hidden",
-  },
-  blockHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    padding: 16,
-    borderBottomWidth: 1,
-  },
-  blockHeaderLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    flex: 1,
-  },
-  blockIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  blockName: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 4,
-  },
-  blockDesc: {
-    fontSize: 13,
-  },
-  blockActions: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  iconButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  unitsSection: {
-    padding: 16,
-    borderTopWidth: 1,
-  },
-  unitsSectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  unitsSectionTitle: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  unitsSectionText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  addUnitButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  addUnitText: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  unitsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  unitCard: {
-    width: "31%",
-    borderRadius: 8,
-    borderWidth: 1,
-    padding: 12,
-  },
-  unitHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-  },
-  unitNumber: {
-    fontSize: 13,
-    fontWeight: "600",
-    marginBottom: 6,
-  },
-  residentInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  residentText: {
-    fontSize: 10,
-    flex: 1,
-  },
-  vacantText: {
-    fontSize: 10,
-    fontStyle: "italic",
-  },
-  deleteUnitButton: {
-    width: 24,
-    height: 24,
-    borderRadius: 4,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emptyUnits: {
-    borderRadius: 8,
-    borderWidth: 1,
-    borderStyle: "dashed",
-    padding: 32,
-    alignItems: "center",
-  },
-  emptyUnitsText: {
-    fontSize: 12,
-    textAlign: "center",
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 16,
-  },
-  modalContent: {
-    width: "100%",
-    maxWidth: 400,
-    borderRadius: 12,
-    borderWidth: 1,
-    overflow: "hidden",
-  },
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    borderBottomWidth: 1,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  modalBody: {
-    padding: 16,
-  },
-  formGroup: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-  },
-  textArea: {
-    height: 80,
-    textAlignVertical: "top",
-  },
-  helperText: {
-    fontSize: 11,
-    marginTop: 6,
-  },
-  modalActions: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 8,
-  },
-  modalButton: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  cancelButton: {
-    borderWidth: 1,
-  },
-  cancelButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  submitButton: {},
-  submitButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  createdUnitsBox: {
-    borderRadius: 8,
-    borderWidth: 1,
-    padding: 12,
-    marginBottom: 16,
-  },
-  createdUnitsHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 8,
-  },
-  createdUnitsTitle: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  createdUnitsList: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-  },
-  createdUnitBadge: {
-    backgroundColor: "rgba(16, 185, 129, 0.2)",
-    borderWidth: 1,
-    borderColor: "#a7f3d0",
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  createdUnitText: {
-    fontSize: 10,
-    fontWeight: "500",
-  },
+  container: { flex: 1 },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
+  loadingText: { fontSize: 14 },
+  headerBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
+  headerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
+  backBtn: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  screenTitle: { fontSize: 18, fontWeight: "700", letterSpacing: -0.3 },
+  screenSub: { fontSize: 12, fontWeight: "500", marginTop: 1 },
+  addBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
+  addBtnText: { color: "#fff", fontSize: 13, fontWeight: "600" },
+  scroll: { padding: 16, paddingBottom: 40, gap: 10 },
+  statsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 6 },
+  statCard: { width: "48%", borderRadius: 14, borderWidth: 1, padding: 14, gap: 6 },
+  statIconWrap: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center", marginBottom: 4 },
+  statValue: { fontSize: 22, fontWeight: "700", letterSpacing: -0.5 },
+  statLabel: { fontSize: 12, fontWeight: "500" },
+  emptyCard: { borderRadius: 16, borderWidth: 1, padding: 32, alignItems: "center", gap: 10 },
+  emptyIcon: { width: 56, height: 56, borderRadius: 16, alignItems: "center", justifyContent: "center", marginBottom: 4 },
+  emptyTitle: { fontSize: 15, fontWeight: "700" },
+  emptyMsg: { fontSize: 13, textAlign: "center" },
+  blockCard: { borderRadius: 16, borderWidth: 1, marginBottom: 10 },
+  blockTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 16 },
+  blockTitleRow: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10 },
+  blockIcon: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  blockTitleWrap: { flex: 1 },
+  blockName: { fontSize: 15, fontWeight: "700" },
+  blockMeta: { fontSize: 12, marginTop: 1 },
+  blockActions: { flexDirection: "row", gap: 6, marginLeft: 8 },
+  iconBtn: { width: 30, height: 30, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  unitsSection: { borderTopWidth: 1, padding: 14 },
+  noUnitsText: { fontSize: 13, textAlign: "center", paddingVertical: 8 },
+  unitsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  unitChip: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
+  unitNum: { fontSize: 12, fontWeight: "600" },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+  modalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 32 },
+  modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 20, borderBottomWidth: 1 },
+  modalTitle: { fontSize: 17, fontWeight: "700" },
+  modalClose: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  modalBody: { padding: 20 },
+  modalFooter: { flexDirection: "row", gap: 10, padding: 20, borderTopWidth: 1 },
+  fieldWrap: { marginBottom: 16 },
+  fieldLabel: { fontSize: 12, fontWeight: "600", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 },
+  fieldRow: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12 },
+  fieldInput: { flex: 1, fontSize: 15 },
+  cancelBtn: { flex: 1, borderWidth: 1, borderRadius: 12, alignItems: "center", justifyContent: "center", paddingVertical: 13 },
+  cancelBtnText: { fontSize: 14, fontWeight: "600" },
+  submitBtn: { flex: 2, borderRadius: 12, alignItems: "center", justifyContent: "center", paddingVertical: 13 },
+  submitBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
+  createdWrap: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 14 },
+  createdChip: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1 },
+  createdNum: { fontSize: 11, fontWeight: "600" },
 });

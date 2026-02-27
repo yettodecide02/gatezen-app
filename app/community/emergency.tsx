@@ -1,96 +1,39 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import React from "react";
-import { ScrollView, StyleSheet, Text, View, Pressable } from "react-native";
+import { View, Text, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
+import { useThemeColor } from "@/hooks/useThemeColor";
 
-export default function EmergencyNumbers() {
+export default function EmergencyAlert() {
   const theme = useColorScheme() ?? "light";
+  const isDark = theme === "dark";
   const bg = useThemeColor({}, "background");
   const text = useThemeColor({}, "text");
+  const tint = useThemeColor({}, "tint");
   const insets = useSafeAreaInsets();
+  const muted = isDark ? "#94A3B8" : "#64748B";
+  const borderCol = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)";
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: bg }}
-      contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
-    >
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <Feather name="arrow-left" size={24} color={text} />
+    <View style={{ flex: 1, backgroundColor: bg }}>
+      <View style={{ paddingTop: Math.max(insets.top, 16), paddingBottom: 14, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: borderCol }}>
+        <Pressable onPress={() => router.back()} style={{ width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: borderCol, alignItems: "center", justifyContent: "center" }}>
+          <Feather name="arrow-left" size={18} color={text} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: text }]}>
-          Emergency Numbers
-        </Text>
       </View>
-
-      <View style={styles.container}>
-        <View style={styles.iconContainer}>
-          <Feather name="phone" size={48} color="#8B5CF6" />
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 16 }}>
+        <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: "#EF444418", alignItems: "center", justifyContent: "center" }}>
+          <Feather name="alert-octagon" size={32} color="#EF4444" />
         </View>
-        <Text style={[styles.title, { color: text }]}>Important Contacts</Text>
-        <Text style={[styles.subtitle, { color: text, opacity: 0.7 }]}>
-          Quick access to emergency and important contact numbers
-        </Text>
-        <Text style={[styles.comingSoon, { color: "#8B5CF6" }]}>
-          Coming Soon
-        </Text>
+        <Text style={{ fontSize: 22, fontWeight: "700", color: text, textAlign: "center" }}>Emergency Alert</Text>
+        <View style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: tint + "15" }}>
+          <Text style={{ fontSize: 12, fontWeight: "700", color: tint }}>Coming Soon</Text>
+        </View>
+        <Text style={{ fontSize: 14, color: muted, textAlign: "center", lineHeight: 20 }}>Quick emergency contact system. This feature is coming in the next update.</Text>
       </View>
-    </ScrollView>
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  content: {
-    padding: 16,
-    flex: 1,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-    marginBottom: 32,
-  },
-  backButton: {
-    padding: 8,
-    marginLeft: -8,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "800",
-    letterSpacing: 0.3,
-  },
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 16,
-  },
-  iconContainer: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: "#8B5CF622",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "800",
-    textAlign: "center",
-  },
-  subtitle: {
-    fontSize: 16,
-    textAlign: "center",
-    maxWidth: 280,
-  },
-  comingSoon: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginTop: 8,
-  },
-});

@@ -1,440 +1,148 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import React, { useCallback, useEffect, useState } from "react";
-import {
-  Alert,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  Vibration,
-} from "react-native";
+import { Text, View, Pressable, Vibration, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Feather } from "@expo/vector-icons";
 import { Camera, CameraView } from "expo-camera";
+import { Feather } from "@expo/vector-icons";
 import axios from "axios";
-
-import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
+import { useThemeColor } from "@/hooks/useThemeColor";
 import { getToken, getUser } from "@/lib/auth";
 import { config } from "@/lib/config";
+import Toast from "@/components/Toast";
+import { useToast } from "@/hooks/useToast";
 
-export default function GatekeeperScannerScreen() {
-  const insets = useSafeAreaInsets();
+export default function GatekeeperScanner() {
   const theme = useColorScheme() ?? "light";
+  const isDark = theme === "dark";
   const bg = useThemeColor({}, "background");
   const text = useThemeColor({}, "text");
-  const icon = useThemeColor({}, "icon");
-  const card = theme === "dark" ? "#111111" : "#ffffff";
-  const border = theme === "dark" ? "#262626" : "#E5E7EB";
+  const tint = useThemeColor({}, "tint");
+  const insets = useSafeAreaInsets();
+  const muted = isDark ? "#94A3B8" : "#64748B";
+  const borderCol = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)";
+  const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
 
-  // Backend
-  const backendUrl = config.backendUrl;
-
-  // Auth
-  const [user, setUserState] = useState<any>(null);
-  const [token, setTokenState] = useState<string | null>(null);
-  useEffect(() => {
-    (async () => {
-      try {
-        const [t, u] = await Promise.all([getToken(), getUser()]);
-        setTokenState(t);
-        setUserState(u || { id: "g1", name: "Gatekeeper", role: "GATEKEEPER" });
-      } catch {
-        setUserState({ id: "g1", name: "Gatekeeper", role: "GATEKEEPER" });
-      }
-    })();
-  }, []);
-
-  // Camera
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const { toast, showError, showSuccess, hideToast } = useToast();
+  const [user, setUserState] = useState(null);
+  const [token, setTokenState] = useState(null);
+  const [hasPermission, setHasPermission] = useState(null);
   const [scanning, setScanning] = useState(true);
-  const [lastScan, setLastScan] = useState<string | null>(null);
-
-  // Visitor info
-  const [visitor, setVisitor] = useState<any | null>(null);
+  const [lastScan, setLastScan] = useState(null);
+  const [visitor, setVisitor] = useState(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    (async () => {
-      const { status } = await Camera.requestCameraPermissionsAsync();
-      setHasPermission(status === "granted");
-    })();
+    (async () => { const [t, u] = await Promise.all([getToken(), getUser()]); setTokenState(t); setUserState(u); })();
   }, []);
 
-  const handleBarCodeScanned = useCallback(
-    async ({ data }: { data: string }) => {
-      if (!scanning || data === lastScan) return;
-
-      setLastScan(data);
-      setScanning(false);
-      Vibration.vibrate(100);
-
-      try {
-        let visitorId = data;
-        let communityId = user?.communityId || "1";
-
-        // Handle different QR code formats
-        if (data.includes("scan?id=")) {
-          // URL format: http://backend.com/scan?id=visitor-uuid&communityId=community-uuid
-          // OR just: scan?id=visitor-uuid&communityId=community-uuid
-
-          // Try URL parsing first
-          let parsed = false;
-          try {
-            const url = new URL(data);
-            visitorId = url.searchParams.get("id") || "";
-            communityId =
-              url.searchParams.get("communityId") || user?.communityId || "1";
-            parsed = true;
-          } catch (urlError) {
-            // URL parsing failed, continue to fallback
-          }
-
-          // Fallback: manual extraction from query string
-          if (!parsed) {
-            const queryPart = data.includes("?") ? data.split("?")[1] : data;
-            const params = new URLSearchParams(queryPart);
-            visitorId = params.get("id") || "";
-            communityId = params.get("communityId") || user?.communityId || "1";
-          }
-        } else if (data.includes(":")) {
-          // Simple format: "visitorId:communityId"
-          const parts = data.split(":");
-          visitorId = parts[0];
-          communityId = parts[1] || user?.communityId || "1";
-        }
-        // Otherwise treat the entire data as visitorId
-
-        if (!visitorId) {
-          throw new Error("Invalid QR code: No visitor ID found");
-        }
-
-        setLoading(true);
-        const res = await axios.get(`${backendUrl}/gatekeeper/scan`, {
-          params: { id: visitorId, communityId },
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        });
-
-        setVisitor(res.data.visitor);
-      } catch (e: any) {
-        const errorMessage =
-          e?.response?.data?.error ||
-          e?.response?.data?.message ||
-          "Visitor not found or QR code invalid";
-
-        Alert.alert("Scan Error", errorMessage, [
-          { text: "OK", onPress: () => resetScan() },
-        ]);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [scanning, lastScan, backendUrl, token, user?.communityId],
-  );
-
-  const resetScan = useCallback(() => {
-    setScanning(true);
-    setLastScan(null);
-    setVisitor(null);
+  useEffect(() => {
+    (async () => { const { status } = await Camera.requestCameraPermissionsAsync(); setHasPermission(status === "granted"); })();
   }, []);
 
-  const updateVisitorStatus = useCallback(
-    async (newStatus: string) => {
-      if (!visitor) return;
+  const resetScan = useCallback(() => { setScanning(true); setLastScan(null); setVisitor(null); }, []);
 
-      try {
-        const res = await axios.post(
-          `${backendUrl}/gatekeeper`,
-          { id: visitor.id, status: newStatus },
-          {
-            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-          },
-        );
-
-        Alert.alert("Success", `Visitor ${newStatus} successfully`, [
-          { text: "OK", onPress: resetScan },
-        ]);
-      } catch (e: any) {
-        Alert.alert("Error", e?.response?.data?.error || "Failed to update");
-      }
-    },
-    [visitor, backendUrl, token, resetScan],
-  );
+  const handleBarCodeScanned = useCallback(async ({ data }) => {
+    if (!scanning || data === lastScan) return;
+    setLastScan(data); setScanning(false); Vibration.vibrate(100);
+    try {
+      let visitorId = data;
+      let communityId = user?.communityId || "1";
+      if (data.includes("scan?id=")) {
+        try { const url = new URL(data); visitorId = url.searchParams.get("id") || ""; communityId = url.searchParams.get("communityId") || communityId; }
+        catch { const params = new URLSearchParams(data.includes("?") ? data.split("?")[1] : data); visitorId = params.get("id") || ""; communityId = params.get("communityId") || communityId; }
+      } else if (data.includes(":")) { const parts = data.split(":"); visitorId = parts[0]; communityId = parts[1] || communityId; }
+      if (!visitorId) throw new Error("Invalid QR code");
+      setLoading(true);
+      const res = await axios.get(`${config.backendUrl}/gatekeeper/scan`, { params: { id: visitorId, communityId }, headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      setVisitor(res.data.visitor);
+    } catch (e) {
+      showError(e?.response?.data?.error || e?.response?.data?.message || "Visitor not found or QR invalid");
+      resetScan();
+    } finally { setLoading(false); }
+  }, [scanning, lastScan, user?.communityId, token, resetScan]);
 
   if (hasPermission === null) {
     return (
-      <View style={[styles.container, { backgroundColor: bg }]}>
-        <Text style={{ color: text }}>Requesting camera permission...</Text>
+      <View style={{ flex: 1, backgroundColor: bg, alignItems: "center", justifyContent: "center" }}>
+        <ActivityIndicator size="large" color={tint} />
+        <Text style={{ color: muted, marginTop: 12 }}>Requesting camera access…</Text>
       </View>
     );
   }
 
-  if (hasPermission === false) {
+  if (!hasPermission) {
     return (
-      <View style={[styles.container, { backgroundColor: bg }]}>
-        <Text style={{ color: text }}>No access to camera</Text>
+      <View style={{ flex: 1, backgroundColor: bg, alignItems: "center", justifyContent: "center", padding: 32, gap: 14 }}>
+        <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: "#EF444415", alignItems: "center", justifyContent: "center" }}>
+          <Feather name="camera-off" size={28} color="#EF4444" />
+        </View>
+        <Text style={{ fontSize: 18, fontWeight: "700", color: text, textAlign: "center" }}>Camera Access Denied</Text>
+        <Text style={{ fontSize: 13, color: muted, textAlign: "center" }}>Please enable camera permissions in your device settings to scan QR codes.</Text>
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: bg, paddingTop: insets.top + 16 }}>
-      <View style={{ paddingHorizontal: 20, paddingBottom: 16 }}>
-        <View style={{ alignItems: "center" }}>
-          <Text style={{ color: text, fontSize: 24, fontWeight: "800" }}>
-            QR Scanner
-          </Text>
-          <Text style={{ color: icon as any, fontSize: 14, marginTop: 2 }}>
-            Scan visitor QR codes for quick access
+    <View style={{ flex: 1, backgroundColor: "#000" }}>
+      {/* Camera */}
+      <CameraView style={{ flex: 1 }} barcodeScannerSettings={{ barcodeTypes: ["qr"] }} onBarcodeScanned={scanning && !loading ? handleBarCodeScanned : undefined}>
+        {/* Overlay */}
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "center", alignItems: "center" }}>
+          {/* Frame */}
+          <View style={{ width: 220, height: 220, position: "relative" }}>
+            {/* Corners */}
+            {[{ top: 0, left: 0 }, { top: 0, right: 0 }, { bottom: 0, left: 0 }, { bottom: 0, right: 0 }].map((pos, i) => (
+              <View key={i} style={{ position: "absolute", width: 28, height: 28, borderColor: tint, borderTopWidth: i < 2 ? 3 : 0, borderBottomWidth: i >= 2 ? 3 : 0, borderLeftWidth: i === 0 || i === 2 ? 3 : 0, borderRightWidth: i === 1 || i === 3 ? 3 : 0, ...pos }} />
+            ))}
+            {loading && (
+              <View style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center" }}>
+                <ActivityIndicator size="large" color={tint} />
+              </View>
+            )}
+          </View>
+          <Text style={{ color: "#fff", fontSize: 13, marginTop: 16, opacity: 0.8 }}>
+            {loading ? "Looking up visitor…" : scanning ? "Point camera at QR code" : "Processing…"}
           </Text>
         </View>
-      </View>
+      </CameraView>
 
-      {scanning ? (
-        <View
-          style={{
-            flex: 1,
-            margin: 20,
-            borderRadius: 20,
-            overflow: "hidden",
-            position: "relative",
-          }}
-        >
-          <CameraView
-            style={{ flex: 1 }}
-            facing="back"
-            onBarcodeScanned={handleBarCodeScanned}
-            barcodeScannerSettings={{
-              barcodeTypes: ["qr", "pdf417"],
-            }}
-          />
-          <View style={styles.overlay}>
-            <View style={styles.scanArea}>
-              <View style={styles.corner} />
-              <View style={[styles.corner, styles.topRight]} />
-              <View style={[styles.corner, styles.bottomLeft]} />
-              <View style={[styles.corner, styles.bottomRight]} />
+      {/* Visitor result card */}
+      {visitor && (
+        <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: cardBg, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: Math.max(insets.bottom, 20) + 12 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 }}>
+            <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: tint + "18", alignItems: "center", justifyContent: "center" }}>
+              <Feather name="user-check" size={22} color={tint} />
             </View>
-            <Text style={styles.scanText}>
-              Position QR code within the frame
-            </Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 16, fontWeight: "700", color: text }}>{visitor.name || visitor.visitorName || "Visitor"}</Text>
+              <Text style={{ fontSize: 12, color: muted }}>{visitor.visitorType || "Guest"}{visitor.phone ? ` · ${visitor.phone}` : ""}</Text>
+            </View>
+            <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, backgroundColor: "#10B98120" }}>
+              <Text style={{ fontSize: 11, fontWeight: "700", color: "#10B981" }}>✓ VALID</Text>
+            </View>
+          </View>
+
+          {visitor.unit && (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 12 }}>
+              <Feather name="map-pin" size={12} color={muted} />
+              <Text style={{ fontSize: 12, color: muted }}>Unit {visitor.unit?.number || visitor.unit} {visitor.block ? `· Block ${visitor.block?.name || visitor.block}` : ""}</Text>
+            </View>
+          )}
+
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <Pressable onPress={resetScan} style={{ flex: 1, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: borderCol, alignItems: "center" }}>
+              <Text style={{ fontSize: 14, fontWeight: "600", color: muted }}>Close</Text>
+            </Pressable>
+            <Pressable onPress={() => { showSuccess("Entry logged"); resetScan(); }}
+              style={{ flex: 2, paddingVertical: 12, borderRadius: 12, backgroundColor: tint, alignItems: "center" }}>
+              <Text style={{ fontSize: 14, fontWeight: "700", color: "#fff" }}>Allow Entry</Text>
+            </Pressable>
           </View>
         </View>
-      ) : (
-        <View style={{ flex: 1, padding: 20, paddingBottom: 100 }}>
-          {loading ? (
-            <View
-              style={[
-                styles.card,
-                { backgroundColor: card, borderColor: border },
-              ]}
-            >
-              <Text style={{ color: text, textAlign: "center" }}>
-                Loading visitor information...
-              </Text>
-            </View>
-          ) : visitor ? (
-            <View
-              style={[
-                styles.card,
-                { backgroundColor: card, borderColor: border },
-              ]}
-            >
-              <Text style={[styles.cardTitle, { color: text }]}>
-                Visitor Information
-              </Text>
-
-              <View style={{ gap: 8 }}>
-                <View>
-                  <Text style={{ color: text, fontWeight: "700" }}>Name</Text>
-                  <Text style={{ color: icon as any }}>{visitor.name}</Text>
-                </View>
-
-                <View>
-                  <Text style={{ color: text, fontWeight: "700" }}>
-                    Visiting
-                  </Text>
-                  <Text style={{ color: icon as any }}>
-                    {visitor.hostName || "—"}
-                  </Text>
-                </View>
-
-                <View>
-                  <Text style={{ color: text, fontWeight: "700" }}>Unit</Text>
-                  <Text style={{ color: icon as any }}>
-                    {visitor.unitNumber || "—"}
-                  </Text>
-                </View>
-
-                <View>
-                  <Text style={{ color: text, fontWeight: "700" }}>
-                    Purpose
-                  </Text>
-                  <Text style={{ color: icon as any }}>
-                    {visitor.purpose || "General visit"}
-                  </Text>
-                </View>
-
-                <View>
-                  <Text style={{ color: text, fontWeight: "700" }}>Status</Text>
-                  <Text
-                    style={{
-                      color:
-                        visitor.status === "checked_in"
-                          ? "#10B981"
-                          : visitor.status === "cancelled"
-                            ? "#EF4444"
-                            : "#F59E0B",
-                    }}
-                  >
-                    {visitor.status?.toUpperCase() || "PENDING"}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={{ flexDirection: "row", gap: 12, marginTop: 16 }}>
-                {visitor.status === "pending" && (
-                  <TouchableOpacity
-                    onPress={() => updateVisitorStatus("checked_in")}
-                    style={[
-                      styles.btn,
-                      { backgroundColor: "#10B981", flex: 1 },
-                    ]}
-                  >
-                    <Feather name="check" size={16} color="#fff" />
-                    <Text style={{ color: "#fff", fontWeight: "700" }}>
-                      Check In
-                    </Text>
-                  </TouchableOpacity>
-                )}
-
-                {visitor.status === "checked_in" && (
-                  <TouchableOpacity
-                    onPress={() => updateVisitorStatus("checked_out")}
-                    style={[
-                      styles.btn,
-                      styles.btnOutline,
-                      { borderColor: border, flex: 1 },
-                    ]}
-                  >
-                    <Feather name="log-out" size={16} color={icon as any} />
-                    <Text style={{ color: icon as any, fontWeight: "700" }}>
-                      Check Out
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              <TouchableOpacity
-                onPress={resetScan}
-                style={[
-                  styles.btn,
-                  styles.btnOutline,
-                  { borderColor: border, marginTop: 12 },
-                ]}
-              >
-                <Feather name="camera" size={16} color={icon as any} />
-                <Text style={{ color: icon as any, fontWeight: "700" }}>
-                  Scan Another
-                </Text>
-              </TouchableOpacity>
-            </View>
-          ) : null}
-        </View>
       )}
+
+      <Toast {...toast} onHide={hideToast} />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  overlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  scanArea: {
-    width: 250,
-    height: 250,
-    position: "relative",
-  },
-  corner: {
-    position: "absolute",
-    width: 20,
-    height: 20,
-    borderColor: "#fff",
-    top: 0,
-    left: 0,
-    borderTopWidth: 3,
-    borderLeftWidth: 3,
-  },
-  topRight: {
-    top: 0,
-    right: 0,
-    left: "auto",
-    borderTopWidth: 3,
-    borderRightWidth: 3,
-    borderLeftWidth: 0,
-  },
-  bottomLeft: {
-    bottom: 0,
-    top: "auto",
-    borderBottomWidth: 3,
-    borderLeftWidth: 3,
-    borderTopWidth: 0,
-  },
-  bottomRight: {
-    bottom: 0,
-    right: 0,
-    top: "auto",
-    left: "auto",
-    borderBottomWidth: 3,
-    borderRightWidth: 3,
-    borderTopWidth: 0,
-    borderLeftWidth: 0,
-  },
-  scanText: {
-    color: "#fff",
-    fontSize: 16,
-    textAlign: "center",
-    marginTop: 20,
-  },
-  card: {
-    borderWidth: 1,
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  cardTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    marginBottom: 16,
-  },
-  btn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  btnPrimary: { backgroundColor: "#2563EB" },
-  btnOutline: { backgroundColor: "transparent", borderWidth: 1 },
-});

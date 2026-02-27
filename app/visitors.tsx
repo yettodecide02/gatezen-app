@@ -1,1127 +1,253 @@
-// @ts-nocheck
-import React, {
-  useCallback,
-  useEffect,
-  useState,
-  useRef,
-  useMemo,
-} from "react";
-import {
-  Alert,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  ActivityIndicator,
-  Platform,
-  Vibration,
-  Dimensions,
-  KeyboardAvoidingView,
-} from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
+﻿// @ts-nocheck
+import React, { useCallback, useEffect, useState, useMemo } from "react";
+import { ScrollView, Text, View, Pressable, ActivityIndicator, TextInput, Modal, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { Feather } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import axios from "axios";
-
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { getToken, getUser } from "@/lib/auth";
-import Toast from "@/components/Toast";
 import { config } from "@/lib/config";
+import Toast from "@/components/Toast";
+import { useToast } from "@/hooks/useToast";
 
-const STATUS_LABEL: any = {
-  pending: "Pending",
-  cancelled: "Cancelled",
-  checked_in: "Checked In",
-  checked_out: "Checked Out",
+const STATUS_CONF = {
+  pending: { color: "#F59E0B", label: "PNDG" }, cancelled: { color: "#EF4444", label: "CNCL" },
+  checked_in: { color: "#10B981", label: "IN" }, checked_out: { color: "#94A3B8", label: "OUT" },
 };
+const VISITOR_TYPES = ["GUEST", "DELIVERY", "CAB_AUTO"];
+const TYPE_LABELS = { GUEST: "Guest", DELIVERY: "Delivery", CAB_AUTO: "Cab/Auto" };
 
-const VISITOR_TYPES = [
-  { value: "GUEST", label: "Guest" },
-  { value: "DELIVERY", label: "Delivery" },
-  { value: "CAB_AUTO", label: "Cab/Auto" },
-];
+function pad(n) { return String(n).padStart(2, "0"); }
+function nowDate() { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function nowTime() { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; }
 
-function StatusChip({ status }: any) {
+export default function Visitors() {
   const theme = useColorScheme() ?? "light";
-  const key = (status || "pending").toLowerCase();
-  const statusConfig: any = {
-    pending: {
-      bg: theme === "dark" ? "#1e1b3a" : "#fffbeb",
-      clr: theme === "dark" ? "#fbbf24" : "#92400e",
-      br: theme === "dark" ? "#1f2937" : "#fde68a",
-      icon: (
-        <Feather
-          name="clock"
-          size={12}
-          color={theme === "dark" ? "#fbbf24" : "#92400e"}
-        />
-      ),
-    },
-    cancelled: {
-      bg: theme === "dark" ? "#2a0b0b" : "#fef2f2",
-      clr: theme === "dark" ? "#fca5a5" : "#991b1b",
-      br: theme === "dark" ? "#1f2937" : "#fecaca",
-      icon: (
-        <Feather
-          name="x-circle"
-          size={12}
-          color={theme === "dark" ? "#fca5a5" : "#991b1b"}
-        />
-      ),
-    },
-    checked_in: {
-      bg: theme === "dark" ? "#052e1f" : "#ecfdf5",
-      clr: theme === "dark" ? "#34d399" : "#065f46",
-      br: theme === "dark" ? "#1f2937" : "#a7f3d0",
-      icon: (
-        <Feather
-          name="log-in"
-          size={12}
-          color={theme === "dark" ? "#34d399" : "#065f46"}
-        />
-      ),
-    },
-    checked_out: {
-      bg: theme === "dark" ? "#1f1f1f" : "#f3f4f6",
-      clr: theme === "dark" ? "#9ca3af" : "#374151",
-      br: theme === "dark" ? "#1f2937" : "#d1d5db",
-      icon: (
-        <Feather
-          name="log-out"
-          size={12}
-          color={theme === "dark" ? "#9ca3af" : "#374151"}
-        />
-      ),
-    },
-  };
-
-  const config = statusConfig[key] || statusConfig.pending;
-
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 4,
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 999,
-        borderWidth: 1,
-        backgroundColor: config.bg,
-        borderColor: config.br,
-      }}
-    >
-      {config.icon}
-      <Text style={{ color: config.clr, fontWeight: "700", fontSize: 11 }}>
-        {STATUS_LABEL[key] || status}
-      </Text>
-    </View>
-  );
-}
-
-function TypeChip({ type }: any) {
-  const theme = useColorScheme() ?? "light";
-  const displayType =
-    type
-      ?.replace("_", " ")
-      .toLowerCase()
-      .replace(/\b\w/g, (l: string) => l.toUpperCase()) || "Guest";
-  const typeConfig: any = {
-    Guest: { icon: "user", color: theme === "dark" ? "#60a5fa" : "#2563eb" },
-    Delivery: {
-      icon: "package",
-      color: theme === "dark" ? "#f59e0b" : "#d97706",
-    },
-    "Cab/Auto": {
-      icon: "truck",
-      color: theme === "dark" ? "#10b981" : "#059669",
-    },
-  };
-
-  const config = typeConfig[displayType] || typeConfig["Guest"];
-
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 3,
-        paddingHorizontal: 6,
-        paddingVertical: 3,
-        borderRadius: 10,
-        backgroundColor: theme === "dark" ? "#1a1a2e" : "#EFF6FF",
-        borderWidth: 1,
-        borderColor: theme === "dark" ? "#2d2d50" : "#BFDBFE",
-      }}
-    >
-      <Feather name={config.icon} size={9} color={config.color} />
-      <Text style={{ color: config.color, fontSize: 10, fontWeight: "600" }}>
-        {displayType}
-      </Text>
-    </View>
-  );
-}
-
-function isoNowLocalDate() {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
-function isoNowLocalTime() {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-export default function VisitorsScreen() {
-  const insets = useSafeAreaInsets();
-  const theme = useColorScheme() ?? "light";
+  const isDark = theme === "dark";
   const bg = useThemeColor({}, "background");
   const text = useThemeColor({}, "text");
-  const icon = useThemeColor({}, "icon");
   const tint = useThemeColor({}, "tint");
-  const muted = useThemeColor({}, "icon");
-  const card = theme === "dark" ? "#111111" : "#ffffff";
-  const border = theme === "dark" ? "#262626" : "#E5E7EB";
+  const insets = useSafeAreaInsets();
+  const muted = isDark ? "#94A3B8" : "#64748B";
+  const borderCol = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)";
+  const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
+  const fieldBg = isDark ? "#111111" : "#F8FAFC";
 
-  // Screen dimensions
-  const [screenWidth, setScreenWidth] = useState(
-    Dimensions.get("window").width,
-  );
-  const [screenHeight, setScreenHeight] = useState(
-    Dimensions.get("window").height,
-  );
-
-  useEffect(() => {
-    const subscription = Dimensions.addEventListener("change", ({ window }) => {
-      setScreenWidth(window.width);
-      setScreenHeight(window.height);
-    });
-    return () => subscription?.remove();
-  }, []);
-
-  // Responsive sizes
-  const isSmallScreen = screenWidth < 375;
-  const headerIconSize = isSmallScreen ? 16 : 18;
-  const headerFontSize = isSmallScreen ? 18 : 20;
-  const inputFontSize = isSmallScreen ? 14 : 16;
-  const inputPaddingH = isSmallScreen ? 12 : 16;
-  const inputPaddingV = isSmallScreen ? 10 : 14;
-  const cardPadding = isSmallScreen ? 12 : 16;
-  const containerPadding = isSmallScreen ? 12 : 16;
-
-  // Backend
-  const backendUrl = config.backendUrl;
-
-  // Auth
-  const [user, setUserState] = useState<any>(null);
-  const [token, setTokenState] = useState<string | null>(null);
-  useEffect(() => {
-    (async () => {
-      try {
-        const [t, u] = await Promise.all([getToken(), getUser()]);
-        setTokenState(t);
-        setUserState(u || { id: "u1", name: "Resident", communityId: "c1" });
-      } catch {
-        setUserState({ id: "u1", name: "Resident", communityId: "c1" });
-      }
-    })();
-  }, []);
-
-  // New visitor form
+  const [user, setUserState] = useState(null);
+  const [token, setTokenState] = useState(null);
+  const [visitors, setVisitors] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showNew, setShowNew] = useState(false);
+  const [from, setFrom] = useState(nowDate());
+  const [to, setTo] = useState(nowDate());
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [type, setType] = useState("GUEST");
-  const [expectedDate, setExpectedDate] = useState(isoNowLocalDate());
-  const [expectedTime, setExpectedTime] = useState(isoNowLocalTime());
-  const [showExpectedDatePicker, setShowExpectedDatePicker] = useState(false);
-  const [showExpectedTimePicker, setShowExpectedTimePicker] = useState(false);
+  const [expectedDate, setExpectedDate] = useState(nowDate());
+  const [expectedTime, setExpectedTime] = useState(nowTime());
   const [vehicle, setVehicle] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [showFromPicker, setShowFromPicker] = useState(false);
+  const [showToPicker, setShowToPicker] = useState(false);
+  const { toast, showError, showSuccess, hideToast } = useToast();
+  const searchParams = useLocalSearchParams();
 
-  // Visitor type picker modal
-  const [visitorTypePickerOpen, setVisitorTypePickerOpen] = useState(false);
-  const [preAuthorizeExpanded, setPreAuthorizeExpanded] = useState(false);
-
-  // Toast
-  const [toastVisible, setToastVisible] = useState(false);
-  const [toastMessage, setToastMessage] = useState("");
-  const [toastType, setToastType] = useState<"error" | "success">("error");
-
-  const showToast = useCallback(
-    (message: string, type: "error" | "success" = "error") => {
-      setToastMessage(message);
-      setToastType(type);
-      setToastVisible(true);
-    },
-    [],
-  );
-
-  const hideToast = useCallback(() => {
-    setToastVisible(false);
+  useEffect(() => {
+    (async () => { const [t, u] = await Promise.all([getToken(), getUser()]); setTokenState(t); setUserState(u); })();
   }, []);
 
-  // Handle route params for visitor type pre-selection
-  const searchParams = useLocalSearchParams();
-  useEffect(() => {
-    if (searchParams.visitorType) {
-      setType(searchParams.visitorType as string);
-      setPreAuthorizeExpanded(true);
-    }
-  }, [searchParams.visitorType]);
+  useEffect(() => { if (searchParams.visitorType) { setType(searchParams.visitorType); setShowNew(true); } }, [searchParams.visitorType]);
 
-  const authHeaders = useMemo(
-    () => (token ? { Authorization: `Bearer ${token}` } : undefined),
-    [token],
-  );
+  const authHeaders = useMemo(() => token ? { Authorization: `Bearer ${token}` } : {}, [token]);
 
-  const preAuthorize = useCallback(async () => {
-    if (!name.trim()) {
-      showToast("Visitor name is required", "error");
-      return;
-    }
-    if (type === "GUEST" && !email.trim()) {
-      showToast("Email is required for guest visitors", "error");
-      return;
-    }
-
-    if (type === "GUEST" && email.trim()) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email.trim())) {
-        showToast("Please enter a valid email address", "error");
-        return;
-      }
-    }
-    if (!expectedDate || !expectedTime) {
-      showToast("Expected date and time are required", "error");
-      return;
-    }
-    if (!user?.communityId || !user?.id) {
-      showToast("User information missing. Please log in again", "error");
-      return;
-    }
-
+  const load = useCallback(async () => {
+    if (!user?.id || !user?.communityId) return;
+    setLoading(true);
     try {
-      setSubmitting(true);
-      const [year, month, day] = expectedDate.split("-").map(Number);
-      const [hours, minutes] = expectedTime.split(":").map(Number);
-      const expectedAt = new Date(
-        year,
-        month - 1,
-        day,
-        hours,
-        minutes,
-        0,
-      ).toISOString();
+      const [fy, fm, fd] = from.split("-").map(Number);
+      const [ty, tm, td] = to.split("-").map(Number);
+      const params = new URLSearchParams({
+        communityId: user.communityId, userId: user.id,
+        from: new Date(fy, fm-1, fd, 0, 0, 0).toISOString(),
+        to: new Date(ty, tm-1, td, 23, 59, 59).toISOString(),
+      });
+      const res = await axios.get(`${config.backendUrl}/resident/visitors?${params}`, { headers: authHeaders });
+      setVisitors(Array.isArray(res.data) ? res.data : []);
+    } catch { showError("Failed to load visitors"); }
+    finally { setLoading(false); }
+  }, [user, authHeaders, from, to]);
 
-      const requestData = {
-        name: name.trim(),
-        contact: email.trim() || null,
-        visitorType: type || "GUEST",
-        visitDate: expectedAt,
-        vehicleNo: vehicle?.trim() || null,
-        communityId: user.communityId,
-        userId: user.id,
-      };
+  useEffect(() => { if (user) load(); }, [user]);
 
-      const cleanedRequestData = Object.fromEntries(
-        Object.entries(requestData).filter(
-          ([_, value]) => value !== null && value !== "",
-        ),
-      );
+  const createVisitor = async () => {
+    if (!name.trim()) { showError("Visitor name is required"); return; }
+    if (type === "GUEST" && email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { showError("Invalid email address"); return; }
+    setSubmitting(true);
+    try {
+      const [yr, mo, dy] = expectedDate.split("-").map(Number);
+      const [hr, mn] = expectedTime.split(":").map(Number);
+      await axios.post(`${config.backendUrl}/resident/visitor-creation`, {
+        name: name.trim(), contact: email.trim() || null, visitorType: type,
+        visitDate: new Date(yr, mo-1, dy, hr, mn, 0).toISOString(),
+        vehicleNo: vehicle.trim() || null, communityId: user.communityId, userId: user.id,
+      }, { headers: authHeaders });
+      showSuccess("Visitor pre-authorized!");
+      setName(""); setEmail(""); setType("GUEST"); setVehicle("");
+      setExpectedDate(nowDate()); setExpectedTime(nowTime());
+      setShowNew(false);
+      load();
+    } catch (e) { showError(e?.response?.data?.error || "Failed to create visitor pass"); }
+    finally { setSubmitting(false); }
+  };
 
-      if (!cleanedRequestData.contact && type === "GUEST") {
-        cleanedRequestData.contact = null;
-      }
-
-      const response = await axios.post(
-        `${backendUrl}/resident/visitor-creation`,
-        cleanedRequestData,
-        {
-          headers: {
-            "Content-Type": "application/json",
-            ...authHeaders,
-          },
-        },
-      );
-
-      setName("");
-      setEmail("");
-      setType("GUEST");
-      setExpectedDate(isoNowLocalDate());
-      setExpectedTime(isoNowLocalTime());
-      setVehicle("");
-      showToast("Pre-authorization submitted successfully!", "success");
-    } catch (error: any) {
-      let errorMessage = "Error creating visitor. Please try again.";
-
-      if (error.response?.data) {
-        if (typeof error.response.data === "string") {
-          errorMessage = error.response.data;
-        } else if (error.response.data.error) {
-          errorMessage = error.response.data.error;
-        } else if (error.response.data.message) {
-          errorMessage = error.response.data.message;
-        } else if (error.response.data.details) {
-          errorMessage = error.response.data.details;
-        } else {
-          errorMessage = `Server error: ${JSON.stringify(error.response.data)}`;
-        }
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-
-      showToast(errorMessage, "error");
-    } finally {
-      setSubmitting(false);
-    }
-  }, [
-    backendUrl,
-    authHeaders,
-    user?.communityId,
-    user?.id,
-    name,
-    email,
-    type,
-    expectedDate,
-    expectedTime,
-    vehicle,
-    showToast,
-  ]);
+  const fmt = (d) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  const fmtShort = (s) => new Date(s + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: bg }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={insets.top}
-    >
-      <View style={{ flex: 1, backgroundColor: bg }}>
-        {/* Fixed Header */}
-        <View
-          style={[
-            styles.headerContainer,
-            {
-              paddingTop: Math.max(insets.top, 16),
-              backgroundColor: bg,
-              borderBottomColor: border,
-            },
-          ]}
-        >
-          <View style={styles.header}>
-            <View style={styles.headerLeft}>
-              <TouchableOpacity
-                onPress={() => router.back()}
-                style={styles.backButton}
-              >
-                <Feather name="arrow-left" size={24} color={tint} />
-              </TouchableOpacity>
-              <View>
-                <Text style={[styles.title, { color: text }]}>Visitors</Text>
-                <Text style={[styles.subtitle, { color: muted }]}>
-                  Manage visitor access
-                </Text>
-              </View>
-            </View>
+    <View style={{ flex: 1, backgroundColor: bg }}>
+      <View style={{ paddingTop: Math.max(insets.top, 16), paddingBottom: 14, paddingHorizontal: 20, backgroundColor: bg, borderBottomWidth: 1, borderBottomColor: borderCol }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <Pressable onPress={() => router.back()} style={{ width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: borderCol, alignItems: "center", justifyContent: "center" }}>
+            <Feather name="arrow-left" size={18} color={text} />
+          </Pressable>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: text }}>Visitors</Text>
+            <Text style={{ fontSize: 12, color: muted }}>{visitors.length} record{visitors.length !== 1 ? "s" : ""}</Text>
+          </View>
+          <Pressable onPress={() => setShowNew(true)} style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: tint }}>
+            <Feather name="user-plus" size={14} color="#fff" />
+            <Text style={{ fontSize: 13, fontWeight: "600", color: "#fff" }}>Invite</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      <ScrollView contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: insets.bottom + 24 }} showsVerticalScrollIndicator={false}>
+        {/* Date filter */}
+        <View style={{ backgroundColor: cardBg, borderRadius: 14, borderWidth: 1, borderColor: borderCol, padding: 14, gap: 10 }}>
+          <Text style={{ fontSize: 11, color: muted, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5 }}>Date Range</Text>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <Pressable onPress={() => setShowFromPicker(true)} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: fieldBg, borderRadius: 10, borderWidth: 1, borderColor: borderCol, padding: 10 }}>
+              <Feather name="calendar" size={13} color={muted} /><Text style={{ fontSize: 13, color: text }}>{fmtShort(from)}</Text>
+            </Pressable>
+            <Text style={{ alignSelf: "center", color: muted }}>—</Text>
+            <Pressable onPress={() => setShowToPicker(true)} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: fieldBg, borderRadius: 10, borderWidth: 1, borderColor: borderCol, padding: 10 }}>
+              <Feather name="calendar" size={13} color={muted} /><Text style={{ fontSize: 13, color: text }}>{fmtShort(to)}</Text>
+            </Pressable>
+            <Pressable onPress={load} style={{ paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, backgroundColor: tint, alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ fontSize: 13, fontWeight: "600", color: "#fff" }}>Go</Text>
+            </Pressable>
           </View>
         </View>
 
-        <Toast
-          visible={toastVisible}
-          message={toastMessage}
-          type={toastType}
-          onHide={hideToast}
-        />
-
-        <ScrollView
-          contentContainerStyle={{
-            padding: containerPadding,
-            gap: isSmallScreen ? 14 : 18,
-            paddingBottom: insets.bottom + 20,
-            paddingTop: 8,
-          }}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Pre-Authorize Guest */}
-          <View
-            style={[
-              styles.card,
-              {
-                backgroundColor: card,
-                borderColor: border,
-                padding: cardPadding,
-              },
-            ]}
-          >
-            <TouchableOpacity
-              onPress={() => setPreAuthorizeExpanded(!preAuthorizeExpanded)}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: preAuthorizeExpanded ? 12 : 0,
-              }}
-            >
-              <Text
-                style={[
-                  styles.cardTitle,
-                  { color: text, fontSize: isSmallScreen ? 16 : 18 },
-                ]}
-              >
-                Pre-Authorize Guest
-              </Text>
-              <Feather
-                name={preAuthorizeExpanded ? "chevron-up" : "chevron-down"}
-                size={24}
-                color={tint}
-              />
-            </TouchableOpacity>
-            {preAuthorizeExpanded && (
-              <View style={{ gap: isSmallScreen ? 8 : 10 }}>
-                <TextInput
-                  placeholder="Visitor Name (e.g., John Doe)"
-                  placeholderTextColor={icon as any}
-                  value={name}
-                  onChangeText={setName}
-                  style={[
-                    styles.input,
-                    {
-                      color: text,
-                      borderColor: border,
-                      backgroundColor: theme === "dark" ? "#0B0B0B" : "#F9FAFB",
-                      minHeight: isSmallScreen ? 44 : 48,
-                      fontSize: inputFontSize,
-                      paddingHorizontal: inputPaddingH,
-                      paddingVertical: inputPaddingV,
-                    },
-                  ]}
-                />
-
-                <View style={styles.inputWithIcon}>
-                  <View
-                    style={[
-                      styles.input,
-                      {
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 8,
-                        color: text,
-                        borderColor: border,
-                        backgroundColor:
-                          theme === "dark" ? "#0B0B0B" : "#F9FAFB",
-                        minHeight: isSmallScreen ? 44 : 48,
-                        paddingHorizontal: inputPaddingH,
-                        paddingVertical: inputPaddingV,
-                      },
-                    ]}
-                  >
-                    <Feather
-                      name="mail"
-                      size={isSmallScreen ? 14 : 16}
-                      color={icon as any}
-                    />
-                    <TextInput
-                      placeholder={
-                        type === "GUEST"
-                          ? "visitor@example.com (required)"
-                          : "visitor@example.com (optional)"
-                      }
-                      placeholderTextColor={icon as any}
-                      value={email}
-                      onChangeText={setEmail}
-                      keyboardType="email-address"
-                      style={{
-                        flex: 1,
-                        color: text,
-                        fontSize: inputFontSize,
-                      }}
-                    />
-                  </View>
-                </View>
-
-                {/* Visitor Type Selector */}
-                <View>
-                  <Text
-                    style={[
-                      styles.label,
-                      {
-                        color: text,
-                        marginBottom: 8,
-                        fontSize: isSmallScreen ? 13 : 14,
-                      },
-                    ]}
-                  >
-                    Visitor Type
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => setVisitorTypePickerOpen(true)}
-                    style={[
-                      styles.input,
-                      {
-                        borderColor: border,
-                        backgroundColor:
-                          theme === "dark" ? "#0B0B0B" : "#F9FAFB",
-                        flexDirection: "row",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        minHeight: isSmallScreen ? 44 : 48,
-                        paddingHorizontal: inputPaddingH,
-                        paddingVertical: inputPaddingV,
-                      },
-                    ]}
-                  >
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 10,
-                        flex: 1,
-                      }}
-                    >
-                      <Feather
-                        name={
-                          type === "GUEST"
-                            ? "user"
-                            : type === "DELIVERY"
-                              ? "package"
-                              : type === "CAB_AUTO"
-                                ? "truck"
-                                : "user"
-                        }
-                        size={isSmallScreen ? 14 : 16}
-                        color={icon as any}
-                      />
-                      <Text
-                        style={{
-                          color: text,
-                          fontSize: inputFontSize,
-                          flex: 1,
-                        }}
-                      >
-                        {VISITOR_TYPES.find((t) => t.value === type)?.label ||
-                          "Guest"}
-                      </Text>
-                    </View>
-                    <Feather
-                      name="chevron-down"
-                      size={isSmallScreen ? 14 : 16}
-                      color={icon as any}
-                    />
-                  </TouchableOpacity>
-                </View>
-
-                {/* Date & Time */}
-                <View>
-                  <Text
-                    style={[
-                      styles.label,
-                      {
-                        color: text,
-                        marginBottom: 8,
-                        fontSize: isSmallScreen ? 13 : 14,
-                      },
-                    ]}
-                  >
-                    Expected Date & Time
-                  </Text>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      gap: isSmallScreen ? 8 : 10,
-                      marginTop: 6,
-                    }}
-                  >
-                    <TouchableOpacity
-                      onPress={() => setShowExpectedDatePicker(true)}
-                      style={[
-                        styles.input,
-                        {
-                          flex: 1,
-                          flexDirection: "row",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          borderColor: border,
-                          backgroundColor:
-                            theme === "dark" ? "#0B0B0B" : "#F9FAFB",
-                          minHeight: isSmallScreen ? 44 : 48,
-                          paddingHorizontal: inputPaddingH,
-                          paddingVertical: inputPaddingV,
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={{
-                          color: text,
-                          fontSize: isSmallScreen ? 13 : 16,
-                        }}
-                        numberOfLines={1}
-                      >
-                        {new Date(expectedDate).toLocaleDateString()}
-                      </Text>
-                      <Feather
-                        name="calendar"
-                        size={isSmallScreen ? 16 : 18}
-                        color={icon as any}
-                      />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => setShowExpectedTimePicker(true)}
-                      style={[
-                        styles.input,
-                        {
-                          flex: 1,
-                          flexDirection: "row",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          borderColor: border,
-                          backgroundColor:
-                            theme === "dark" ? "#0B0B0B" : "#F9FAFB",
-                          minHeight: isSmallScreen ? 44 : 48,
-                          paddingHorizontal: inputPaddingH,
-                          paddingVertical: inputPaddingV,
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={{
-                          color: text,
-                          fontSize: isSmallScreen ? 13 : 16,
-                        }}
-                      >
-                        {expectedTime}
-                      </Text>
-                      <Feather
-                        name="clock"
-                        size={isSmallScreen ? 16 : 18}
-                        color={icon as any}
-                      />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                <View style={styles.inputWithIcon}>
-                  <View
-                    style={[
-                      styles.input,
-                      {
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 8,
-                        color: text,
-                        borderColor: border,
-                        backgroundColor:
-                          theme === "dark" ? "#0B0B0B" : "#F9FAFB",
-                        minHeight: isSmallScreen ? 44 : 48,
-                        paddingHorizontal: inputPaddingH,
-                        paddingVertical: inputPaddingV,
-                      },
-                    ]}
-                  >
-                    <Feather
-                      name="truck"
-                      size={isSmallScreen ? 14 : 16}
-                      color={icon as any}
-                    />
-                    <TextInput
-                      placeholder="Vehicle (optional, e.g., KA01 AB 1234)"
-                      placeholderTextColor={icon as any}
-                      value={vehicle}
-                      onChangeText={setVehicle}
-                      style={{
-                        flex: 1,
-                        color: text,
-                        fontSize: inputFontSize,
-                      }}
-                    />
-                  </View>
-                </View>
-
-                <TouchableOpacity
-                  onPress={preAuthorize}
-                  disabled={submitting}
-                  style={[
-                    styles.btn,
-                    styles.btnPrimary,
-                    {
-                      opacity: submitting ? 0.6 : 1,
-                      minHeight: isSmallScreen ? 46 : 52,
-                      justifyContent: "center",
-                    },
-                  ]}
-                >
-                  <Feather
-                    name="check-circle"
-                    size={isSmallScreen ? 16 : 18}
-                    color="#fff"
-                  />
-                  <Text
-                    style={{
-                      color: "#fff",
-                      fontWeight: "700",
-                      fontSize: isSmallScreen ? 14 : 16,
-                    }}
-                  >
-                    {submitting ? "Submitting..." : "Submit Request"}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
+        {loading ? (
+          <View style={{ alignItems: "center", paddingVertical: 40 }}><ActivityIndicator size="large" color={tint} /></View>
+        ) : visitors.length === 0 ? (
+          <View style={{ alignItems: "center", paddingVertical: 40, gap: 8 }}>
+            <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: "#06B6D415", alignItems: "center", justifyContent: "center" }}>
+              <Feather name="users" size={24} color="#06B6D4" />
+            </View>
+            <Text style={{ fontSize: 16, fontWeight: "600", color: text }}>No Visitors</Text>
+            <Text style={{ fontSize: 13, color: muted, textAlign: "center" }}>No visitor records for this period.</Text>
           </View>
-
-          {/* View All Passes Card */}
-          <TouchableOpacity
-            onPress={() => router.push("/visitors/passes")}
-            activeOpacity={0.7}
-          >
-            <View
-              style={[
-                styles.card,
-                {
-                  backgroundColor: card,
-                  borderColor: border,
-                  padding: cardPadding,
-                },
-              ]}
-            >
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={[
-                      styles.cardTitle,
-                      { color: text, fontSize: isSmallScreen ? 16 : 18 },
-                    ]}
-                  >
-                    My Passes
-                  </Text>
-                  <Text
-                    style={{
-                      color: icon as any,
-                      fontSize: isSmallScreen ? 12 : 13,
-                      marginTop: 4,
-                    }}
-                  >
-                    View past visitor records
-                  </Text>
+        ) : visitors.map((v) => {
+          const key = (v.status || "pending").toLowerCase();
+          const sc = STATUS_CONF[key] || STATUS_CONF.pending;
+          const typeLabel = TYPE_LABELS[v.visitorType] || v.visitorType || "Guest";
+          const typeColors = { Guest: "#3B82F6", Delivery: "#F59E0B", "Cab/Auto": "#10B981" };
+          const tc = typeColors[typeLabel] || tint;
+          return (
+            <View key={v.id} style={{ backgroundColor: cardBg, borderRadius: 14, borderWidth: 1, borderColor: borderCol, padding: 14 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: tc + "1A", alignItems: "center", justifyContent: "center" }}>
+                  <Feather name={typeLabel === "Delivery" ? "package" : typeLabel === "Cab/Auto" ? "truck" : "user"} size={18} color={tc} />
                 </View>
-                <Feather
-                  name="arrow-right"
-                  size={isSmallScreen ? 20 : 24}
-                  color={tint}
-                />
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                    <Text style={{ fontSize: 14, fontWeight: "600", color: text }}>{v.name || v.visitorName || "Visitor"}</Text>
+                    <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, backgroundColor: sc.color + "20" }}>
+                      <Text style={{ fontSize: 10, fontWeight: "700", color: sc.color }}>{sc.label}</Text>
+                    </View>
+                  </View>
+                  <Text style={{ fontSize: 12, color: muted, marginTop: 2 }}>
+                    {typeLabel}{v.phone ? ` · ${v.phone}` : ""}{v.contact ? ` · ${v.contact}` : ""}
+                  </Text>
+                  {(v.expectedAt || v.visitDate) && <Text style={{ fontSize: 11, color: muted, marginTop: 1 }}>{fmt(v.expectedAt || v.visitDate)}</Text>}
+                </View>
               </View>
             </View>
-          </TouchableOpacity>
-        </ScrollView>
+          );
+        })}
+      </ScrollView>
 
-        {/* Expected Date/Time Pickers */}
-        {showExpectedDatePicker && (
-          <DateTimePicker
-            value={new Date(expectedDate)}
-            mode="date"
-            minimumDate={new Date()}
-            display={Platform.OS === "ios" ? "spinner" : "default"}
-            onChange={(event, selectedDate) => {
-              setShowExpectedDatePicker(false);
-              if (selectedDate) {
-                const pad = (n: number) => String(n).padStart(2, "0");
-                const formattedDate = `${selectedDate.getFullYear()}-${pad(selectedDate.getMonth() + 1)}-${pad(selectedDate.getDate())}`;
-                setExpectedDate(formattedDate);
-              }
-            }}
-          />
-        )}
+      {/* New visitor modal */}
+      <Modal visible={showNew} animationType="slide" transparent onRequestClose={() => setShowNew(false)}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}>
+          <ScrollView style={{ backgroundColor: cardBg, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: "92%", paddingHorizontal: 20, paddingTop: 20 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: text }}>Pre-Authorize Visitor</Text>
+              <Pressable onPress={() => setShowNew(false)} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: borderCol, alignItems: "center", justifyContent: "center" }}>
+                <Feather name="x" size={16} color={text} />
+              </Pressable>
+            </View>
 
-        {showExpectedTimePicker && (
-          <DateTimePicker
-            value={new Date(`${expectedDate}T${expectedTime}:00`)}
-            mode="time"
-            minimumDate={
-              expectedDate === isoNowLocalDate() ? new Date() : undefined
-            }
-            display={Platform.OS === "ios" ? "spinner" : "default"}
-            onChange={(event, selectedTime) => {
-              setShowExpectedTimePicker(false);
-              if (selectedTime) {
-                const hours = selectedTime
-                  .getHours()
-                  .toString()
-                  .padStart(2, "0");
-                const minutes = selectedTime
-                  .getMinutes()
-                  .toString()
-                  .padStart(2, "0");
-                setExpectedTime(`${hours}:${minutes}`);
-              }
-            }}
-          />
-        )}
-
-        {/* Visitor Type Picker Modal */}
-        <Modal visible={visitorTypePickerOpen} animationType="fade" transparent>
-          <View style={styles.modalBackdrop}>
-            <View
-              style={[
-                styles.modalCard,
-                {
-                  backgroundColor: card,
-                  borderColor: border,
-                  width: screenWidth > 500 ? 400 : screenWidth - 40,
-                  maxWidth: "90%",
-                  padding: isSmallScreen ? 16 : 20,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.cardTitle,
-                  {
-                    color: text,
-                    marginBottom: 16,
-                    fontSize: isSmallScreen ? 16 : 18,
-                  },
-                ]}
-              >
-                Select Visitor Type
-              </Text>
-              <View style={{ gap: isSmallScreen ? 10 : 12 }}>
-                {VISITOR_TYPES.map((option) => (
-                  <TouchableOpacity
-                    key={option.value}
-                    onPress={() => {
-                      setType(option.value);
-                      setVisitorTypePickerOpen(false);
-                    }}
-                    style={[
-                      styles.visitorTypeOption,
-                      {
-                        borderColor: border,
-                        backgroundColor:
-                          type === option.value
-                            ? theme === "dark"
-                              ? "#1a1a2e"
-                              : "#f0f4ff"
-                            : "transparent",
-                        paddingVertical: isSmallScreen ? 12 : 16,
-                        paddingHorizontal: isSmallScreen ? 10 : 12,
-                        minHeight: isSmallScreen ? 50 : 56,
-                      },
-                    ]}
-                  >
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 12,
-                      }}
-                    >
-                      <Feather
-                        name={
-                          option.value === "GUEST"
-                            ? "user"
-                            : option.value === "DELIVERY"
-                              ? "package"
-                              : option.value === "CAB_AUTO"
-                                ? "truck"
-                                : "user"
-                        }
-                        size={isSmallScreen ? 16 : 18}
-                        color={
-                          type === option.value
-                            ? theme === "dark"
-                              ? "#60a5fa"
-                              : "#2563eb"
-                            : (icon as any)
-                        }
-                      />
-                      <Text
-                        style={{
-                          color:
-                            type === option.value
-                              ? theme === "dark"
-                                ? "#60a5fa"
-                                : "#2563eb"
-                              : text,
-                          fontWeight: type === option.value ? "700" : "400",
-                          fontSize: isSmallScreen ? 14 : 16,
-                        }}
-                      >
-                        {option.label}
-                      </Text>
-                    </View>
-                    {type === option.value && (
-                      <Feather
-                        name="check"
-                        size={isSmallScreen ? 16 : 18}
-                        color={theme === "dark" ? "#60a5fa" : "#2563eb"}
-                      />
-                    )}
-                  </TouchableOpacity>
+            {/* Visitor type */}
+            <View style={{ marginBottom: 14 }}>
+              <Text style={{ fontSize: 12, color: muted, fontWeight: "600", marginBottom: 8 }}>Visitor Type</Text>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                {VISITOR_TYPES.map(t => (
+                  <Pressable key={t} onPress={() => setType(t)} style={{ flex: 1, paddingVertical: 9, borderRadius: 10, backgroundColor: type === t ? tint : fieldBg, borderWidth: 1, borderColor: type === t ? tint : borderCol, alignItems: "center" }}>
+                    <Text style={{ fontSize: 12, fontWeight: "600", color: type === t ? "#fff" : muted }}>{TYPE_LABELS[t]}</Text>
+                  </Pressable>
                 ))}
               </View>
-              <TouchableOpacity
-                onPress={() => setVisitorTypePickerOpen(false)}
-                style={[
-                  styles.btn,
-                  styles.btnOutline,
-                  {
-                    marginTop: 16,
-                    borderColor: border,
-                    justifyContent: "center",
-                    minHeight: isSmallScreen ? 44 : 48,
-                  },
-                ]}
-              >
-                <Text
-                  style={{
-                    color: icon as any,
-                    fontWeight: "700",
-                    fontSize: isSmallScreen ? 14 : 16,
-                  }}
-                >
-                  Close
-                </Text>
-              </TouchableOpacity>
             </View>
-          </View>
-        </Modal>
-      </View>
-    </KeyboardAvoidingView>
+
+            {[
+              { label: "Name *", value: name, set: setName, placeholder: "Visitor name" },
+              { label: type === "GUEST" ? "Email" : "Contact", value: email, set: setEmail, placeholder: type === "GUEST" ? "visitor@email.com" : "Phone number", keyboardType: type === "GUEST" ? "email-address" : "phone-pad" },
+              { label: "Vehicle No.", value: vehicle, set: setVehicle, placeholder: "Optional" },
+            ].map(f => (
+              <View key={f.label} style={{ marginBottom: 12 }}>
+                <Text style={{ fontSize: 12, color: muted, fontWeight: "600", marginBottom: 5 }}>{f.label}</Text>
+                <TextInput value={f.value} onChangeText={f.set} placeholder={f.placeholder} placeholderTextColor={muted} keyboardType={f.keyboardType || "default"}
+                  style={{ backgroundColor: fieldBg, borderRadius: 10, borderWidth: 1, borderColor: borderCol, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: text }} />
+              </View>
+            ))}
+
+            {/* Date / Time */}
+            <View style={{ flexDirection: "row", gap: 10, marginBottom: 14 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 12, color: muted, fontWeight: "600", marginBottom: 5 }}>Expected Date</Text>
+                <Pressable onPress={() => setShowDatePicker(true)} style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: fieldBg, borderRadius: 10, borderWidth: 1, borderColor: borderCol, padding: 10 }}>
+                  <Feather name="calendar" size={13} color={muted} /><Text style={{ fontSize: 13, color: text }}>{fmtShort(expectedDate)}</Text>
+                </Pressable>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 12, color: muted, fontWeight: "600", marginBottom: 5 }}>Time</Text>
+                <Pressable onPress={() => setShowTimePicker(true)} style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: fieldBg, borderRadius: 10, borderWidth: 1, borderColor: borderCol, padding: 10 }}>
+                  <Feather name="clock" size={13} color={muted} /><Text style={{ fontSize: 13, color: text }}>{expectedTime}</Text>
+                </Pressable>
+              </View>
+            </View>
+
+            <Pressable onPress={createVisitor} disabled={submitting}
+              style={({ pressed }) => ({ backgroundColor: pressed || submitting ? tint + "CC" : tint, borderRadius: 12, padding: 14, alignItems: "center", marginBottom: insets.bottom + 20 })}>
+              {submitting ? <ActivityIndicator color="#fff" size="small" /> : <Text style={{ fontSize: 15, fontWeight: "700", color: "#fff" }}>Send Invite</Text>}
+            </Pressable>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {showFromPicker && <DateTimePicker value={new Date(from + "T00:00:00")} mode="date" onChange={(e, d) => { setShowFromPicker(false); if (e.type==="set" && d) setFrom(d.toISOString().split("T")[0]); }} />}
+      {showToPicker && <DateTimePicker value={new Date(to + "T00:00:00")} mode="date" onChange={(e, d) => { setShowToPicker(false); if (e.type==="set" && d) setTo(d.toISOString().split("T")[0]); }} />}
+      {showDatePicker && <DateTimePicker value={new Date(expectedDate + "T00:00:00")} mode="date" onChange={(e, d) => { setShowDatePicker(false); if (e.type==="set" && d) setExpectedDate(d.toISOString().split("T")[0]); }} />}
+      {showTimePicker && <DateTimePicker value={(() => { const [h,m] = expectedTime.split(":").map(Number); const d = new Date(); d.setHours(h, m, 0); return d; })()} mode="time" is24Hour onChange={(e, d) => { setShowTimePicker(false); if (e.type==="set" && d) { const h = String(d.getHours()).padStart(2,"0"); const m = String(d.getMinutes()).padStart(2,"0"); setExpectedTime(`${h}:${m}`); } }} />}
+      <Toast {...toast} onHide={hideToast} />
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  headerContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    flex: 1,
-  },
-  backButton: {
-    padding: 8,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "700",
-  },
-  subtitle: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  card: {
-    borderWidth: 1,
-    borderRadius: 16,
-    gap: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  cardTitle: {
-    fontWeight: "800",
-    marginBottom: 4,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 12,
-  },
-  inputWithIcon: {
-    // Container for inputs with icons
-  },
-  textarea: {
-    borderWidth: 1,
-    borderRadius: 12,
-    minHeight: 80,
-    textAlignVertical: "top",
-  },
-  label: {
-    fontWeight: "700",
-  },
-  typeButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  filterLabel: {
-    fontWeight: "600",
-    marginBottom: 4,
-  },
-  filterInput: {
-    borderWidth: 1,
-    borderRadius: 8,
-  },
-  btn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  btnPrimary: {
-    backgroundColor: "#2563EB",
-    shadowColor: "#2563EB",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  btnOutline: {
-    backgroundColor: "transparent",
-    borderWidth: 1,
-  },
-  visitorItem: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-    borderWidth: 1,
-    borderRadius: 16,
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 20,
-  },
-  modalCard: {
-    borderWidth: 1,
-    borderRadius: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  visitorTypeOption: {
-    borderBottomWidth: 1,
-    borderRadius: 8,
-    marginBottom: 4,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-});

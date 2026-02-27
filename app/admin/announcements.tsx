@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import React, { useEffect, useState } from "react";
 import {
   StyleSheet,
@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   ScrollView,
   RefreshControl,
-  Alert,
   Modal,
   TextInput,
 } from "react-native";
@@ -18,274 +17,112 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
-import { getToken, getCommunityId, getUser } from "@/lib/auth";
+import { getToken, getCommunityId } from "@/lib/auth";
 import { config } from "@/lib/config";
+import Toast from "@/components/Toast";
+import ConfirmModal from "@/components/ConfirmModal";
+import { useToast } from "@/hooks/useToast";
 
-interface Announcement {
-  id: string;
-  title: string;
-  content: string;
-  createdAt: string;
-}
-
-interface AnnouncementCardProps {
-  announcement: Announcement;
-  theme: string;
-  textColor: string;
-  muted: string;
-  onDelete: (id: string) => void;
-  tint: string;
-}
-
-interface CreateAnnouncementModalProps {
-  visible: boolean;
-  onClose: () => void;
-  onSubmit: (data: { title: string; content: string }) => void;
-  theme: string;
-  textColor: string;
-  tint: string;
-  error: string;
-  setError: (error: string) => void;
-}
-
-// Announcement Card Component
-function AnnouncementCard({
-  announcement,
-  theme,
-  textColor,
-  muted,
-  onDelete,
-  tint,
-}: AnnouncementCardProps) {
-  const handleDelete = () => {
-    Alert.alert(
-      "Delete Announcement",
-      "Are you sure you want to delete this announcement?",
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => onDelete(announcement.id),
-        },
-      ],
-    );
-  };
-
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
+// --- Announcement Card ---
+function AnnouncementCard({ announcement, theme, textColor, muted, onDelete, tint, borderCol }) {
+  const isDark = theme === "dark";
+  const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
+  const formatDate = (d) => new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
   return (
-    <View
-      style={[
-        styles.announcementCard,
-        {
-          backgroundColor: theme === "dark" ? "#1F1F1F" : "#ffffff",
-          borderColor:
-            theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)",
-        },
-      ]}
-    >
-      <View style={styles.announcementHeader}>
-        <View style={styles.announcementInfo}>
-          <Text style={[styles.announcementTitle, { color: textColor }]}>
-            {announcement.title}
-          </Text>
-          <View style={styles.announcementMeta}>
-            <Feather name="calendar" size={12} color={muted} />
-            <Text style={[styles.announcementDate, { color: muted }]}>
-              {formatDate(announcement.createdAt)}
-            </Text>
+    <View style={[styles.annCard, { backgroundColor: cardBg, borderColor: borderCol }]}>
+      <View style={styles.annCardHeader}>
+        <View style={[styles.annIconWrap, { backgroundColor: tint + "15" }]}>
+          <Feather name="bell" size={15} color={tint} />
+        </View>
+        <View style={styles.annHeaderInfo}>
+          <Text style={[styles.annTitle, { color: textColor }]} numberOfLines={1}>{announcement.title}</Text>
+          <View style={styles.annMetaRow}>
+            <Feather name="calendar" size={11} color={muted} />
+            <Text style={[styles.annDate, { color: muted }]}>{formatDate(announcement.createdAt)}</Text>
           </View>
         </View>
-        <TouchableOpacity
-          onPress={handleDelete}
-          style={[
-            styles.deleteButton,
-            {
-              borderColor: theme === "dark" ? "#fee2e2" : "#fee2e2",
-            },
-          ]}
-        >
-          <Feather name="trash-2" size={14} color="#ef4444" />
+        <TouchableOpacity style={[styles.delBtn, { borderColor: "#FEE2E2" }]} onPress={() => onDelete(announcement.id)}>
+          <Feather name="trash-2" size={14} color="#EF4444" />
         </TouchableOpacity>
       </View>
-      <Text style={[styles.announcementContent, { color: textColor }]}>
-        {announcement.content}
-      </Text>
+      <Text style={[styles.annContent, { color: muted }]} numberOfLines={3}>{announcement.content}</Text>
     </View>
   );
 }
 
-// Create Announcement Modal
-function CreateAnnouncementModal({
-  visible,
-  onClose,
-  onSubmit,
-  theme,
-  textColor,
-  tint,
-  error,
-  setError,
-  muted,
-}) {
+// --- Create Announcement Modal ---
+function CreateAnnouncementModal({ visible, onClose, onSubmit, theme, textColor, tint, muted, borderCol }) {
+  const isDark = theme === "dark";
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleSubmit = async () => {
-    if (!title.trim() || !content.trim()) {
-      setError("Title and content are required");
-      return;
-    }
-
+    if (!title.trim() || !content.trim()) { setError("Title and content are required"); return; }
     setLoading(true);
     try {
       await onSubmit({ title: title.trim(), content: content.trim() });
-      setTitle("");
-      setContent("");
-      onClose();
-    } catch (error) {
-      // Error handled in parent
-    } finally {
-      setLoading(false);
-    }
+      setTitle(""); setContent(""); setError(""); onClose();
+    } catch (e) { setError("Failed to create announcement"); }
+    finally { setLoading(false); }
   };
-
-  const handleClose = () => {
-    setTitle("");
-    setContent("");
-    setError("");
-    onClose();
-  };
+  const handleClose = () => { setTitle(""); setContent(""); setError(""); onClose(); };
+  const inputBg = isDark ? "#252525" : "#F8FAFC";
+  const inputBorder = isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)";
+  const sheetBg = isDark ? "#141414" : "#FFFFFF";
 
   return (
-    <Modal visible={visible} transparent animationType="fade">
+    <Modal visible={visible} transparent animationType="slide">
       <View style={styles.modalOverlay}>
-        <View
-          style={[
-            styles.modalContainer,
-            {
-              backgroundColor: theme === "dark" ? "#1F1F1F" : "#ffffff",
-            },
-          ]}
-        >
-          <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, { color: textColor }]}>
-              Create New Announcement
-            </Text>
+        <View style={[styles.sheet, { backgroundColor: sheetBg }]}>
+          <View style={styles.sheetHandle} />
+          <View style={[styles.sheetHeader, { borderBottomColor: borderCol }]}>
+            <View style={styles.sheetHeaderLeft}>
+              <View style={[styles.sheetIconWrap, { backgroundColor: tint + "15" }]}>
+                <Feather name="bell" size={18} color={tint} />
+              </View>
+              <Text style={[styles.sheetTitle, { color: textColor }]}>New Announcement</Text>
+            </View>
+            <TouchableOpacity style={[styles.sheetCloseBtn, { borderColor: borderCol }]} onPress={handleClose}>
+              <Feather name="x" size={18} color={textColor} />
+            </TouchableOpacity>
           </View>
-
-          <View style={styles.modalBody}>
-            {error && (
-              <View style={styles.errorContainer}>
-                <Text style={styles.errorText}>{error}</Text>
+          <ScrollView style={styles.sheetBody} showsVerticalScrollIndicator={false}>
+            {!!error && (
+              <View style={styles.errorBanner}>
+                <Feather name="alert-circle" size={14} color="#EF4444" />
+                <Text style={styles.errorBannerText}>{error}</Text>
               </View>
             )}
-
             <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: textColor }]}>
-                Title *
-              </Text>
+              <Text style={[styles.inputLabel, { color: muted }]}>TITLE</Text>
               <TextInput
-                style={[
-                  styles.textInput,
-                  {
-                    backgroundColor: theme === "dark" ? "#2A2A2A" : "#f9fafb",
-                    borderColor:
-                      theme === "dark"
-                        ? "rgba(255,255,255,0.1)"
-                        : "rgba(0,0,0,0.1)",
-                    color: textColor,
-                  },
-                ]}
-                value={title}
-                onChangeText={setTitle}
-                placeholder="Enter announcement title"
-                placeholderTextColor={theme === "dark" ? "#6b7280" : "#9ca3af"}
-                maxLength={200}
+                style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
+                value={title} onChangeText={setTitle}
+                placeholder="Announcement title" placeholderTextColor={muted} maxLength={200}
               />
             </View>
-
             <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: textColor }]}>
-                Content *
-              </Text>
+              <Text style={[styles.inputLabel, { color: muted }]}>CONTENT</Text>
               <TextInput
-                style={[
-                  styles.textArea,
-                  {
-                    backgroundColor: theme === "dark" ? "#2A2A2A" : "#f9fafb",
-                    borderColor:
-                      theme === "dark"
-                        ? "rgba(255,255,255,0.1)"
-                        : "rgba(0,0,0,0.1)",
-                    color: textColor,
-                  },
-                ]}
-                value={content}
-                onChangeText={setContent}
-                placeholder="Enter announcement content"
-                placeholderTextColor={theme === "dark" ? "#6b7280" : "#9ca3af"}
-                multiline
-                numberOfLines={6}
-                maxLength={1000}
+                style={[styles.textarea, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
+                value={content} onChangeText={setContent}
+                placeholder="Write your announcement..." placeholderTextColor={muted}
+                multiline numberOfLines={6} maxLength={1000}
               />
-              <Text style={[styles.charCount, { color: muted }]}>
-                {content.length}/1000 characters
-              </Text>
+              <Text style={[styles.charCount, { color: muted }]}>{content.length}/1000</Text>
             </View>
-          </View>
-
-          <View style={styles.modalFooter}>
-            <TouchableOpacity
-              onPress={handleClose}
-              style={[
-                styles.modalButton,
-                styles.cancelButton,
-                {
-                  borderColor:
-                    theme === "dark" ? "rgba(255,255,255,0.2)" : "#d1d5db",
-                },
-              ]}
-              disabled={loading}
-            >
-              <Text
-                style={[
-                  styles.cancelButtonText,
-                  { color: theme === "dark" ? "#9ca3af" : "#6b7280" },
-                ]}
-              >
-                Cancel
-              </Text>
+          </ScrollView>
+          <View style={[styles.sheetFooter, { borderTopColor: borderCol }]}>
+            <TouchableOpacity style={[styles.btnOutline, { borderColor: isDark ? "rgba(255,255,255,0.15)" : "#E2E8F0" }]} onPress={handleClose}>
+              <Text style={[styles.btnOutlineText, { color: muted }]}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={handleSubmit}
-              style={[
-                styles.modalButton,
-                styles.submitButton,
-                {
-                  backgroundColor: tint,
-                  opacity:
-                    loading || !title.trim() || !content.trim() ? 0.5 : 1,
-                },
-              ]}
-              disabled={loading || !title.trim() || !content.trim()}
+              style={[styles.btnPrimary, { backgroundColor: tint, flex: 1.5, opacity: loading || !title.trim() || !content.trim() ? 0.5 : 1 }]}
+              onPress={handleSubmit} disabled={loading || !title.trim() || !content.trim()}
             >
-              <Text style={[styles.submitButtonText, { color: "#ffffff" }]}>
-                {loading ? "Creating..." : "Create Announcement"}
-              </Text>
+              <Text style={styles.btnPrimaryText}>{loading ? "Creating..." : "Create Announcement"}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -294,526 +131,219 @@ function CreateAnnouncementModal({
   );
 }
 
+// --- Main Component ---
 export default function AdminAnnouncements() {
   const theme = useColorScheme() ?? "light";
+  const isDark = theme === "dark";
   const bg = useThemeColor({}, "background");
   const textColor = useThemeColor({}, "text");
   const tint = useThemeColor({}, "tint");
-  const iconColor = useThemeColor({}, "icon");
-  const muted = iconColor;
+  const muted = isDark ? "#94A3B8" : "#64748B";
+  const borderCol = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)";
+  const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
   const insets = useSafeAreaInsets();
 
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
+  const { toast, showError, showSuccess, hideToast } = useToast();
   const url = config.backendUrl;
 
-  useEffect(() => {
-    fetchAnnouncements();
-  }, []);
+  useEffect(() => { fetchAnnouncements(); }, []);
 
   const fetchAnnouncements = async () => {
     try {
       const token = await getToken();
       const communityId = await getCommunityId();
-
-      if (!communityId) {
-        Alert.alert(
-          "Error",
-          "Community information not found. Please login again.",
-        );
-        return;
-      }
-
+      if (!communityId) { showError("Community information not found."); return; }
       const res = await axios.get(`${url}/admin/announcements`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        params: { communityId: communityId },
+        headers: { Authorization: `Bearer ${token}` },
+        params: { communityId },
       });
       setAnnouncements(res.data.announcements || []);
-    } catch (error) {
-      console.error("Error fetching announcements:", error);
-      Alert.alert("Error", "Failed to load announcements.");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+    } catch (e) { showError("Failed to load announcements."); }
+    finally { setLoading(false); setRefreshing(false); }
   };
 
-  const handleRefresh = () => {
-    setRefreshing(true);
-    fetchAnnouncements();
+  const handleRefresh = () => { setRefreshing(true); fetchAnnouncements(); };
+
+  const handleCreate = async ({ title, content }) => {
+    const token = await getToken();
+    const communityId = await getCommunityId();
+    if (!communityId) throw new Error("No community");
+    const res = await axios.post(`${url}/admin/create-announcement`,
+      { title, content, communityId },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    setAnnouncements((prev) => [res.data.announcement, ...prev]);
+    showSuccess("Announcement created!");
   };
 
-  const handleCreateAnnouncement = async (announcementData) => {
+  const handleDelete = (id) => setDeleteConfirmId(id);
+
+  const confirmDelete = async () => {
+    const id = deleteConfirmId;
+    setDeleting(true);
     try {
       const token = await getToken();
       const communityId = await getCommunityId();
-
-      if (!communityId) {
-        Alert.alert(
-          "Error",
-          "Community information not found. Please login again.",
-        );
-        return;
-      }
-
-      const data = {
-        title: announcementData.title,
-        content: announcementData.content,
-        communityId: communityId,
-      };
-
-      const response = await axios.post(
-        `${url}/admin/create-announcement`,
-        data,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
-
-      // Add the new announcement to the list
-      setAnnouncements((prev) => [response.data.announcement, ...prev]);
-      setSuccess("Announcement created successfully!");
-
-      // Clear success message after 3 seconds
-      setTimeout(() => setSuccess(""), 3000);
-
-      fetchAnnouncements();
-    } catch (error) {
-      console.error("Error creating announcement:", error);
-      setError(error.response?.data?.error || "Failed to create announcement");
-    }
-  };
-
-  const handleDeleteAnnouncement = async (id) => {
-    try {
-      const token = await getToken();
-      const communityId = await getCommunityId();
-
       await axios.delete(`${url}/admin/announcements/${id}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        params: { communityId: communityId },
+        headers: { Authorization: `Bearer ${token}` },
+        params: { communityId },
       });
-
-      // Remove the announcement from the list
-      setAnnouncements((prev) => prev.filter((ann) => ann.id !== id));
-      setSuccess("Announcement deleted successfully!");
-
-      // Clear success message after 3 seconds
-      setTimeout(() => setSuccess(""), 3000);
-    } catch (error) {
-      console.error("Error deleting announcement:", error);
-      Alert.alert("Error", "Failed to delete announcement");
-    }
+      setAnnouncements((prev) => prev.filter((a) => a.id !== id));
+      showSuccess("Announcement deleted.");
+    } catch (e) { showError("Failed to delete announcement."); }
+    finally { setDeleting(false); setDeleteConfirmId(null); }
   };
 
   if (loading) {
     return (
-      <View style={[styles.container, { backgroundColor: bg }]}>
-        <View
-          style={[
-            styles.centerContent,
-            { paddingTop: Math.max(insets.top, 16) },
-          ]}
-        >
-          <Text style={[styles.loadingText, { color: textColor }]}>
-            Loading announcements...
-          </Text>
-        </View>
+      <View style={[styles.container, { backgroundColor: bg, alignItems: "center", justifyContent: "center" }]}>
+        <Feather name="bell" size={32} color={tint} style={{ opacity: 0.5, marginBottom: 12 }} />
+        <Text style={{ fontSize: 14, color: muted }}>Loading announcements...</Text>
       </View>
     );
   }
 
   return (
     <View style={[styles.container, { backgroundColor: bg }]}>
-      {/* Fixed Header */}
-      <View
-        style={[
-          styles.headerContainer,
-          {
-            paddingTop: Math.max(insets.top, 16),
-            backgroundColor: bg,
-            borderBottomColor:
-              theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)",
-          },
-        ]}
-      >
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={styles.backButton}
-            >
-              <Feather name="arrow-left" size={24} color={tint} />
-            </TouchableOpacity>
-            <View>
-              <Text style={[styles.title, { color: textColor }]}>
-                Announcements
-              </Text>
-              <Text style={[styles.subtitle, { color: muted }]}>
-                Manage community announcements
-              </Text>
-            </View>
-          </View>
-          <TouchableOpacity
-            onPress={() => setShowCreateModal(true)}
-            style={[styles.createButton, { backgroundColor: tint }]}
-          >
-            <Feather
-              name="plus"
-              size={16}
-              color={theme === "dark" ? "#11181C" : "#ffffff"}
-            />
-            <Text
-              style={[
-                styles.createButtonText,
-                { color: theme === "dark" ? "#11181C" : "#ffffff" },
-              ]}
-            >
-              Create
-            </Text>
+      <View style={[styles.headerBar, { paddingTop: Math.max(insets.top, 20), borderBottomColor: borderCol, backgroundColor: bg }]}>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity onPress={() => router.back()} style={[styles.backBtn, { borderColor: borderCol }]}>
+            <Feather name="arrow-left" size={18} color={textColor} />
           </TouchableOpacity>
+          <View>
+            <Text style={[styles.headerTitle, { color: textColor }]}>Announcements</Text>
+            <Text style={[styles.headerSub, { color: muted }]}>{announcements.length} announcement{announcements.length !== 1 ? "s" : ""}</Text>
+          </View>
         </View>
+        <TouchableOpacity style={[styles.headerBtn, { backgroundColor: tint }]} onPress={() => setShowCreateModal(true)}>
+          <Feather name="plus" size={16} color="#ffffff" />
+          <Text style={styles.headerBtnText}>New</Text>
+        </TouchableOpacity>
       </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-        }
-      >
+      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={tint} />}>
         <View style={styles.content}>
-          {/* Error/Success Messages */}
-          {error && (
-            <View style={styles.messageContainer}>
-              <Text style={styles.errorText}>{error}</Text>
+          <View style={[styles.summaryCard, { backgroundColor: cardBg, borderColor: borderCol }]}>
+            <View style={[styles.summaryIconWrap, { backgroundColor: tint + "15" }]}>
+              <Feather name="bell" size={20} color={tint} />
             </View>
-          )}
-
-          {success && (
-            <View style={[styles.messageContainer, styles.successMessage]}>
-              <Text style={styles.successText}>{success}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.summaryValue, { color: textColor }]}>{announcements.length}</Text>
+              <Text style={[styles.summaryLabel, { color: muted }]}>Total Announcements</Text>
             </View>
-          )}
-
-          {/* Stats */}
-          <View
-            style={[
-              styles.statsCard,
-              {
-                backgroundColor: theme === "dark" ? "#1F1F1F" : "#ffffff",
-                borderColor:
-                  theme === "dark"
-                    ? "rgba(255,255,255,0.08)"
-                    : "rgba(0,0,0,0.08)",
-              },
-            ]}
-          >
-            <Text style={[styles.statsTitle, { color: textColor }]}>
-              All Announcements ({announcements.length})
-            </Text>
+            <TouchableOpacity style={[styles.newBtnInline, { backgroundColor: tint + "15" }]} onPress={() => setShowCreateModal(true)}>
+              <Feather name="plus" size={14} color={tint} />
+              <Text style={[styles.newBtnInlineText, { color: tint }]}>Create</Text>
+            </TouchableOpacity>
           </View>
 
-          {/* Announcements List */}
+          <View style={styles.sectionRow}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Feather name="list" size={16} color={tint} />
+              <Text style={[styles.sectionTitle, { color: textColor }]}>All Announcements</Text>
+            </View>
+          </View>
+
           {announcements.length === 0 ? (
-            <View
-              style={[
-                styles.emptyState,
-                {
-                  backgroundColor: theme === "dark" ? "#1F1F1F" : "#ffffff",
-                  borderColor:
-                    theme === "dark"
-                      ? "rgba(255,255,255,0.08)"
-                      : "rgba(0,0,0,0.08)",
-                },
-              ]}
-            >
-              <Feather
-                name="message-square"
-                size={48}
-                color={muted}
-                style={{ opacity: 0.3 }}
-              />
-              <Text style={[styles.emptyTitle, { color: textColor }]}>
-                No announcements found
-              </Text>
-              <Text style={[styles.emptySubtitle, { color: muted }]}>
-                Create your first announcement to get started
-              </Text>
+            <View style={[styles.emptyCard, { backgroundColor: cardBg, borderColor: borderCol }]}>
+              <Feather name="bell-off" size={36} color={muted} style={{ opacity: 0.3 }} />
+              <Text style={[styles.emptyTitle, { color: textColor }]}>No announcements yet</Text>
+              <Text style={[styles.emptyDesc, { color: muted }]}>Create your first announcement to notify residents.</Text>
+              <TouchableOpacity style={[styles.emptyCreateBtn, { backgroundColor: tint }]} onPress={() => setShowCreateModal(true)}>
+                <Feather name="plus" size={14} color="#ffffff" />
+                <Text style={styles.emptyCreateBtnText}>Create Announcement</Text>
+              </TouchableOpacity>
             </View>
           ) : (
-            <View style={styles.announcementsList}>
-              {announcements.map((announcement) => (
-                <AnnouncementCard
-                  key={announcement.id}
-                  announcement={announcement}
-                  theme={theme}
-                  textColor={textColor}
-                  muted={muted}
-                  onDelete={handleDeleteAnnouncement}
-                  tint={tint}
-                />
+            <View style={{ gap: 10 }}>
+              {announcements.map((ann) => (
+                <AnnouncementCard key={ann.id} announcement={ann} theme={theme} textColor={textColor} muted={muted} tint={tint} borderCol={borderCol} onDelete={handleDelete} />
               ))}
             </View>
           )}
-
-          {/* Create Announcement Modal */}
-          <CreateAnnouncementModal
-            visible={showCreateModal}
-            onClose={() => setShowCreateModal(false)}
-            onSubmit={handleCreateAnnouncement}
-            theme={theme}
-            textColor={textColor}
-            tint={tint}
-            error={error}
-            setError={setError}
-            muted={muted}
-          />
         </View>
       </ScrollView>
+
+      <CreateAnnouncementModal
+        visible={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSubmit={handleCreate}
+        theme={theme} textColor={textColor} tint={tint} muted={muted} borderCol={borderCol}
+      />
+
+      <ConfirmModal
+        visible={!!deleteConfirmId}
+        title="Delete Announcement"
+        message="Are you sure you want to delete this announcement? This cannot be undone."
+        confirmLabel="Delete" confirmColor="#EF4444" icon="trash-2"
+        loading={deleting} onConfirm={confirmDelete} onCancel={() => setDeleteConfirmId(null)}
+      />
+
+      <Toast visible={toast.visible} message={toast.message} type={toast.type} onHide={hideToast} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  headerContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  centerContent: {
-    alignItems: "center",
-    justifyContent: "center",
-    flex: 1,
-  },
-  loadingText: {
-    fontSize: 16,
-  },
-  content: {
-    padding: 16,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    flex: 1,
-  },
-  backButton: {
-    padding: 8,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "700",
-  },
-  subtitle: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  createButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    gap: 6,
-  },
-  createButtonText: {
-    fontWeight: "600",
-    fontSize: 14,
-  },
-  messageContainer: {
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    backgroundColor: "#fef2f2",
-    borderWidth: 1,
-    borderColor: "#fecaca",
-  },
-  errorText: {
-    color: "#dc2626",
-    fontSize: 14,
-  },
-  successMessage: {
-    backgroundColor: "#f0fdf4",
-    borderColor: "#bbf7d0",
-  },
-  successText: {
-    color: "#16a34a",
-    fontSize: 14,
-  },
-  statsCard: {
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 16,
-  },
-  statsTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  emptyState: {
-    padding: 40,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: "center",
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginTop: 16,
-    marginBottom: 4,
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    textAlign: "center",
-  },
-  announcementsList: {
-    gap: 12,
-  },
-  announcementCard: {
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  announcementHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 8,
-  },
-  announcementInfo: {
-    flex: 1,
-  },
-  announcementTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 4,
-  },
-  announcementMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  announcementDate: {
-    fontSize: 12,
-  },
-  deleteButton: {
-    padding: 6,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  announcementContent: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  // Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 20,
-  },
-  modalContainer: {
-    width: "100%",
-    maxWidth: 400,
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-  modalHeader: {
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(0,0,0,0.05)",
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  modalBody: {
-    padding: 20,
-  },
-  errorContainer: {
-    padding: 12,
-    backgroundColor: "#fef2f2",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#fecaca",
-    marginBottom: 16,
-  },
-  inputGroup: {
-    marginBottom: 16,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: "500",
-    marginBottom: 6,
-  },
-  textInput: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-  },
-  textArea: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    minHeight: 120,
-    textAlignVertical: "top",
-  },
-  charCount: {
-    fontSize: 12,
-    textAlign: "right",
-    marginTop: 4,
-  },
-  modalFooter: {
-    flexDirection: "row",
-    gap: 12,
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(0,0,0,0.05)",
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  cancelButton: {
-    backgroundColor: "transparent",
-    borderWidth: 1,
-  },
-  cancelButtonText: {
-    fontWeight: "600",
-  },
-  submitButton: {
-    // backgroundColor will be set dynamically
-  },
-  submitButtonText: {
-    fontWeight: "600",
-  },
+  container: { flex: 1 },
+  headerBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
+  headerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
+  backBtn: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  headerTitle: { fontSize: 20, fontWeight: "700", letterSpacing: -0.3 },
+  headerSub: { fontSize: 12, marginTop: 1 },
+  headerBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 12 },
+  headerBtnText: { fontSize: 13, fontWeight: "600", color: "#ffffff" },
+  scroll: { flex: 1 },
+  content: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32, gap: 14 },
+  summaryCard: { flexDirection: "row", alignItems: "center", gap: 14, borderRadius: 16, borderWidth: 1, padding: 16 },
+  summaryIconWrap: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  summaryValue: { fontSize: 22, fontWeight: "700", letterSpacing: -0.5 },
+  summaryLabel: { fontSize: 12, fontWeight: "500", marginTop: 1 },
+  newBtnInline: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
+  newBtnInlineText: { fontSize: 13, fontWeight: "600" },
+  sectionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  sectionTitle: { fontSize: 15, fontWeight: "600" },
+  emptyCard: { borderRadius: 16, borderWidth: 1, padding: 32, alignItems: "center", gap: 10 },
+  emptyTitle: { fontSize: 16, fontWeight: "600", marginTop: 4 },
+  emptyDesc: { fontSize: 13, textAlign: "center" },
+  emptyCreateBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, marginTop: 8 },
+  emptyCreateBtnText: { fontSize: 13, fontWeight: "600", color: "#ffffff" },
+  annCard: { borderRadius: 14, borderWidth: 1, padding: 14 },
+  annCardHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 10 },
+  annIconWrap: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  annHeaderInfo: { flex: 1 },
+  annTitle: { fontSize: 14, fontWeight: "600" },
+  annMetaRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },
+  annDate: { fontSize: 11 },
+  delBtn: { width: 32, height: 32, borderRadius: 8, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  annContent: { fontSize: 13, lineHeight: 20 },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end" },
+  sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 24 },
+  sheetHandle: { width: 40, height: 4, backgroundColor: "rgba(150,150,150,0.3)", borderRadius: 2, alignSelf: "center", marginTop: 12, marginBottom: 4 },
+  sheetHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1 },
+  sheetHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
+  sheetIconWrap: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  sheetTitle: { fontSize: 17, fontWeight: "700" },
+  sheetCloseBtn: { width: 34, height: 34, borderRadius: 17, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  sheetBody: { paddingHorizontal: 20, paddingTop: 16 },
+  sheetFooter: { flexDirection: "row", gap: 10, paddingHorizontal: 20, paddingTop: 14, borderTopWidth: 1, marginTop: 8 },
+  errorBanner: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#FEE2E2", paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, marginBottom: 14 },
+  errorBannerText: { fontSize: 13, color: "#991B1B", flex: 1 },
+  inputGroup: { marginBottom: 16 },
+  inputLabel: { fontSize: 11, fontWeight: "700", letterSpacing: 0.6, marginBottom: 7, textTransform: "uppercase" },
+  input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11, fontSize: 14 },
+  textarea: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11, fontSize: 14, textAlignVertical: "top", minHeight: 110 },
+  charCount: { fontSize: 11, textAlign: "right", marginTop: 5 },
+  btnPrimary: { paddingVertical: 13, borderRadius: 12, alignItems: "center" },
+  btnPrimaryText: { color: "#ffffff", fontSize: 14, fontWeight: "600" },
+  btnOutline: { flex: 1, paddingVertical: 13, borderRadius: 12, borderWidth: 1, alignItems: "center" },
+  btnOutlineText: { fontSize: 14, fontWeight: "600" },
 });

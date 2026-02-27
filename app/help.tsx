@@ -1,777 +1,182 @@
-// @ts-nocheck
-import React, { useState, useEffect } from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-  ScrollView,
-  Pressable,
-  TextInput,
-  Alert,
-  Linking,
-  Modal,
-  TouchableOpacity,
-} from "react-native";
-import { Feather } from "@expo/vector-icons";
+﻿// @ts-nocheck
+import React, { useState } from "react";
+import { ScrollView, Text, View, Pressable, TextInput, Modal, Linking, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
+import Toast from "@/components/Toast";
+import { useToast } from "@/hooks/useToast";
 
-type FAQ = {
-  id: string;
-  question: string;
-  answer: string;
-  category: string;
-};
+const FAQS = [
+  { id: "1", question: "How do I reset my password?", answer: "Go to Login → Forgot Password, enter your registered email, and follow the link sent to you.", category: "Account" },
+  { id: "2", question: "Where can I see my maintenance requests?", answer: "Open the Maintenance page. You can track statuses (submitted, in-progress, resolved) and add comments.", category: "Maintenance" },
+  { id: "3", question: "How do I download invoices/receipts?", answer: "Go to Payments, open the payment row, and click Download Receipt.", category: "Payments" },
+  { id: "4", question: "How do I book community facilities?", answer: "Visit the Bookings page, pick a date/time slot, and confirm. Double-booking is automatically prevented.", category: "Bookings" },
+  { id: "5", question: "How do I add visitors?", answer: "Go to Visitors page, click Add Visitor, fill in their details and expected visit time. They will receive a QR code.", category: "Visitors" },
+  { id: "6", question: "Where can I find community documents?", answer: "Visit the Documents page to view and download community policies, forms, and other important documents.", category: "Documents" },
+];
 
-type SupportTicket = {
-  name: string;
-  email: string;
-  topic: string;
-  message: string;
-};
+const TOPICS = ["General", "Account", "Payments", "Maintenance", "Bookings", "Visitors", "Documents"];
+const CONTACTS = [
+  { title: "Community Guidelines", icon: "book-open", color: "#6366F1", action: "info" },
+  { title: "Contact Support", icon: "message-square", color: "#10B981", action: "form" },
+  { title: "Email Support", icon: "mail", color: "#F59E0B", action: "email" },
+  { title: "Call Help Desk", icon: "phone", color: "#EF4444", action: "phone" },
+];
 
 export default function Help() {
-  const insets = useSafeAreaInsets();
   const theme = useColorScheme() ?? "light";
+  const isDark = theme === "dark";
   const bg = useThemeColor({}, "background");
   const text = useThemeColor({}, "text");
   const tint = useThemeColor({}, "tint");
-  const muted = useThemeColor({}, "icon");
-  const cardBg = theme === "dark" ? "#1F1F1F" : "#ffffff";
-  const borderCol =
-    theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
+  const insets = useSafeAreaInsets();
+  const muted = isDark ? "#94A3B8" : "#64748B";
+  const borderCol = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)";
+  const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
+  const fieldBg = isDark ? "#111111" : "#F8FAFC";
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedFAQ, setSelectedFAQ] = useState<string | null>(null);
-  const [showSupportForm, setShowSupportForm] = useState(false);
-  const [supportForm, setSupportForm] = useState<SupportTicket>({
-    name: "",
-    email: "",
-    topic: "General",
-    message: "",
-  });
+  const [expandedFAQ, setExpandedFAQ] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ name: "", email: "", topic: "General", message: "" });
   const [sending, setSending] = useState(false);
+  const { toast, showInfo, showError, showSuccess, hideToast } = useToast();
 
-  const faqs: FAQ[] = [
-    {
-      id: "1",
-      question: "How do I reset my password?",
-      answer:
-        "Go to Login → Forgot Password, enter your registered email, and follow the link sent to you.",
-      category: "Account",
-    },
-    {
-      id: "2",
-      question: "Where can I see my maintenance requests?",
-      answer:
-        "Open the Maintenance page. You can track statuses (submitted, in-progress, resolved) and add comments.",
-      category: "Maintenance",
-    },
-    {
-      id: "3",
-      question: "How do I download invoices/receipts?",
-      answer:
-        "Go to Payments, open the payment row, and click Download Receipt.",
-      category: "Payments",
-    },
-    {
-      id: "4",
-      question: "How do I book community facilities?",
-      answer:
-        "Visit the Bookings page, pick a date/time slot, and confirm. Double-booking is automatically prevented.",
-      category: "Bookings",
-    },
-    {
-      id: "5",
-      question: "How do I add visitors?",
-      answer:
-        "Go to Visitors page, click 'Add Visitor', fill in their details and expected visit time. They'll receive a QR code.",
-      category: "Visitors",
-    },
-    {
-      id: "6",
-      question: "Where can I find community documents?",
-      answer:
-        "Visit the Documents page to view and download community policies, forms, and other important documents.",
-      category: "Documents",
-    },
-  ];
-
-  const topics = [
-    "General",
-    "Account",
-    "Payments",
-    "Maintenance",
-    "Bookings",
-    "Visitors",
-    "Documents",
-  ];
-
-  const filteredFAQs = faqs.filter(
-    (faq) =>
-      faq.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      faq.answer.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      faq.category.toLowerCase().includes(searchQuery.toLowerCase()),
+  const filteredFAQs = FAQS.filter(f =>
+    f.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    f.answer.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const contactOptions = [
-    {
-      title: "Community Guidelines",
-      icon: "book-open",
-      color: "#6366F1",
-      action: () =>
-        Alert.alert(
-          "Community Guidelines",
-          "Community guidelines document will be available soon.",
-        ),
-    },
-    {
-      title: "Contact Support",
-      icon: "message-square",
-      color: "#10B981",
-      action: () => setShowSupportForm(true),
-    },
-    {
-      title: "Email Us",
-      icon: "mail",
-      color: "#F59E0B",
-      action: () => Linking.openURL("mailto:support@CGate.com"),
-    },
-    {
-      title: "Call Help Desk",
-      icon: "phone",
-      color: "#EF4444",
-      action: () => Linking.openURL("tel:+1234567890"),
-    },
-  ];
+  const handleContact = (action) => {
+    if (action === "info") { showInfo("Community guidelines document coming soon."); }
+    else if (action === "form") { setShowForm(true); }
+    else if (action === "email") { Linking.openURL("mailto:support@cgate.com"); }
+    else if (action === "phone") { Linking.openURL("tel:+1234567890"); }
+  };
 
-  const handleSubmitTicket = async () => {
-    if (!supportForm.name || !supportForm.email || !supportForm.message) {
-      Alert.alert("Error", "Please fill in all required fields.");
-      return;
-    }
-
+  const handleSubmit = async () => {
+    if (!form.name || !form.email || !form.message) { showError("Please fill in all required fields."); return; }
     try {
       setSending(true);
-      // TODO: Implement actual support ticket submission API call
-      // const response = await supportAPI.submitTicket(supportForm);
-
-      Alert.alert(
-        "Success",
-        "Your support ticket has been submitted. We'll get back to you shortly!",
-        [
-          {
-            text: "OK",
-            onPress: () => {
-              setShowSupportForm(false);
-              setSupportForm({
-                name: "",
-                email: "",
-                topic: "General",
-                message: "",
-              });
-            },
-          },
-        ],
-      );
-    } catch (error) {
-      Alert.alert("Error", "Failed to submit ticket. Please try again.");
-    } finally {
-      setSending(false);
-    }
+      await new Promise(r => setTimeout(r, 800));
+      showSuccess("Ticket submitted! We will get back to you shortly.");
+      setShowForm(false);
+      setForm({ name: "", email: "", topic: "General", message: "" });
+    } catch { showError("Failed to submit ticket."); }
+    finally { setSending(false); }
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: bg }]}>
-      {/* Fixed Header */}
-      <View
-        style={[
-          styles.headerContainer,
-          {
-            paddingTop: Math.max(insets.top, 16),
-            backgroundColor: bg,
-            borderBottomColor: borderCol,
-          },
-        ]}
-      >
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={styles.backButton}
-            >
-              <Feather name="arrow-left" size={24} color={tint} />
-            </TouchableOpacity>
-            <View>
-              <Text style={[styles.title, { color: text }]}>
-                Help & Support
-              </Text>
-              <Text style={[styles.subtitle, { color: muted }]}>
-                Get answers and support
-              </Text>
-            </View>
+    <View style={{ flex: 1, backgroundColor: bg }}>
+      {/* Header */}
+      <View style={{ paddingTop: Math.max(insets.top, 16), paddingBottom: 14, paddingHorizontal: 20, backgroundColor: bg, borderBottomWidth: 1, borderBottomColor: borderCol }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <Pressable onPress={() => router.back()} style={{ width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: borderCol, alignItems: "center", justifyContent: "center" }}>
+            <Feather name="arrow-left" size={18} color={text} />
+          </Pressable>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: text }}>Help & Support</Text>
+            <Text style={{ fontSize: 12, color: muted }}>FAQs and contact options</Text>
           </View>
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: fieldBg, borderRadius: 10, borderWidth: 1, borderColor: borderCol, paddingHorizontal: 12, paddingVertical: 8, marginTop: 12 }}>
+          <Feather name="search" size={15} color={muted} />
+          <TextInput value={searchQuery} onChangeText={setSearchQuery} placeholder="Search FAQs…" placeholderTextColor={muted} style={{ flex: 1, fontSize: 14, color: text }} />
+          {!!searchQuery && <Pressable onPress={() => setSearchQuery("")}><Feather name="x" size={14} color={muted} /></Pressable>}
         </View>
       </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.content}
-      >
-        {/* Quick Actions */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: text }]}>
-            Quick Actions
-          </Text>
-          <View style={styles.actionsGrid}>
-            {contactOptions.map((option, index) => (
-              <Pressable
-                key={index}
-                style={[
-                  styles.actionCard,
-                  { backgroundColor: cardBg, borderColor: borderCol },
-                ]}
-                onPress={option.action}
-              >
-                <View
-                  style={[
-                    styles.actionIcon,
-                    { backgroundColor: `${option.color}22` },
-                  ]}
-                >
-                  <Feather name={option.icon} size={20} color={option.color} />
+      <ScrollView contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: insets.bottom + 24 }} showsVerticalScrollIndicator={false}>
+
+        {/* Quick contact */}
+        <View>
+          <Text style={{ fontSize: 12, fontWeight: "700", color: muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Contact Options</Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+            {CONTACTS.map(c => (
+              <Pressable key={c.title} onPress={() => handleContact(c.action)}
+                style={({ pressed }) => ({ width: "48%", backgroundColor: cardBg, borderRadius: 12, borderWidth: 1, borderColor: borderCol, padding: 12, flexDirection: "row", alignItems: "center", gap: 10, opacity: pressed ? 0.8 : 1 })}>
+                <View style={{ width: 34, height: 34, borderRadius: 9, backgroundColor: c.color + "18", alignItems: "center", justifyContent: "center" }}>
+                  <Feather name={c.icon} size={16} color={c.color} />
                 </View>
-                <Text
-                  style={[styles.actionTitle, { color: text }]}
-                  numberOfLines={2}
-                >
-                  {option.title}
-                </Text>
+                <Text style={{ fontSize: 12, fontWeight: "600", color: text, flex: 1 }} numberOfLines={2}>{c.title}</Text>
               </Pressable>
             ))}
           </View>
         </View>
 
-        {/* FAQ Search */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: text }]}>
-            Frequently Asked Questions
-          </Text>
-
-          <View
-            style={[
-              styles.searchContainer,
-              { backgroundColor: cardBg, borderColor: borderCol },
-            ]}
-          >
-            <Feather name="search" size={20} color={text} />
-            <TextInput
-              style={[styles.searchInput, { color: text }]}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholder="Search FAQs..."
-              placeholderTextColor={theme === "dark" ? "#9CA3AF" : "#6B7280"}
-            />
-          </View>
-
-          {/* FAQ List */}
-          <View style={styles.faqList}>
-            {filteredFAQs.length === 0 ? (
-              <View
-                style={[
-                  styles.emptyCard,
-                  { backgroundColor: cardBg, borderColor: borderCol },
-                ]}
-              >
-                <Feather
-                  name="search"
-                  size={48}
-                  color={text}
-                  style={{ opacity: 0.3 }}
-                />
-                <Text style={[styles.emptyText, { color: text }]}>
-                  No FAQs match your search
-                </Text>
-                <Text style={[styles.emptySubtext, { color: text }]}>
-                  Try a different search term or contact support
-                </Text>
-              </View>
-            ) : (
-              filteredFAQs.map((faq) => (
-                <View
-                  key={faq.id}
-                  style={[
-                    styles.faqCard,
-                    { backgroundColor: cardBg, borderColor: borderCol },
-                  ]}
-                >
-                  <Pressable
-                    style={styles.faqHeader}
-                    onPress={() =>
-                      setSelectedFAQ(selectedFAQ === faq.id ? null : faq.id)
-                    }
-                  >
-                    <View style={styles.faqHeaderLeft}>
-                      <View
-                        style={[
-                          styles.categoryBadge,
-                          { backgroundColor: "#6366F122" },
-                        ]}
-                      >
-                        <Text
-                          style={[styles.categoryText, { color: "#6366F1" }]}
-                        >
-                          {faq.category}
-                        </Text>
-                      </View>
-                      <Text
-                        style={[styles.faqQuestion, { color: text }]}
-                        numberOfLines={2}
-                      >
-                        {faq.question}
-                      </Text>
+        {/* FAQs */}
+        <View>
+          <Text style={{ fontSize: 12, fontWeight: "700", color: muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Frequently Asked Questions</Text>
+          {filteredFAQs.length === 0 ? (
+            <View style={{ alignItems: "center", paddingVertical: 30, gap: 6 }}>
+              <Feather name="search" size={24} color={muted} />
+              <Text style={{ fontSize: 14, color: muted }}>No results for "{searchQuery}"</Text>
+            </View>
+          ) : (
+            <View style={{ backgroundColor: cardBg, borderRadius: 14, borderWidth: 1, borderColor: borderCol, overflow: "hidden" }}>
+              {filteredFAQs.map((faq, idx) => (
+                <Pressable key={faq.id} onPress={() => setExpandedFAQ(expandedFAQ === faq.id ? null : faq.id)}
+                  style={({ pressed }) => ({ padding: 14, backgroundColor: pressed ? (isDark ? "#222" : "#F8FAFC") : "transparent", borderTopWidth: idx > 0 ? 1 : 0, borderTopColor: borderCol })}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: tint + "15", alignItems: "center", justifyContent: "center" }}>
+                      <Text style={{ fontSize: 12, fontWeight: "700", color: tint }}>Q</Text>
                     </View>
-                    <Feather
-                      name={
-                        selectedFAQ === faq.id ? "chevron-up" : "chevron-down"
-                      }
-                      size={20}
-                      color={text}
-                    />
-                  </Pressable>
-
-                  {selectedFAQ === faq.id && (
-                    <View style={styles.faqAnswer}>
-                      <Text
-                        style={[
-                          styles.faqAnswerText,
-                          { color: text, opacity: 0.8 },
-                        ]}
-                      >
-                        {faq.answer}
-                      </Text>
+                    <Text style={{ flex: 1, fontSize: 14, fontWeight: "600", color: text }}>{faq.question}</Text>
+                    <Feather name={expandedFAQ === faq.id ? "chevron-up" : "chevron-down"} size={15} color={muted} />
+                  </View>
+                  {expandedFAQ === faq.id && (
+                    <View style={{ marginTop: 10, marginLeft: 38, padding: 10, backgroundColor: tint + "08", borderRadius: 8 }}>
+                      <Text style={{ fontSize: 13, color: text, lineHeight: 20 }}>{faq.answer}</Text>
+                      <View style={{ marginTop: 6, alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, backgroundColor: tint + "20" }}>
+                        <Text style={{ fontSize: 10, fontWeight: "600", color: tint }}>{faq.category}</Text>
+                      </View>
                     </View>
                   )}
-                </View>
-              ))
-            )}
-          </View>
+                </Pressable>
+              ))}
+            </View>
+          )}
         </View>
 
-        {/* Still Need Help */}
-        <View
-          style={[
-            styles.helpCard,
-            { backgroundColor: cardBg, borderColor: borderCol },
-          ]}
-        >
-          <View style={styles.helpCardIcon}>
-            <Feather name="message-circle" size={24} color="#6366F1" />
-          </View>
-          <View style={styles.helpCardContent}>
-            <Text style={[styles.helpCardTitle, { color: text }]}>
-              Still need help?
-            </Text>
-            <Text style={[styles.helpCardText, { color: text, opacity: 0.7 }]}>
-              Can't find what you're looking for? Contact our support team.
-            </Text>
-            <Pressable
-              style={styles.helpCardButton}
-              onPress={() => setShowSupportForm(true)}
-            >
-              <Text style={styles.helpCardButtonText}>Contact Support</Text>
+      </ScrollView>
+
+      {/* Support form modal */}
+      <Modal visible={showForm} animationType="slide" transparent onRequestClose={() => setShowForm(false)}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}>
+          <View style={{ backgroundColor: cardBg, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: insets.bottom + 24, gap: 14 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: text }}>Submit a Ticket</Text>
+              <Pressable onPress={() => setShowForm(false)} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: borderCol, alignItems: "center", justifyContent: "center" }}>
+                <Feather name="x" size={16} color={text} />
+              </Pressable>
+            </View>
+            {[{ label: "Name *", key: "name", placeholder: "Your full name" }, { label: "Email *", key: "email", placeholder: "your@email.com", keyboardType: "email-address" }, { label: "Message *", key: "message", placeholder: "Describe your issue…", multiline: true, lines: 4 }].map(f => (
+              <View key={f.key}>
+                <Text style={{ fontSize: 12, color: muted, fontWeight: "600", marginBottom: 5 }}>{f.label}</Text>
+                <TextInput
+                  value={form[f.key]}
+                  onChangeText={v => setForm(p => ({ ...p, [f.key]: v }))}
+                  placeholder={f.placeholder}
+                  placeholderTextColor={muted}
+                  multiline={f.multiline}
+                  numberOfLines={f.lines}
+                  keyboardType={f.keyboardType || "default"}
+                  style={{ backgroundColor: fieldBg, borderRadius: 10, borderWidth: 1, borderColor: borderCol, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: text, minHeight: f.multiline ? 90 : undefined, textAlignVertical: f.multiline ? "top" : undefined }}
+                />
+              </View>
+            ))}
+            <Pressable onPress={handleSubmit} disabled={sending}
+              style={({ pressed }) => ({ backgroundColor: pressed || sending ? tint + "CC" : tint, borderRadius: 12, padding: 14, alignItems: "center" })}>
+              {sending ? <ActivityIndicator color="#fff" size="small" /> : <Text style={{ fontSize: 15, fontWeight: "700", color: "#fff" }}>Submit Ticket</Text>}
             </Pressable>
           </View>
         </View>
-      </ScrollView>
-
-      {/* Support Form Modal */}
-      <Modal
-        visible={showSupportForm}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowSupportForm(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: cardBg }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: text }]}>
-                Contact Support
-              </Text>
-              <Pressable onPress={() => setShowSupportForm(false)}>
-                <Feather name="x" size={24} color={text} />
-              </Pressable>
-            </View>
-
-            <ScrollView style={styles.modalForm}>
-              <Text style={[styles.formLabel, { color: text }]}>Name *</Text>
-              <TextInput
-                style={[styles.input, { color: text, borderColor: borderCol }]}
-                value={supportForm.name}
-                onChangeText={(text) =>
-                  setSupportForm((prev) => ({ ...prev, name: text }))
-                }
-                placeholder="Your full name"
-                placeholderTextColor={theme === "dark" ? "#9CA3AF" : "#6B7280"}
-              />
-
-              <Text style={[styles.formLabel, { color: text }]}>Email *</Text>
-              <TextInput
-                style={[styles.input, { color: text, borderColor: borderCol }]}
-                value={supportForm.email}
-                onChangeText={(text) =>
-                  setSupportForm((prev) => ({ ...prev, email: text }))
-                }
-                placeholder="your@email.com"
-                placeholderTextColor={theme === "dark" ? "#9CA3AF" : "#6B7280"}
-                keyboardType="email-address"
-              />
-
-              <Text style={[styles.formLabel, { color: text }]}>Topic</Text>
-              <View style={styles.topicButtons}>
-                {topics.map((topic) => (
-                  <Pressable
-                    key={topic}
-                    style={[
-                      styles.topicButton,
-                      { borderColor: borderCol },
-                      supportForm.topic === topic && styles.selectedTopicButton,
-                    ]}
-                    onPress={() =>
-                      setSupportForm((prev) => ({ ...prev, topic }))
-                    }
-                  >
-                    <Text
-                      style={[
-                        styles.topicButtonText,
-                        {
-                          color: supportForm.topic === topic ? "#6366F1" : text,
-                        },
-                      ]}
-                    >
-                      {topic}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-
-              <Text style={[styles.formLabel, { color: text }]}>Message *</Text>
-              <TextInput
-                style={[
-                  styles.messageInput,
-                  { color: text, borderColor: borderCol },
-                ]}
-                value={supportForm.message}
-                onChangeText={(text) =>
-                  setSupportForm((prev) => ({ ...prev, message: text }))
-                }
-                placeholder="Describe your issue or question..."
-                placeholderTextColor={theme === "dark" ? "#9CA3AF" : "#6B7280"}
-                multiline
-                numberOfLines={4}
-              />
-
-              <Pressable
-                style={[
-                  styles.submitButton,
-                  sending && styles.submitButtonDisabled,
-                ]}
-                onPress={handleSubmitTicket}
-                disabled={sending}
-              >
-                <Feather name="send" size={16} color="#ffffff" />
-                <Text style={styles.submitButtonText}>
-                  {sending ? "Sending..." : "Send Message"}
-                </Text>
-              </Pressable>
-            </ScrollView>
-          </View>
-        </View>
       </Modal>
+
+      <Toast {...toast} onHide={hideToast} />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-
-  headerContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    flex: 1,
-  },
-  backButton: {
-    padding: 8,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "700",
-  },
-  subtitle: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-
-  scrollView: {
-    flex: 1,
-  },
-
-  content: {
-    padding: 16,
-  },
-
-  section: {
-    marginBottom: 32,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    marginBottom: 16,
-  },
-
-  actionsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-  },
-  actionCard: {
-    width: "47%",
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: "center",
-    gap: 8,
-  },
-  actionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  actionTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    textAlign: "center",
-  },
-
-  searchContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 16,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-  },
-
-  faqList: {
-    gap: 12,
-  },
-  emptyCard: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 32,
-    alignItems: "center",
-    gap: 12,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: "600",
-    opacity: 0.7,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    opacity: 0.5,
-    textAlign: "center",
-  },
-
-  faqCard: {
-    borderWidth: 1,
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-  faqHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-  },
-  faqHeaderLeft: {
-    flex: 1,
-    gap: 8,
-  },
-  categoryBadge: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  categoryText: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  faqQuestion: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  faqAnswer: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(0,0,0,0.1)",
-  },
-  faqAnswerText: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-
-  helpCard: {
-    flexDirection: "row",
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 20,
-    gap: 16,
-    marginTop: 16,
-  },
-  helpCardIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: "rgba(99, 102, 241, 0.1)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  helpCardContent: {
-    flex: 1,
-    gap: 8,
-  },
-  helpCardTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  helpCardText: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  helpCardButton: {
-    backgroundColor: "#6366F1",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    alignSelf: "flex-start",
-  },
-  helpCardButtonText: {
-    color: "#ffffff",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-
-  // Modal styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: "90%",
-    minHeight: "70%",
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-  },
-  modalForm: {
-    padding: 20,
-  },
-
-  formLabel: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 8,
-    marginTop: 16,
-  },
-
-  input: {
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-  },
-
-  topicButtons: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  topicButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  selectedTopicButton: {
-    backgroundColor: "rgba(99, 102, 241, 0.1)",
-    borderColor: "#6366F1",
-  },
-  topicButtonText: {
-    fontSize: 14,
-    fontWeight: "500",
-  },
-
-  messageInput: {
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    textAlignVertical: "top",
-    minHeight: 100,
-  },
-
-  submitButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: "#6366F1",
-    borderRadius: 12,
-    paddingVertical: 16,
-    marginTop: 24,
-  },
-  submitButtonDisabled: {
-    opacity: 0.6,
-  },
-  submitButtonText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-});

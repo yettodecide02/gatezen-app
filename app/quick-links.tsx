@@ -1,49 +1,31 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import React from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, Text, View, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
 
-type ServiceItem = {
-  key: string;
-  title: string;
-  subtitle?: string;
-  icon: keyof typeof Feather.glyphMap;
-  href: string;
-  color: string;
-};
-
-type ServiceSection = {
-  title: string;
-  icon: keyof typeof Feather.glyphMap;
-  color: string;
-  services: ServiceItem[];
-};
-
-const SERVICE_SECTIONS: ServiceSection[] = [
+const SECTIONS = [
   {
     title: "Visitors",
     icon: "users",
     color: "#06B6D4",
-    services: [
+    items: [
       {
-        key: "invite-guest",
+        key: "invite",
         title: "Invite Guest",
         subtitle: "Send invitations",
         icon: "user-plus",
-        href: "/visitors/invite",
-        color: "#06B6D4",
+        href: "/visitors?visitorType=GUEST",
       },
       {
-        key: "cab-auto",
-        title: "Cab/Auto",
+        key: "transport",
+        title: "Cab / Auto",
         subtitle: "Book transportation",
         icon: "truck",
-        href: "/visitors/transport",
-        color: "#06B6D4",
+        href: "/visitors?visitorType=CAB_AUTO",
       },
       {
         key: "delivery",
@@ -51,23 +33,20 @@ const SERVICE_SECTIONS: ServiceSection[] = [
         subtitle: "Manage deliveries",
         icon: "package",
         href: "/visitors/delivery",
-        color: "#06B6D4",
       },
       {
-        key: "my-passes",
+        key: "passes",
         title: "My Passes",
         subtitle: "View visitor passes",
         icon: "credit-card",
         href: "/visitors/passes",
-        color: "#06B6D4",
       },
       {
-        key: "kids-exit",
-        title: "Allow Kids Exit",
+        key: "kids",
+        title: "Kids Exit",
         subtitle: "Child permissions",
         icon: "shield",
         href: "/visitors/kids-exit",
-        color: "#06B6D4",
       },
     ],
   },
@@ -75,30 +54,27 @@ const SERVICE_SECTIONS: ServiceSection[] = [
     title: "Security",
     icon: "shield",
     color: "#EF4444",
-    services: [
+    items: [
       {
-        key: "call-security",
+        key: "call",
         title: "Call Security",
         subtitle: "Emergency contact",
         icon: "phone-call",
         href: "/security/call",
-        color: "#EF4444",
       },
       {
-        key: "message-security",
+        key: "msg",
         title: "Message",
         subtitle: "Send message",
         icon: "message-circle",
         href: "/security/message",
-        color: "#EF4444",
       },
       {
-        key: "guard-info",
-        title: "Guard",
+        key: "guard",
+        title: "Guard Info",
         subtitle: "Guard information",
         icon: "user-check",
         href: "/security/guard",
-        color: "#EF4444",
       },
     ],
   },
@@ -106,38 +82,34 @@ const SERVICE_SECTIONS: ServiceSection[] = [
     title: "Community",
     icon: "home",
     color: "#8B5CF6",
-    services: [
+    items: [
       {
-        key: "maintenance",
+        key: "maint",
         title: "Maintenance",
         subtitle: "Repair requests",
         icon: "tool",
         href: "/maintenance",
-        color: "#8B5CF6",
       },
       {
-        key: "meter-reading",
-        title: "Meter",
+        key: "meter",
+        title: "Meter Reading",
         subtitle: "Reading & bills",
         icon: "activity",
         href: "/community/meter",
-        color: "#8B5CF6",
       },
       {
-        key: "emergency-numbers",
+        key: "emergency",
         title: "Emergency Numbers",
         subtitle: "Important contacts",
         icon: "phone",
         href: "/community/emergency",
-        color: "#8B5CF6",
       },
       {
-        key: "amenities",
-        title: "Amenities/Bookings",
+        key: "bookings",
+        title: "Bookings",
         subtitle: "Book facilities",
         icon: "calendar",
         href: "/bookings",
-        color: "#8B5CF6",
       },
     ],
   },
@@ -145,162 +117,175 @@ const SERVICE_SECTIONS: ServiceSection[] = [
     title: "Help",
     icon: "help-circle",
     color: "#10B981",
-    services: [
+    items: [
       {
-        key: "help-support",
+        key: "help",
         title: "Support",
         subtitle: "Get assistance",
         icon: "help-circle",
         href: "/help",
-        color: "#10B981",
       },
       {
         key: "faq",
         title: "FAQ",
         subtitle: "Common questions",
-        icon: "info",
+        icon: "list",
         href: "/help/faq",
-        color: "#10B981",
       },
       {
         key: "contact",
         title: "Contact Us",
-        subtitle: "Reach out",
+        subtitle: "Reach out to us",
         icon: "mail",
         href: "/help/contact",
-        color: "#10B981",
       },
     ],
   },
 ];
 
-function ServiceCard({ service }: { service: ServiceItem }) {
-  const theme = useColorScheme() ?? "light";
-  const text = useThemeColor({}, "text");
-  const cardBg = theme === "dark" ? "#1F1F1F" : "#ffffff";
-  const borderCol =
-    theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
-
-  return (
-    <Pressable
-      onPress={() => router.push(service.href)}
-      android_ripple={{ color: `${service.color}22` }}
-      style={[
-        styles.serviceCard,
-        { backgroundColor: cardBg, borderColor: borderCol },
-      ]}
-    >
-      <View
-        style={[
-          styles.serviceIcon,
-          {
-            backgroundColor: `${service.color}22`,
-            borderColor: `${service.color}44`,
-          },
-        ]}
-      >
-        <Feather name={service.icon} size={18} color={service.color} />
-      </View>
-      <View style={styles.serviceInfo}>
-        <Text style={[styles.serviceTitle, { color: text }]} numberOfLines={1}>
-          {service.title}
-        </Text>
-        {service.subtitle && (
-          <Text
-            style={[styles.serviceSubtitle, { color: text, opacity: 0.6 }]}
-            numberOfLines={1}
-          >
-            {service.subtitle}
-          </Text>
-        )}
-      </View>
-      <Feather
-        name="chevron-right"
-        size={16}
-        color={text}
-        style={{ opacity: 0.4 }}
-      />
-    </Pressable>
-  );
-}
-
-function SectionHeader({ section }: { section: ServiceSection }) {
-  const text = useThemeColor({}, "text");
-
-  return (
-    <View style={styles.sectionHeader}>
-      <View
-        style={[
-          styles.sectionIcon,
-          {
-            backgroundColor: `${section.color}22`,
-            borderColor: `${section.color}44`,
-          },
-        ]}
-      >
-        <Feather name={section.icon} size={20} color={section.color} />
-      </View>
-      <Text style={[styles.sectionTitle, { color: text }]}>
-        {section.title}
-      </Text>
-    </View>
-  );
-}
-
 export default function QuickLinks() {
   const theme = useColorScheme() ?? "light";
+  const isDark = theme === "dark";
   const bg = useThemeColor({}, "background");
   const text = useThemeColor({}, "text");
   const tint = useThemeColor({}, "tint");
-  const border = theme === "dark" ? "#262626" : "#E5E7EB";
   const insets = useSafeAreaInsets();
+  const muted = isDark ? "#94A3B8" : "#64748B";
+  const borderCol = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)";
+  const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
 
   return (
     <View style={{ flex: 1, backgroundColor: bg }}>
-      {/* Fixed header — sits above the scroll area */}
+      {/* Header */}
       <View
-        style={[
-          styles.headerContainer,
-          {
-            paddingTop: Math.max(insets.top, 16),
-            backgroundColor: bg,
-            borderBottomColor: border,
-          },
-        ]}
+        style={{
+          paddingTop: Math.max(insets.top, 16),
+          paddingBottom: 14,
+          paddingHorizontal: 20,
+          backgroundColor: bg,
+          borderBottomWidth: 1,
+          borderBottomColor: borderCol,
+        }}
       >
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <Pressable onPress={() => router.back()} style={styles.backButton}>
-              <Feather name="arrow-left" size={24} color={tint} />
-            </Pressable>
-            <View>
-              <Text style={[styles.headerTitle, { color: text }]}>
-                All Services
-              </Text>
-              <Text
-                style={[styles.headerSubtitle, { color: text, opacity: 0.5 }]}
-              >
-                Browse all available features
-              </Text>
-            </View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <Pressable
+            onPress={() => router.back()}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              borderWidth: 1,
+              borderColor: borderCol,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Feather name="arrow-left" size={18} color={text} />
+          </Pressable>
+          <View>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: text }}>
+              Services
+            </Text>
+            <Text style={{ fontSize: 12, color: muted }}>
+              All available features
+            </Text>
           </View>
         </View>
       </View>
 
       <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={[
-          styles.content,
-          { paddingBottom: insets.bottom + 20 },
-        ]}
+        contentContainerStyle={{
+          padding: 16,
+          gap: 16,
+          paddingBottom: insets.bottom + 24,
+        }}
         showsVerticalScrollIndicator={false}
       >
-        {SERVICE_SECTIONS.map((section) => (
-          <View key={section.title} style={styles.section}>
-            <SectionHeader section={section} />
-            <View style={styles.servicesContainer}>
-              {section.services.map((service) => (
-                <ServiceCard key={service.key} service={service} />
+        {SECTIONS.map((section) => (
+          <View key={section.title}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                marginBottom: 8,
+              }}
+            >
+              <View
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: 6,
+                  backgroundColor: section.color + "20",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Feather name={section.icon} size={12} color={section.color} />
+              </View>
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: "700",
+                  color: section.color,
+                  textTransform: "uppercase",
+                  letterSpacing: 0.6,
+                }}
+              >
+                {section.title}
+              </Text>
+            </View>
+            <View
+              style={{
+                backgroundColor: cardBg,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: borderCol,
+                overflow: "hidden",
+              }}
+            >
+              {section.items.map((item, idx) => (
+                <Pressable
+                  key={item.key}
+                  onPress={() => router.push(item.href)}
+                  style={({ pressed }) => ({
+                    flexDirection: "row",
+                    alignItems: "center",
+                    padding: 13,
+                    gap: 12,
+                    backgroundColor: pressed
+                      ? isDark
+                        ? "#222"
+                        : "#F8FAFC"
+                      : "transparent",
+                    borderTopWidth: idx > 0 ? 1 : 0,
+                    borderTopColor: borderCol,
+                  })}
+                >
+                  <View
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 10,
+                      backgroundColor: section.color + "18",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Feather name={item.icon} size={17} color={section.color} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{ fontSize: 14, fontWeight: "600", color: text }}
+                    >
+                      {item.title}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: muted, marginTop: 1 }}>
+                      {item.subtitle}
+                    </Text>
+                  </View>
+                  <Feather name="chevron-right" size={15} color={muted} />
+                </Pressable>
               ))}
             </View>
           </View>
@@ -309,92 +294,3 @@ export default function QuickLinks() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  headerContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    flex: 1,
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  content: {
-    padding: 16,
-    gap: 24,
-  },
-  section: {
-    gap: 16,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  sectionIcon: {
-    height: 40,
-    width: 40,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  servicesContainer: {
-    gap: 8,
-  },
-  serviceCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-    borderWidth: 1,
-    borderRadius: 12,
-    gap: 12,
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
-  },
-  serviceIcon: {
-    height: 36,
-    width: 36,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-  },
-  serviceInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  serviceTitle: {
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  serviceSubtitle: {
-    fontSize: 12,
-  },
-});

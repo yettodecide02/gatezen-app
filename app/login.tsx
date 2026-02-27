@@ -1,21 +1,15 @@
-// @ts-nocheck
-import React, { useCallback, useEffect, useState } from "react";
+﻿// @ts-nocheck
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+  KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View,
 } from "react-native";
-import { Feather } from "@expo/vector-icons";
 import axios from "axios";
 import { router } from "expo-router";
-
 import { isAuthed, setToken, setUser } from "@/lib/auth";
 import GoogleSignin from "@/components/GoogleSignin";
 import Toast from "@/components/Toast";
+import FormField from "@/components/FormField";
+import LoadingButton from "@/components/LoadingButton";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useToast } from "@/hooks/useToast";
@@ -27,288 +21,132 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState("");
+  const [emailErr, setEmailErr] = useState("");
+  const [passwordErr, setPasswordErr] = useState("");
+  const pwRef = useRef<TextInput>(null);
 
   const { toast, showError, showSuccess, hideToast } = useToast();
-
   const theme = useColorScheme() ?? "light";
-  const bg = useThemeColor({}, "background");
-  const textColor = useThemeColor({}, "text");
-  const tint = useThemeColor({}, "tint");
-  const iconColor = useThemeColor({}, "icon");
-  const cardBg = theme === "dark" ? "#1F1F1F" : "#ffffff";
-  const fieldBg = theme === "dark" ? "#181818" : "#f3f4f6";
-  const borderCol =
-    theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
-  const muted = iconColor;
-  const placeholder = iconColor;
-  const buttonBg = tint;
-  const buttonText = theme === "dark" ? "#11181C" : "#ffffff";
+  const bg = useThemeColor({}, "background") as string;
+  const textColor = useThemeColor({}, "text") as string;
+  const tint = useThemeColor({}, "tint") as string;
+  const iconColor = useThemeColor({}, "icon") as string;
+  const isDark = theme === "dark";
+  const muted = isDark ? "#94A3B8" : "#64748B";
+  const borderCol = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)";
+  const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
+  const fieldBg = isDark ? "#111111" : "#F8FAFC";
+  const btnTextColor = isDark ? "#11181C" : "#ffffff";
 
   useEffect(() => {
-    (async () => {
-      if (await isAuthed()) router.replace("/(tabs)/home");
-    })();
+    (async () => { if (await isAuthed()) router.replace("/(tabs)/home"); })();
   }, []);
 
+  const validate = () => {
+    let valid = true;
+    if (!email.trim()) { setEmailErr("Email is required"); valid = false; }
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setEmailErr("Enter a valid email"); valid = false; }
+    else setEmailErr("");
+    if (!password) { setPasswordErr("Password is required"); valid = false; }
+    else setPasswordErr("");
+    return valid;
+  };
+
   const submit = useCallback(async () => {
-    if (!email || !password) return;
+    if (!validate()) return;
     setLoading(true);
     try {
-      try {
-        const res = await axios.post(`${config.backendUrl}/auth/login`, {
-          email,
-          password,
-        });
-        if (!res?.data?.jwttoken) {
-          showError("Login succeeded, but backend did not return a token.");
-          return;
-        }
-
-        await setToken(res.data.jwttoken);
-        if (res.data.user) await setUser(res.data.user);
-
-        // Register push token silently — errors won't block login
-        registerForPushNotifications(res.data.jwttoken).catch(() => {});
-
-        showSuccess("Welcome back! Login successful.");
-
-        // Check user status
-        if (res.data.user.status === "PENDING") {
-          router.replace("/pending");
-        } else if (res.data.user.role === "ADMIN") {
-          router.replace("/admin");
-        } else if (res.data.user.role === "GATEKEEPER") {
-          router.replace("/gatekeeper/visitors");
-        } else {
-          router.replace("/(tabs)/home");
-        }
-      } catch (errAny: any) {
-        const status = errAny?.response?.status;
-        const code = errAny?.code;
-        if (status === 401 || status === 400) {
-          showError("Invalid email or password");
-        } else if (code === "ERR_NETWORK") {
-          showError(
-            `Cannot reach backend from device. Ensure EXPO_BACKEND_URL points to your computer's LAN IP (e.g., http://192.168.x.x:PORT).`,
-          );
-        } else {
-          showError(errAny.response?.data?.error || "Login failed");
-        }
-        return;
-      }
-    } catch {
-      showError("Invalid email or password");
-    } finally {
-      setLoading(false);
-    }
-  }, [email, password, showError, showSuccess]);
+      const res = await axios.post(`${config.backendUrl}/auth/login`, { email: email.trim(), password });
+      if (!res?.data?.jwttoken) { showError("Login succeeded but no token returned."); return; }
+      await setToken(res.data.jwttoken);
+      if (res.data.user) await setUser(res.data.user);
+      registerForPushNotifications(res.data.jwttoken).catch(() => {});
+      showSuccess("Welcome back!");
+      if (res.data.user.status === "PENDING") router.replace("/pending");
+      else if (res.data.user.role === "ADMIN") router.replace("/admin");
+      else if (res.data.user.role === "GATEKEEPER") router.replace("/gatekeeper/visitors");
+      else router.replace("/(tabs)/home");
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const code = err?.code;
+      if (status === 401 || status === 400) showError("Invalid email or password.");
+      else if (code === "ERR_NETWORK") showError("Cannot reach server. Check your connection.");
+      else showError(err?.response?.data?.error ?? "Login failed. Please try again.");
+    } finally { setLoading(false); }
+  }, [email, password]);
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: bg }]}
-      behavior={Platform.select({ ios: "padding", android: undefined })}
-    >
-      <View
-        style={[
-          styles.card,
-          { backgroundColor: cardBg, borderColor: borderCol },
-        ]}
-      >
-        <View style={styles.brandRow}>
-          <View style={[styles.logoBadge, { backgroundColor: tint }]}>
-            <Text style={[styles.logoText, { color: buttonText }]}>GZ</Text>
-          </View>
-          <View>
-            <Text style={[styles.brandName, { color: textColor }]}>
-              CGate
-            </Text>
-            <Text style={[styles.brandSub, { color: muted }]}>
-              Community Portal
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.form}>
-          <View
-            style={[
-              styles.field,
-              { backgroundColor: fieldBg, borderColor: borderCol },
-            ]}
-          >
-            <Feather
-              name="mail"
-              size={18}
-              color={iconColor}
-              style={styles.icon}
-            />
-            <TextInput
-              style={[styles.input, { color: textColor }]}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="Email address"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="off"
-              returnKeyType="next"
-              onSubmitEditing={() => {}}
-              placeholderTextColor={placeholder}
-              selectionColor={tint}
-            />
+    <KeyboardAvoidingView style={[styles.container, { backgroundColor: bg }]} behavior={Platform.select({ ios: "padding", android: undefined })}>
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <View style={[styles.card, { backgroundColor: cardBg, borderColor: borderCol }]}>
+          {/* Brand */}
+          <View style={styles.brandRow}>
+            <View style={[styles.logoBadge, { backgroundColor: tint }]}>
+              <Text style={[styles.logoText, { color: btnTextColor }]}>GZ</Text>
+            </View>
+            <View>
+              <Text style={[styles.brandName, { color: textColor }]}>CGate</Text>
+              <Text style={[styles.brandSub, { color: muted }]}>Community Portal</Text>
+            </View>
           </View>
 
-          <View
-            style={[
-              styles.field,
-              { backgroundColor: fieldBg, borderColor: borderCol },
-            ]}
-          >
-            <Feather
-              name="lock"
-              size={18}
-              color={iconColor}
-              style={styles.icon}
-            />
-            <TextInput
-              style={[styles.input, { color: textColor }]}
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Password"
-              secureTextEntry={!showPw}
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="off"
-              returnKeyType="done"
-              onSubmitEditing={submit}
-              placeholderTextColor={placeholder}
-              selectionColor={tint}
-            />
-            <TouchableOpacity
-              style={styles.pwToggle}
-              onPress={() => setShowPw((s) => !s)}
-            >
-              <Feather
-                name={showPw ? "eye-off" : "eye"}
-                size={18}
-                color={iconColor}
-              />
-            </TouchableOpacity>
-          </View>
+          <Text style={[styles.heading, { color: textColor }]}>Sign in to your account</Text>
 
-          <View style={styles.forgotPassword}>
-            <Text
-              style={[styles.link, { color: tint }]}
-              onPress={() => router.push("/forgot-password")}
-            >
-              Forgot password?
-            </Text>
-          </View>
+          <View style={styles.form}>
+            <FormField label="Email address" icon="mail" required error={emailErr} value={email}
+              onChangeText={(v) => { setEmail(v); if (emailErr) setEmailErr(""); }}
+              keyboardType="email-address" autoCapitalize="none" autoCorrect={false}
+              autoComplete="off" returnKeyType="next" onSubmitEditing={() => pwRef.current?.focus()}
+              placeholder="you@example.com" fieldBg={fieldBg} borderCol={borderCol}
+              textColor={textColor} iconColor={iconColor} tint={tint} />
 
-          <TouchableOpacity
-            style={[
-              styles.authBtn,
-              { backgroundColor: buttonBg },
-              loading && styles.authBtnDisabled,
-            ]}
-            onPress={submit}
-            disabled={loading}
-          >
-            <Feather name="log-in" size={18} color={buttonText} />
-            <Text style={[styles.authBtnText, { color: buttonText }]}>
-              {loading ? "Signing in…" : "Sign In"}
-            </Text>
-          </TouchableOpacity>
+            <FormField label="Password" icon="lock" required error={passwordErr} value={password}
+              onChangeText={(v) => { setPassword(v); if (passwordErr) setPasswordErr(""); }}
+              secureTextEntry={!showPw} autoCapitalize="none" autoCorrect={false}
+              autoComplete="off" returnKeyType="done" onSubmitEditing={submit}
+              placeholder="Your password" rightIcon={showPw ? "eye-off" : "eye"}
+              onRightIconPress={() => setShowPw(s => !s)} fieldBg={fieldBg}
+              borderCol={borderCol} textColor={textColor} iconColor={iconColor} tint={tint} />
 
-          <GoogleSignin />
-
-          <View style={styles.foot}>
-            <Text style={[styles.muted, { color: muted }]}>
-              New here?{" "}
-              <Text
-                style={[styles.link, { color: tint }]}
-                onPress={() => router.push("/register")}
-              >
-                Create an account
+            <View style={styles.forgotRow}>
+              <Text style={[styles.link, { color: tint }]} onPress={() => router.push("/forgot-password")}>
+                Forgot password?
               </Text>
-            </Text>
+            </View>
+
+            <LoadingButton label="Sign In" loadingLabel="Signing in…" loading={loading}
+              icon="log-in" bgColor={tint} textColor={btnTextColor} onPress={submit} style={styles.submitBtn} />
+            <GoogleSignin />
+            <View style={styles.foot}>
+              <Text style={[styles.footText, { color: muted }]}>
+                New here?{" "}
+                <Text style={[styles.link, { color: tint }]} onPress={() => router.push("/register")}>
+                  Create an account
+                </Text>
+              </Text>
+            </View>
           </View>
         </View>
-      </View>
-
-      <Toast
-        visible={toast.visible}
-        message={toast.message}
-        type={toast.type}
-        onHide={hideToast}
-      />
+      </ScrollView>
+      <Toast visible={toast.visible} message={toast.message} type={toast.type} onHide={hideToast} />
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 16,
-  },
-  card: {
-    width: "100%",
-    maxWidth: 420,
-    padding: 20,
-    borderRadius: 16,
-    borderWidth: 1,
-  },
-  brandRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 16,
-  },
-  logoBadge: {
-    height: 44,
-    width: 44,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  logoText: { fontWeight: "800" },
-  brandName: { fontSize: 20, fontWeight: "700" },
-  brandSub: { fontSize: 12 },
-  form: { marginTop: 8 },
-  field: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    marginBottom: 12,
-  },
-  icon: { marginRight: 8 },
-  input: {
-    flex: 1,
-    paddingVertical: 12,
-  },
-  pwToggle: { padding: 8 },
-  forgotPassword: {
-    alignItems: "flex-end",
-    marginBottom: 8,
-  },
-  authBtn: {
-    marginTop: 4,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 8,
-  },
-  authBtnDisabled: { opacity: 0.7 },
-  authBtnText: { fontWeight: "700" },
-  error: { color: "#f87171", marginTop: 10, textAlign: "center" },
-
-  foot: { marginTop: 12, alignItems: "center" },
-  muted: {},
-  link: { fontWeight: "600", textDecorationLine: "underline" },
+  container: { flex: 1 },
+  scroll: { flexGrow: 1, alignItems: "center", justifyContent: "center", padding: 20 },
+  card: { width: "100%", maxWidth: 440, padding: 28, borderRadius: 24, borderWidth: 1 },
+  brandRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 24 },
+  logoBadge: { width: 48, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  logoText: { fontWeight: "800", fontSize: 18 },
+  brandName: { fontSize: 20, fontWeight: "700", letterSpacing: -0.3 },
+  brandSub: { fontSize: 12, marginTop: 2 },
+  heading: { fontSize: 22, fontWeight: "800", marginBottom: 22, letterSpacing: -0.5 },
+  form: { gap: 0 },
+  forgotRow: { alignItems: "flex-end", marginTop: -4, marginBottom: 16 },
+  link: { fontWeight: "600", textDecorationLine: "underline", fontSize: 14 },
+  submitBtn: { marginBottom: 14 },
+  foot: { marginTop: 16, alignItems: "center" },
+  footText: { fontSize: 14 },
 });

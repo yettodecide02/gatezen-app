@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1079770925435",
+    "project_id": "cgate-9f9d9",
+    "storage_bucket": "cgate-9f9d9.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1079770925435:android:721000eeccf1e8cf0fd5de",
+        "android_client_info": {
+          "package_name": "com.yettodecide.gatezenapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBDWW-gL89B4BKFPYm23h7lDdn6lhVffSs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,6 +1,13 @@
 ﻿// @ts-nocheck
 import React, { useEffect, useState } from "react";
-import { ScrollView, Text, View, Pressable, ActivityIndicator, TextInput } from "react-native";
+import {
+  ScrollView,
+  Text,
+  View,
+  Pressable,
+  ActivityIndicator,
+  TextInput,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -36,56 +43,118 @@ export default function Documents() {
   useEffect(() => {
     (async () => {
       const user = await getUser();
-      if (!user?.communityId) { setLoading(false); return; }
+      if (!user?.communityId) {
+        setLoading(false);
+        return;
+      }
       await fetchPdfs(user.communityId);
       setLoading(false);
     })();
   }, []);
 
   useEffect(() => {
-    if (!searchQuery.trim()) { setFilteredPdfs(pdfs); return; }
-    setFilteredPdfs(pdfs.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase())));
+    if (!searchQuery.trim()) {
+      setFilteredPdfs(pdfs);
+      return;
+    }
+    setFilteredPdfs(
+      pdfs.filter((p) =>
+        p.name.toLowerCase().includes(searchQuery.toLowerCase()),
+      ),
+    );
   }, [searchQuery, pdfs]);
 
   const fetchPdfs = async (cid) => {
     try {
       const token = await getToken();
-      const res = await axios.get(`${config.backendUrl}/resident/pdfs?communityId=${cid}`, { headers: { Authorization: `Bearer ${token}` } });
-      const list = res.data?.data ?? res.data ?? [];
+      const res = await axios.get(
+        `${config.backendUrl}/resident/pdfs?communityId=${cid}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      const list = res.data?.pdfs ?? res.data?.data ?? res.data ?? [];
       setPdfs(Array.isArray(list) ? list : []);
-    } catch { showError("Failed to load documents"); }
+    } catch {
+      showError("Failed to load documents");
+    }
   };
 
   const downloadPdf = async (pdf) => {
     try {
       setDownloadingId(pdf.id);
       const token = await getToken();
-      const url = `${config.backendUrl}/resident/pdfs/${pdf.id}/download`;
-      const dest = `${FileSystem.documentDirectory}${pdf.name.replace(/[^a-zA-Z0-9._-]/g,"_")}.pdf`;
-      const res = await FileSystem.downloadAsync(url, dest, { headers: { Authorization: `Bearer ${token}` } });
+      const url = `${config.backendUrl}/resident/pdf/${pdf.id}`;
+      const dest = `${FileSystem.documentDirectory}${pdf.name.replace(/[^a-zA-Z0-9._-]/g, "_")}.pdf`;
+      const res = await FileSystem.downloadAsync(url, dest, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (res.status === 200) {
-        if (await Sharing.isAvailableAsync()) { await Sharing.shareAsync(res.uri); }
-        else { showSuccess("Downloaded to documents."); }
-      } else { showError("Download failed."); }
-    } catch { showError("Download failed."); }
-    finally { setDownloadingId(null); }
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(res.uri);
+        } else {
+          showSuccess("Downloaded to documents.");
+        }
+      } else {
+        showError("Download failed.");
+      }
+    } catch {
+      showError("Download failed.");
+    } finally {
+      setDownloadingId(null);
+    }
   };
 
   return (
     <View style={{ flex: 1, backgroundColor: bg }}>
       {/* Header */}
-      <View style={{ paddingTop: Math.max(insets.top, 16), paddingBottom: 14, paddingHorizontal: 20, backgroundColor: bg, borderBottomWidth: 1, borderBottomColor: borderCol }}>
+      <View
+        style={{
+          paddingTop: Math.max(insets.top, 16),
+          paddingBottom: 14,
+          paddingHorizontal: 20,
+          backgroundColor: bg,
+          borderBottomWidth: 1,
+          borderBottomColor: borderCol,
+        }}
+      >
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-          <Pressable onPress={() => router.back()} style={{ width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: borderCol, alignItems: "center", justifyContent: "center" }}>
+          <Pressable
+            onPress={() => router.back()}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              borderWidth: 1,
+              borderColor: borderCol,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
             <Feather name="arrow-left" size={18} color={text} />
           </Pressable>
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 18, fontWeight: "700", color: text }}>Documents</Text>
-            <Text style={{ fontSize: 12, color: muted }}>Community policies & forms</Text>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: text }}>
+              Documents
+            </Text>
+            <Text style={{ fontSize: 12, color: muted }}>
+              Community policies & forms
+            </Text>
           </View>
         </View>
         {/* Search */}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: fieldBg, borderRadius: 10, borderWidth: 1, borderColor: borderCol, paddingHorizontal: 12, paddingVertical: 8, marginTop: 12 }}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+            backgroundColor: fieldBg,
+            borderRadius: 10,
+            borderWidth: 1,
+            borderColor: borderCol,
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            marginTop: 12,
+          }}
+        >
           <Feather name="search" size={15} color={muted} />
           <TextInput
             value={searchQuery}
@@ -94,37 +163,110 @@ export default function Documents() {
             placeholderTextColor={muted}
             style={{ flex: 1, fontSize: 14, color: text }}
           />
-          {!!searchQuery && <Pressable onPress={() => setSearchQuery("")}><Feather name="x" size={14} color={muted} /></Pressable>}
+          {!!searchQuery && (
+            <Pressable onPress={() => setSearchQuery("")}>
+              <Feather name="x" size={14} color={muted} />
+            </Pressable>
+          )}
         </View>
       </View>
 
       {loading ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}><ActivityIndicator size="large" color={tint} /></View>
+        <View
+          style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
+        >
+          <ActivityIndicator size="large" color={tint} />
+        </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: insets.bottom + 24 }} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={{
+            padding: 16,
+            gap: 10,
+            paddingBottom: insets.bottom + 24,
+          }}
+          showsVerticalScrollIndicator={false}
+        >
           {filteredPdfs.length === 0 ? (
             <View style={{ alignItems: "center", paddingVertical: 50, gap: 8 }}>
-              <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: "#6366F115", alignItems: "center", justifyContent: "center" }}>
+              <View
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 28,
+                  backgroundColor: "#6366F115",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
                 <Feather name="file-text" size={24} color="#6366F1" />
               </View>
-              <Text style={{ fontSize: 16, fontWeight: "600", color: text }}>{searchQuery ? "No Results" : "No Documents"}</Text>
-              <Text style={{ fontSize: 13, color: muted, textAlign: "center" }}>{searchQuery ? `No documents match "${searchQuery}"` : "No community documents available yet."}</Text>
+              <Text style={{ fontSize: 16, fontWeight: "600", color: text }}>
+                {searchQuery ? "No Results" : "No Documents"}
+              </Text>
+              <Text style={{ fontSize: 13, color: muted, textAlign: "center" }}>
+                {searchQuery
+                  ? `No documents match "${searchQuery}"`
+                  : "No community documents available yet."}
+              </Text>
             </View>
-          ) : filteredPdfs.map((pdf) => (
-            <View key={pdf.id} style={{ backgroundColor: cardBg, borderRadius: 14, borderWidth: 1, borderColor: borderCol, padding: 14, flexDirection: "row", alignItems: "center", gap: 12 }}>
-              <View style={{ width: 42, height: 42, borderRadius: 10, backgroundColor: "#6366F115", alignItems: "center", justifyContent: "center" }}>
-                <Feather name="file-text" size={20} color="#6366F1" />
+          ) : (
+            filteredPdfs.map((pdf) => (
+              <View
+                key={pdf.id}
+                style={{
+                  backgroundColor: cardBg,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: borderCol,
+                  padding: 14,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 12,
+                }}
+              >
+                <View
+                  style={{
+                    width: 42,
+                    height: 42,
+                    borderRadius: 10,
+                    backgroundColor: "#6366F115",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Feather name="file-text" size={20} color="#6366F1" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{ fontSize: 14, fontWeight: "600", color: text }}
+                    numberOfLines={1}
+                  >
+                    {pdf.name}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: muted, marginTop: 2 }}>
+                    PDF Document
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => downloadPdf(pdf)}
+                  style={({ pressed }) => ({
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    backgroundColor: pressed ? tint + "30" : tint + "18",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  })}
+                >
+                  {downloadingId === pdf.id ? (
+                    <ActivityIndicator size="small" color={tint} />
+                  ) : (
+                    <Feather name="download" size={16} color={tint} />
+                  )}
+                </Pressable>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 14, fontWeight: "600", color: text }} numberOfLines={1}>{pdf.name}</Text>
-                <Text style={{ fontSize: 11, color: muted, marginTop: 2 }}>PDF Document</Text>
-              </View>
-              <Pressable onPress={() => downloadPdf(pdf)}
-                style={({ pressed }) => ({ width: 36, height: 36, borderRadius: 10, backgroundColor: pressed ? tint + "30" : tint + "18", alignItems: "center", justifyContent: "center" })}>
-                {downloadingId === pdf.id ? <ActivityIndicator size="small" color={tint} /> : <Feather name="download" size={16} color={tint} />}
-              </Pressable>
-            </View>
-          ))}
+            ))
+          )}
         </ScrollView>
       )}
       <Toast {...toast} onHide={hideToast} />

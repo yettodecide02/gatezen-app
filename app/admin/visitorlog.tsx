@@ -1,67 +1,85 @@
 ﻿// @ts-nocheck
-import React, { useEffect, useState } from "react";
+import { Feather } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import { Picker } from "@react-native-picker/picker";
+import axios from "axios";
+import { router } from "expo-router";
+import { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
+  Platform,
+  RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
-  View,
-  TouchableOpacity,
-  ScrollView,
   TextInput,
-  ActivityIndicator,
-  RefreshControl,
-  Platform,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { Feather } from "@expo/vector-icons";
-import { router } from "expo-router";
-import DateTimePicker from "@react-native-community/datetimepicker";
-import axios from "axios";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Picker } from "@react-native-picker/picker";
 
-import { useThemeColor } from "@/hooks/useThemeColor";
-import { useColorScheme } from "@/hooks/useColorScheme";
-import { getToken, getCommunityId } from "@/lib/auth";
-import { config } from "@/lib/config";
 import Toast from "@/components/Toast";
+import { useColorScheme } from "@/hooks/useColorScheme";
+import { useThemeColor } from "@/hooks/useThemeColor";
 import { useToast } from "@/hooks/useToast";
+import { getCommunityId, getToken } from "@/lib/auth";
+import { config } from "@/lib/config";
+
+// Overstay limits — must match admin-overstay.tsx
+const OVERSTAY_LIMITS = {
+  DELIVERY: 10,
+  GUEST:    240,
+  STAFF:    600,
+  CAB_AUTO: 15,
+  OTHER:    120,
+};
+
+function getOverstayCount(visitors) {
+  return visitors.filter((v) => {
+    if (!v.checkInAt || v.checkOutAt) return false;
+    const mins = Math.floor((Date.now() - new Date(v.checkInAt).getTime()) / 60000);
+    const limit = OVERSTAY_LIMITS[v.visitorType?.toUpperCase()] ?? OVERSTAY_LIMITS.OTHER;
+    return mins > limit;
+  }).length;
+}
 
 function getVisitorTypeConfig(type) {
   switch (type) {
     case "DELIVERY": return { bg: "#DBEAFE", text: "#1E40AF", icon: "truck" };
-    case "GUEST": return { bg: "#D1FAE5", text: "#065F46", icon: "user" };
+    case "GUEST":    return { bg: "#D1FAE5", text: "#065F46", icon: "user" };
     case "CAB_AUTO": return { bg: "#FEF3C7", text: "#92400E", icon: "navigation" };
-    default: return { bg: "#F3F4F6", text: "#374151", icon: "user" };
+    default:         return { bg: "#F3F4F6", text: "#374151", icon: "user" };
   }
 }
 
 function getStatusConfig(checkIn, checkOut) {
-  if (!checkIn) return { bg: "#F3F4F6", text: "#374151", label: "Pending", icon: "clock" };
-  if (checkIn && !checkOut) return { bg: "#D1FAE5", text: "#065F46", label: "Checked In", icon: "log-in" };
-  return { bg: "#F3F4F6", text: "#374151", label: "Checked Out", icon: "log-out" };
+  if (!checkIn)             return { bg: "#F3F4F6", text: "#374151", label: "Pending",     icon: "clock" };
+  if (checkIn && !checkOut) return { bg: "#D1FAE5", text: "#065F46", label: "Checked In",  icon: "log-in" };
+  return                           { bg: "#F3F4F6", text: "#374151", label: "Checked Out", icon: "log-out" };
 }
 
 export default function VisitorLog() {
-  const theme = useColorScheme() ?? "light";
-  const isDark = theme === "dark";
-  const bg = useThemeColor({}, "background");
+  const theme    = useColorScheme() ?? "light";
+  const isDark   = theme === "dark";
+  const bg       = useThemeColor({}, "background");
   const textColor = useThemeColor({}, "text");
-  const tint = useThemeColor({}, "tint");
-  const muted = isDark ? "#94A3B8" : "#64748B";
+  const tint     = useThemeColor({}, "tint");
+  const muted    = isDark ? "#94A3B8" : "#64748B";
   const borderCol = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)";
-  const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
-  const insets = useSafeAreaInsets();
+  const cardBg   = isDark ? "#1A1A1A" : "#FFFFFF";
+  const insets   = useSafeAreaInsets();
 
-  const [visitors, setVisitors] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [typeFilter, setTypeFilter] = useState("ALL");
-  const [unitFilter, setUnitFilter] = useState("ALL");
+  const [visitors, setVisitors]         = useState([]);
+  const [loading, setLoading]           = useState(true);
+  const [refreshing, setRefreshing]     = useState(false);
+  const [searchTerm, setSearchTerm]     = useState("");
+  const [typeFilter, setTypeFilter]     = useState("ALL");
+  const [unitFilter, setUnitFilter]     = useState("ALL");
   const [filtersExpanded, setFiltersExpanded] = useState(false);
 
   const today = new Date().toISOString().split("T")[0];
-  const [fromDate, setFromDate] = useState(today);
-  const [toDate, setToDate] = useState(today);
+  const [fromDate, setFromDate]         = useState(today);
+  const [toDate, setToDate]             = useState(today);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [datePickerMode, setDatePickerMode] = useState("from");
 
@@ -116,13 +134,16 @@ export default function VisitorLog() {
   });
 
   const stats = {
-    total: filteredVisitors.length,
-    checkedIn: filteredVisitors.filter((v) => v.checkInAt && !v.checkOutAt).length,
+    total:      filteredVisitors.length,
+    checkedIn:  filteredVisitors.filter((v) => v.checkInAt && !v.checkOutAt).length,
     checkedOut: filteredVisitors.filter((v) => v.checkOutAt).length,
-    pending: filteredVisitors.filter((v) => !v.checkInAt).length,
+    pending:    filteredVisitors.filter((v) => !v.checkInAt).length,
   };
 
-  const inputBg = isDark ? "#252525" : "#F8FAFC";
+  // Live overstay count badge for header button
+  const overstayCount = getOverstayCount(visitors);
+
+  const inputBg     = isDark ? "#252525" : "#F8FAFC";
   const inputBorder = isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)";
 
   if (loading) {
@@ -136,7 +157,8 @@ export default function VisitorLog() {
 
   return (
     <View style={[styles.container, { backgroundColor: bg }]}>
-      {/* Header */}
+
+      {/* ── Header ── */}
       <View style={[styles.headerBar, { paddingTop: Math.max(insets.top, 20), borderBottomColor: borderCol, backgroundColor: bg }]}>
         <View style={styles.headerLeft}>
           <TouchableOpacity onPress={() => router.back()} style={[styles.backBtn, { borderColor: borderCol }]}>
@@ -147,18 +169,69 @@ export default function VisitorLog() {
             <Text style={[styles.headerSub, { color: muted }]}>Track all visitors</Text>
           </View>
         </View>
+
+        {/* Overstay Alert button — shows badge if any overstays */}
+        <TouchableOpacity
+          onPress={() => router.push("/admin/overstay")}
+          style={[styles.overstayBtn, {
+            backgroundColor: overstayCount > 0 ? "#EF4444" : (isDark ? "#2C2C2E" : "#F1F5F9"),
+            borderColor: overstayCount > 0 ? "#EF4444" : borderCol,
+          }]}
+        >
+          <Feather
+            name="alert-triangle"
+            size={15}
+            color={overstayCount > 0 ? "#FFFFFF" : muted}
+          />
+          <Text style={[styles.overstayBtnText, {
+            color: overstayCount > 0 ? "#FFFFFF" : muted,
+          }]}>
+            {overstayCount > 0 ? `${overstayCount} Overstay` : "Overstay"}
+          </Text>
+          {overstayCount > 0 && (
+            <View style={styles.overstayDot} />
+          )}
+        </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={tint} />}>
+      <ScrollView
+        style={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={tint} />}
+      >
         <View style={styles.content}>
+
+          {/* Overstay alert banner — only shown when there are active overstays */}
+          {overstayCount > 0 && (
+            <TouchableOpacity
+              onPress={() => router.push("/admin/overstay")}
+              style={[styles.overstayBanner, {
+                backgroundColor: isDark ? "#1C1400" : "#FFFBEB",
+                borderColor: isDark ? "#92400E" : "#FCD34D",
+              }]}
+            >
+              <View style={[styles.overstayBannerIcon, { backgroundColor: isDark ? "#3D2000" : "#FEF3C7" }]}>
+                <Feather name="alert-triangle" size={18} color="#F59E0B" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.overstayBannerTitle, { color: "#F59E0B" }]}>
+                  {overstayCount} visitor{overstayCount > 1 ? "s" : ""} overstaying
+                </Text>
+                <Text style={[styles.overstayBannerSub, { color: muted }]}>
+                  Tap to review and take action
+                </Text>
+              </View>
+              <Feather name="chevron-right" size={16} color="#F59E0B" />
+            </TouchableOpacity>
+          )}
+
           {/* Stats */}
           <View style={styles.statsGrid}>
             {[
-              { label: "Total", value: stats.total, icon: "users", color: "#6366F1" },
-              { label: "Checked In", value: stats.checkedIn, icon: "log-in", color: "#10B981" },
-              { label: "Checked Out", value: stats.checkedOut, icon: "log-out", color: "#64748B" },
-              { label: "Pending", value: stats.pending, icon: "clock", color: "#F59E0B" },
+              { label: "Total",       value: stats.total,      icon: "users",    color: "#6366F1" },
+              { label: "Checked In",  value: stats.checkedIn,  icon: "log-in",   color: "#10B981" },
+              { label: "Checked Out", value: stats.checkedOut, icon: "log-out",  color: "#64748B" },
+              { label: "Pending",     value: stats.pending,    icon: "clock",    color: "#F59E0B" },
             ].map((item) => (
               <View key={item.label} style={[styles.statCard, { backgroundColor: cardBg, borderColor: borderCol }]}>
                 <View style={[styles.statIconWrap, { backgroundColor: item.color + "1A" }]}>
@@ -185,7 +258,6 @@ export default function VisitorLog() {
 
             {filtersExpanded && (
               <View style={{ gap: 14, marginTop: 4 }}>
-                {/* Search */}
                 <View>
                   <Text style={[styles.inputLabel, { color: muted }]}>SEARCH</Text>
                   <View style={styles.searchWrap}>
@@ -198,7 +270,6 @@ export default function VisitorLog() {
                   </View>
                 </View>
 
-                {/* Date Range */}
                 <View style={styles.row}>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.inputLabel, { color: muted }]}>FROM DATE</Text>
@@ -229,7 +300,6 @@ export default function VisitorLog() {
                   </TouchableOpacity>
                 )}
 
-                {/* Type + Unit Pickers */}
                 <View style={styles.row}>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.inputLabel, { color: muted }]}>VISITOR TYPE</Text>
@@ -271,10 +341,40 @@ export default function VisitorLog() {
           ) : (
             <View style={{ gap: 10 }}>
               {filteredVisitors.map((visitor) => {
-                const typeConfig = getVisitorTypeConfig(visitor.visitorType);
+                const typeConfig   = getVisitorTypeConfig(visitor.visitorType);
                 const statusConfig = getStatusConfig(visitor.checkInAt, visitor.checkOutAt);
+
+                // Highlight card if this visitor is overstaying
+                const visitorMins  = visitor.checkInAt && !visitor.checkOutAt
+                  ? Math.floor((Date.now() - new Date(visitor.checkInAt).getTime()) / 60000)
+                  : 0;
+                const visitorLimit = OVERSTAY_LIMITS[visitor.visitorType?.toUpperCase()] ?? OVERSTAY_LIMITS.OTHER;
+                const isOver       = visitorMins > visitorLimit;
+
                 return (
-                  <View key={visitor.id} style={[styles.vCard, { backgroundColor: cardBg, borderColor: borderCol }]}>
+                  <View
+                    key={visitor.id}
+                    style={[
+                      styles.vCard,
+                      {
+                        backgroundColor: cardBg,
+                        borderColor: isOver ? "#EF444460" : borderCol,
+                        borderLeftWidth: isOver ? 4 : 1,
+                        borderLeftColor: isOver ? "#EF4444" : borderCol,
+                      },
+                    ]}
+                  >
+                    {/* Overstay indicator row */}
+                    {isOver && (
+                      <View style={[styles.overstayRow, { backgroundColor: isDark ? "#3B0000" : "#FEE2E2" }]}>
+                        <Feather name="alert-triangle" size={12} color="#EF4444" />
+                        <Text style={styles.overstayRowText}>
+                          Overstaying by {Math.floor(visitorMins - visitorLimit)} min
+                          {visitorMins - visitorLimit > 1 ? "s" : ""}
+                        </Text>
+                      </View>
+                    )}
+
                     {/* Header row */}
                     <View style={styles.vCardTop}>
                       <View style={[styles.vIconWrap, { backgroundColor: typeConfig.bg }]}>
@@ -328,8 +428,8 @@ export default function VisitorLog() {
                           <Feather name="log-in" size={13} color={visitor.checkInAt ? "#065F46" : muted} />
                         </View>
                         <View>
-                          <Text style={[{ fontSize: 10, color: muted }]}>Check In</Text>
-                          <Text style={[{ fontSize: 13, fontWeight: "500", color: visitor.checkInAt ? textColor : muted }]}>
+                          <Text style={{ fontSize: 10, color: muted }}>Check In</Text>
+                          <Text style={{ fontSize: 13, fontWeight: "500", color: visitor.checkInAt ? textColor : muted }}>
                             {visitor.checkInAt ? formatTime(visitor.checkInAt) : "Not yet"}
                           </Text>
                         </View>
@@ -339,8 +439,8 @@ export default function VisitorLog() {
                           <Feather name="log-out" size={13} color={visitor.checkOutAt ? "#374151" : muted} />
                         </View>
                         <View>
-                          <Text style={[{ fontSize: 10, color: muted }]}>Check Out</Text>
-                          <Text style={[{ fontSize: 13, fontWeight: "500", color: visitor.checkOutAt ? textColor : muted }]}>
+                          <Text style={{ fontSize: 10, color: muted }}>Check Out</Text>
+                          <Text style={{ fontSize: 13, fontWeight: "500", color: visitor.checkOutAt ? textColor : muted }}>
                             {visitor.checkOutAt ? formatTime(visitor.checkOutAt) : "Not yet"}
                           </Text>
                         </View>
@@ -353,56 +453,68 @@ export default function VisitorLog() {
           )}
         </View>
       </ScrollView>
+
       <Toast visible={toast.visible} message={toast.message} type={toast.type} onHide={hideToast} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  headerBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
-  headerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
-  backBtn: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, alignItems: "center", justifyContent: "center" },
-  headerTitle: { fontSize: 20, fontWeight: "700", letterSpacing: -0.3 },
-  headerSub: { fontSize: 12, marginTop: 1 },
-  scroll: { flex: 1 },
-  content: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32, gap: 12 },
-  statsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  statCard: { width: "48%", borderRadius: 14, borderWidth: 1, padding: 14, gap: 6 },
-  statIconWrap: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center", marginBottom: 4 },
-  statValue: { fontSize: 22, fontWeight: "700", letterSpacing: -0.5 },
-  statLabel: { fontSize: 12, fontWeight: "500" },
-  card: { borderRadius: 16, borderWidth: 1, padding: 16 },
-  filterToggle: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  filterTitle: { fontSize: 15, fontWeight: "600" },
-  filterActiveDot: { width: 7, height: 7, borderRadius: 4 },
-  inputLabel: { fontSize: 11, fontWeight: "700", letterSpacing: 0.6, marginBottom: 7, textTransform: "uppercase" },
-  searchWrap: { position: "relative" },
-  searchInput: { borderWidth: 1, borderRadius: 10, paddingLeft: 38, paddingRight: 14, paddingVertical: 11, fontSize: 14 },
-  row: { flexDirection: "row", gap: 12 },
-  dateBtn: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11 },
-  iosDoneBtn: { alignSelf: "flex-end", paddingHorizontal: 20, paddingVertical: 9, borderRadius: 10 },
-  pickerWrap: { borderWidth: 1, borderRadius: 10, overflow: "hidden" },
-  refreshBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 12, borderRadius: 12 },
-  emptyCard: { borderRadius: 16, borderWidth: 1, padding: 40, alignItems: "center", gap: 10 },
-  emptyTitle: { fontSize: 16, fontWeight: "600" },
-  emptyDesc: { fontSize: 13, textAlign: "center" },
-  // Visitor card
-  vCard: { borderRadius: 14, borderWidth: 1, padding: 14 },
-  vCardTop: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginBottom: 12 },
-  vIconWrap: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
-  vCardInfo: { flex: 1 },
-  vName: { fontSize: 15, fontWeight: "600", marginBottom: 5 },
-  typePill: { alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-  typePillText: { fontSize: 10, fontWeight: "600", textTransform: "uppercase" },
-  statusPill: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 10 },
-  statusPillText: { fontSize: 11, fontWeight: "600" },
-  visitingBanner: { flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 8, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 8, marginBottom: 10 },
-  visitingText: { fontSize: 12, flex: 1 },
-  vDetails: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 10 },
-  vDetailItem: { flexDirection: "row", alignItems: "center", gap: 4 },
-  vDetailText: { fontSize: 12 },
-  vTimes: { flexDirection: "row", gap: 16, paddingTop: 10, borderTopWidth: 1 },
-  vTimeItem: { flexDirection: "row", alignItems: "center", gap: 10 },
-  vTimeIcon: { width: 30, height: 30, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  container:          { flex: 1 },
+  headerBar:          { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
+  headerLeft:         { flexDirection: "row", alignItems: "center", gap: 12 },
+  backBtn:            { width: 36, height: 36, borderRadius: 18, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  headerTitle:        { fontSize: 20, fontWeight: "700", letterSpacing: -0.3 },
+  headerSub:          { fontSize: 12, marginTop: 1 },
+  // Overstay button in header
+  overstayBtn:        { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+  overstayBtnText:    { fontSize: 12, fontWeight: "700" },
+  overstayDot:        { width: 6, height: 6, borderRadius: 3, backgroundColor: "#FFFFFF" },
+  // Overstay banner inside list
+  overstayBanner:     { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 14, borderWidth: 1 },
+  overstayBannerIcon: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  overstayBannerTitle:{ fontSize: 14, fontWeight: "700", color: "#F59E0B" },
+  overstayBannerSub:  { fontSize: 12, marginTop: 2 },
+  // Overstay row on card
+  overstayRow:        { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, marginBottom: 10 },
+  overstayRowText:    { fontSize: 12, fontWeight: "600", color: "#EF4444" },
+  scroll:             { flex: 1 },
+  content:            { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32, gap: 12 },
+  statsGrid:          { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  statCard:           { width: "48%", borderRadius: 14, borderWidth: 1, padding: 14, gap: 6 },
+  statIconWrap:       { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center", marginBottom: 4 },
+  statValue:          { fontSize: 22, fontWeight: "700", letterSpacing: -0.5 },
+  statLabel:          { fontSize: 12, fontWeight: "500" },
+  card:               { borderRadius: 16, borderWidth: 1, padding: 16 },
+  filterToggle:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  filterTitle:        { fontSize: 15, fontWeight: "600" },
+  filterActiveDot:    { width: 7, height: 7, borderRadius: 4 },
+  inputLabel:         { fontSize: 11, fontWeight: "700", letterSpacing: 0.6, marginBottom: 7, textTransform: "uppercase" },
+  searchWrap:         { position: "relative" },
+  searchInput:        { borderWidth: 1, borderRadius: 10, paddingLeft: 38, paddingRight: 14, paddingVertical: 11, fontSize: 14 },
+  row:                { flexDirection: "row", gap: 12 },
+  dateBtn:            { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11 },
+  iosDoneBtn:         { alignSelf: "flex-end", paddingHorizontal: 20, paddingVertical: 9, borderRadius: 10 },
+  pickerWrap:         { borderWidth: 1, borderRadius: 10, overflow: "hidden" },
+  refreshBtn:         { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 12, borderRadius: 12 },
+  emptyCard:          { borderRadius: 16, borderWidth: 1, padding: 40, alignItems: "center", gap: 10 },
+  emptyTitle:         { fontSize: 16, fontWeight: "600" },
+  emptyDesc:          { fontSize: 13, textAlign: "center" },
+  vCard:              { borderRadius: 14, borderWidth: 1, padding: 14 },
+  vCardTop:           { flexDirection: "row", alignItems: "flex-start", gap: 12, marginBottom: 12 },
+  vIconWrap:          { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  vCardInfo:          { flex: 1 },
+  vName:              { fontSize: 15, fontWeight: "600", marginBottom: 5 },
+  typePill:           { alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  typePillText:       { fontSize: 10, fontWeight: "600", textTransform: "uppercase" },
+  statusPill:         { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 10 },
+  statusPillText:     { fontSize: 11, fontWeight: "600" },
+  visitingBanner:     { flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 8, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 8, marginBottom: 10 },
+  visitingText:       { fontSize: 12, flex: 1 },
+  vDetails:           { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 10 },
+  vDetailItem:        { flexDirection: "row", alignItems: "center", gap: 4 },
+  vDetailText:        { fontSize: 12 },
+  vTimes:             { flexDirection: "row", gap: 16, paddingTop: 10, borderTopWidth: 1 },
+  vTimeItem:          { flexDirection: "row", alignItems: "center", gap: 10 },
+  vTimeIcon:          { width: 30, height: 30, borderRadius: 8, alignItems: "center", justifyContent: "center" },
 });

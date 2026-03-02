@@ -183,12 +183,17 @@ export default function BookingsScreen() {
   }, [userBookings]);
   const minsLeft = Math.max(0, 180 - minsUsed);
 
-  const isSlotBooked = (slot) =>
-    bookings.some(
-      (b) =>
-        +new Date(b.startsAt) === +new Date(slot.start) &&
-        b.status === "confirmed",
-    );
+  const isSlotBooked = (slot) => {
+    const cap = facility?.capacity || 1;
+    const bookedPeople = bookings
+      .filter(
+        (b) =>
+          +new Date(b.startsAt) === +new Date(slot.start) &&
+          b.status === "confirmed",
+      )
+      .reduce((sum, b) => sum + (b.peopleCount || 1), 0);
+    return bookedPeople >= cap;
+  };
   const isSlotPast = (slot) => new Date(slot.start) < new Date();
 
   const shiftDay = (delta) => {
@@ -274,6 +279,7 @@ export default function BookingsScreen() {
       setBookings((prev) =>
         prev.map((b) => (b.id === id ? { ...b, status: "cancelled" } : b)),
       );
+      loadBookings();
     } catch {
       showError("Failed to cancel booking");
     }

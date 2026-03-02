@@ -88,6 +88,15 @@ function BookingCard({ booking, theme, textColor, muted, borderCol }) {
             {end ? ` - ${end.time}` : ""}
           </Text>
         </View>
+        {booking.peopleCount > 0 && (
+          <View style={styles.bookMetaItem}>
+            <Feather name="users" size={11} color={muted} />
+            <Text style={[styles.bookMeta, { color: muted }]}>
+              {booking.peopleCount}{" "}
+              {booking.peopleCount === 1 ? "person" : "people"}
+            </Text>
+          </View>
+        )}
         {booking.amount && (
           <View style={styles.bookMetaItem}>
             <Feather name="credit-card" size={11} color={muted} />

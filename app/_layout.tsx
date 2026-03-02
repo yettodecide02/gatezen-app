@@ -21,8 +21,12 @@ configureNotificationHandler();
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const router = useRouter();
-  const notificationListener = useRef<Notifications.EventSubscription>();
-  const responseListener = useRef<Notifications.EventSubscription>();
+  const notificationListener = useRef<
+    Notifications.EventSubscription | undefined
+  >(undefined);
+  const responseListener = useRef<Notifications.EventSubscription | undefined>(
+    undefined,
+  );
 
   useEffect(() => {
     // Listen for notifications received while app is in foreground

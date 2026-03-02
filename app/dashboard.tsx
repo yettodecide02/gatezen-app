@@ -1,7 +1,6 @@
 // @ts-nocheck
-import React from "react";
-import { View, Text, StyleSheet } from "react-native";
 import { useThemeColor } from "@/hooks/useThemeColor";
+import { StyleSheet, Text, View } from "react-native";
 
 export default function DashboardScreen() {
   const bg = useThemeColor({}, "background");

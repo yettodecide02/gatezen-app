@@ -13,32 +13,43 @@ import { Feather } from "@expo/vector-icons";
 import axios from "axios";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
+import { useToast } from "@/hooks/useToast";
 import { getToken, getUser } from "@/lib/auth";
 import { config } from "@/lib/config";
-import Toast from "@/components/Toast";
-import { useToast } from "@/hooks/useToast";
+import { Feather } from "@expo/vector-icons";
+import axios from "axios";
+import { Camera, CameraView } from "expo-camera";
+import { router } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
+import { ActivityIndicator, Pressable, Text, Vibration, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function GatekeeperScanner() {
-  const theme = useColorScheme() ?? "light";
-  const isDark = theme === "dark";
-  const bg = useThemeColor({}, "background");
-  const text = useThemeColor({}, "text");
-  const tint = useThemeColor({}, "tint");
-  const insets = useSafeAreaInsets();
-  const muted = isDark ? "#94A3B8" : "#64748B";
+  const theme     = useColorScheme() ?? "light";
+  const isDark    = theme === "dark";
+  const bg        = useThemeColor({}, "background");
+  const text      = useThemeColor({}, "text");
+  const tint      = useThemeColor({}, "tint");
+  const insets    = useSafeAreaInsets();
+  const muted     = isDark ? "#94A3B8" : "#64748B";
   const borderCol = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)";
-  const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
+  const cardBg    = isDark ? "#1A1A1A" : "#FFFFFF";
 
   const { toast, showError, showSuccess, hideToast } = useToast();
-  const [user, setUserState] = useState(null);
-  const [token, setTokenState] = useState(null);
+  const [user,          setUserState]     = useState(null);
+  const [token,         setTokenState]    = useState(null);
   const [hasPermission, setHasPermission] = useState(null);
-  const [scanning, setScanning] = useState(true);
-  const [lastScan, setLastScan] = useState(null);
-  const [visitor, setVisitor] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [scanning,      setScanning]      = useState(true);
+  const [lastScan,      setLastScan]      = useState(null);
+  const [visitor,       setVisitor]       = useState(null);
+  const [loading,       setLoading]       = useState(false);
 
   useEffect(() => {
+    (async () => {
+      const [t, u] = await Promise.all([getToken(), getUser()]);
+      setTokenState(t);
+      setUserState(u);
+    })();
     (async () => {
       const [t, u] = await Promise.all([getToken(), getUser()]);
       setTokenState(t);
@@ -51,8 +62,17 @@ export default function GatekeeperScanner() {
       const { status } = await Camera.requestCameraPermissionsAsync();
       setHasPermission(status === "granted");
     })();
+    (async () => {
+      const { status } = await Camera.requestCameraPermissionsAsync();
+      setHasPermission(status === "granted");
+    })();
   }, []);
 
+  const resetScan = useCallback(() => {
+    setScanning(true);
+    setLastScan(null);
+    setVisitor(null);
+  }, []);
   const resetScan = useCallback(() => {
     setScanning(true);
     setLastScan(null);
@@ -106,6 +126,7 @@ export default function GatekeeperScanner() {
     [scanning, lastScan, user?.communityId, token, resetScan],
   );
 
+  // ── No permission yet ──────────────────────────────────────────
   if (hasPermission === null) {
     return (
       <View
@@ -166,6 +187,7 @@ export default function GatekeeperScanner() {
     );
   }
 
+  // ── Main scanner ───────────────────────────────────────────────
   return (
     <View style={{ flex: 1, backgroundColor: "#000" }}>
       {/* Camera */}
@@ -232,10 +254,34 @@ export default function GatekeeperScanner() {
                 ? "Point camera at QR code"
                 : "Processing…"}
           </Text>
+
+          {/* ── Bottom hint + second vehicle search CTA ── */}
+          <View style={{
+            position: "absolute", bottom: insets.bottom + 24,
+            alignItems: "center", gap: 10,
+          }}>
+            <Text style={{ color: "rgba(255,255,255,0.45)", fontSize: 11 }}>
+              Don't have a QR? Search by vehicle plate
+            </Text>
+            <Pressable
+              onPress={() => router.push("/vehicle-search")}
+              style={({ pressed }) => ({
+                flexDirection: "row", alignItems: "center", gap: 7,
+                paddingHorizontal: 20, paddingVertical: 10, borderRadius: 24,
+                backgroundColor: "rgba(255,255,255,0.13)",
+                borderWidth: 1, borderColor: "rgba(255,255,255,0.2)",
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Feather name="truck" size={15} color="#fff" />
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "#fff" }}>Search Vehicle Plate</Text>
+            </Pressable>
+          </View>
+
         </View>
       </CameraView>
 
-      {/* Visitor result card */}
+      {/* ── Visitor result bottom sheet ── */}
       {visitor && (
         <View
           style={{
@@ -366,4 +412,4 @@ export default function GatekeeperScanner() {
       <Toast {...toast} onHide={hideToast} />
     </View>
   );
-}
+} 

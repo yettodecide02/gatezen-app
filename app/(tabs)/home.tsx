@@ -1,22 +1,22 @@
 ﻿// @ts-nocheck
-import React, { useEffect, useState } from "react";
+import Toast from "@/components/Toast";
+import { useColorScheme } from "@/hooks/useColorScheme";
+import { useThemeColor } from "@/hooks/useThemeColor";
+import { useToast } from "@/hooks/useToast";
+import { getToken, getUser } from "@/lib/auth";
+import { config } from "@/lib/config";
+import { Feather } from "@expo/vector-icons";
+import axios from "axios";
+import { router } from "expo-router";
+import { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
+  Pressable,
   ScrollView,
   Text,
   View,
-  Pressable,
-  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Feather } from "@expo/vector-icons";
-import { router } from "expo-router";
-import axios from "axios";
-import { useThemeColor } from "@/hooks/useThemeColor";
-import { useColorScheme } from "@/hooks/useColorScheme";
-import { getUser, getToken } from "@/lib/auth";
-import { config } from "@/lib/config";
-import Toast from "@/components/Toast";
-import { useToast } from "@/hooks/useToast";
 
 const QUICK_LINKS = [
   {
@@ -66,6 +66,38 @@ const QUICK_LINKS = [
     icon: "help-circle",
     href: "/help",
     color: "#10B981",
+  },
+  {
+    key: "directory",
+    title: "Directory",
+    subtitle: "Browse residents",
+    icon: "book",
+    href: "/directory",
+    color: "#3B82F6",
+  },
+  {
+    key: "notice-board",
+    title: "Notice Board",
+    subtitle: "Community notices",
+    icon: "clipboard",
+    href: "/notice-board",
+    color: "#F97316",
+  },
+  {
+    key: "surveys",
+    title: "Surveys",
+    subtitle: "Share your feedback",
+    icon: "bar-chart-2",
+    href: "/surveys",
+    color: "#10B981",
+  },
+  {
+    key: "polls",
+    title: "Election Polls",
+    subtitle: "Vote on community matters",
+    icon: "check-square",
+    href: "/election-polls",
+    color: "#8B5CF6",
   },
 ];
 

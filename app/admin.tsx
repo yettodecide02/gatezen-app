@@ -1,29 +1,29 @@
 // @ts-nocheck
-import React, { useEffect, useState, useMemo } from "react";
+import { Feather } from "@expo/vector-icons";
+import axios from "axios";
+import { router } from "expo-router";
+import { useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
+  Modal,
+  RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
-  View,
-  TouchableOpacity,
-  ScrollView,
-  RefreshControl,
-  Modal,
   TextInput,
-  ActivityIndicator,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { Feather } from "@expo/vector-icons";
-import { router } from "expo-router";
-import axios from "axios";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useThemeColor } from "@/hooks/useThemeColor";
-import { useColorScheme } from "@/hooks/useColorScheme";
-import { logout, getToken, getCommunityId } from "@/lib/auth";
-import { config } from "@/lib/config";
-import Toast from "@/components/Toast";
 import ConfirmModal from "@/components/ConfirmModal";
 import { SkeletonStatCard } from "@/components/SkeletonLoader";
+import Toast from "@/components/Toast";
+import { useColorScheme } from "@/hooks/useColorScheme";
+import { useThemeColor } from "@/hooks/useThemeColor";
 import { useToast } from "@/hooks/useToast";
+import { getCommunityId, getToken, logout } from "@/lib/auth";
+import { config } from "@/lib/config";
 
 // ─── Helpers ───────────────────────────────────
 function getStatusPill(status: string) {
@@ -632,6 +632,38 @@ export default function AdminDashboard() {
                 desc="Visitor log"
                 color="#F59E0B"
                 onPress={() => router.push("/admin/visitorlog")}
+                theme={theme}
+              />
+              <ActionTile
+                icon="clipboard"
+                label="Notice Board"
+                desc="Post notices"
+                color="#F97316"
+                onPress={() => router.push("/notice-board")}
+                theme={theme}
+              />
+              <ActionTile
+                icon="bar-chart-2"
+                label="Surveys"
+                desc="Create & review"
+                color="#10B981"
+                onPress={() => router.push("/surveys")}
+                theme={theme}
+              />
+              <ActionTile
+                icon="check-square"
+                label="Polls"
+                desc="Election polls"
+                color="#8B5CF6"
+                onPress={() => router.push("/election-polls")}
+                theme={theme}
+              />
+              <ActionTile
+                icon="book"
+                label="Directory"
+                desc="Resident list"
+                color="#3B82F6"
+                onPress={() => router.push("/directory")}
                 theme={theme}
               />
             </View>

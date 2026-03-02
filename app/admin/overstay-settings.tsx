@@ -156,13 +156,13 @@ export default function OverstaySettings() {
 
   const handleSave = async () => {
     setSaving(true);
-    const ok = await saveOvstayLimits(limits);
+    const result = await saveOvstayLimits(limits);
     setSaving(false);
-    if (ok) {
+    if (result.ok) {
       setOriginal({ ...limits });
       showSuccess("Overstay limits saved successfully!");
     } else {
-      showError("Failed to save. Please try again.");
+      showError(result.error || "Failed to save. Please try again.");
     }
   };
 

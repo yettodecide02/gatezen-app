@@ -3,14 +3,14 @@ import {
   DefaultTheme,
   ThemeProvider,
 } from "@react-navigation/native";
-import { View, Platform } from "react-native";
 import { useFonts } from "expo-font";
+import * as Notifications from "expo-notifications";
 import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import { useEffect, useRef } from "react";
+import { Platform, View } from "react-native";
 import "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import * as Notifications from "expo-notifications";
-import { useEffect, useRef } from "react";
 
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { configureNotificationHandler } from "@/lib/notifications";
@@ -124,6 +124,10 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="gatekeeper" />
             <Stack.Screen name="auth/callback" />
+            <Stack.Screen name="directory" />
+            <Stack.Screen name="notice-board" />
+            <Stack.Screen name="surveys" />
+            <Stack.Screen name="election-polls" />
           </Stack>
           <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
         </ThemeProvider>

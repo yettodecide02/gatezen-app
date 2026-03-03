@@ -70,7 +70,7 @@ export default function GatekeeperProfile() {
     setLoggingOut(true);
     try {
       await AsyncStorage.multiRemove(["token", "user"]);
-      router.replace("/login");
+      router.replace("/auth/login");
     } catch {
       showError("Failed to logout");
     } finally {

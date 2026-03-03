@@ -69,6 +69,15 @@ export default function GatekeeperTabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="vehicle-search"
+        options={{
+          title: "Vehicles",
+          tabBarIcon: ({ color, focused }) => (
+            <Feather name="search" size={focused ? 26 : 22} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="packages"
         options={{
           title: "Packages",

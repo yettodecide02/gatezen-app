@@ -45,22 +45,22 @@ export default function RootLayout() {
         if (!data?.type) return;
         switch (data.type) {
           case "VISITOR_CHECKIN":
-            router.push("/visitors/passes");
+            router.push("/resident/visitors/passes");
             break;
           case "PACKAGE":
-            router.push("/mypackages");
+            router.push("/resident/mypackages");
             break;
           case "ANNOUNCEMENT":
             router.push("/(tabs)/home");
             break;
           case "TICKET_UPDATE":
-            router.push("/maintenance");
+            router.push("/resident/maintenance");
             break;
           case "NEW_USER":
             router.push("/admin");
             break;
           case "BOOKING_REMINDER":
-            router.push("/bookings");
+            router.push("/resident/bookings");
             break;
           default:
             break;
@@ -112,7 +112,7 @@ export default function RootLayout() {
           value={colorScheme === "dark" ? DarkNavTheme : LightNavTheme}
         >
           <Stack
-            initialRouteName="login"
+            initialRouteName="auth/login"
             screenOptions={{
               headerShown: false,
               animation: Platform.OS === "ios" ? "slide_from_right" : "fade",
@@ -123,15 +123,18 @@ export default function RootLayout() {
               },
             }}
           >
-            <Stack.Screen name="login" />
-            <Stack.Screen name="register" />
+            <Stack.Screen name="auth/login" />
+            <Stack.Screen name="auth/register" />
+            <Stack.Screen name="auth/forgot-password" />
+            <Stack.Screen name="auth/pending" />
             <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="admin/index" />
             <Stack.Screen name="gatekeeper" />
             <Stack.Screen name="auth/callback" />
-            <Stack.Screen name="directory" />
-            <Stack.Screen name="notice-board" />
-            <Stack.Screen name="surveys" />
-            <Stack.Screen name="election-polls" />
+            <Stack.Screen name="resident/directory" />
+            <Stack.Screen name="resident/notice-board" />
+            <Stack.Screen name="resident/surveys" />
+            <Stack.Screen name="resident/election-polls" />
           </Stack>
           <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
         </ThemeProvider>

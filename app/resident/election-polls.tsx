@@ -96,7 +96,7 @@ function PollCard({ poll, isAdmin, isDark, textColor, muted, tint, borderCol, on
         {/* Header */}
         <View style={styles.pollTitleRow}>
           <View style={[styles.pollIconWrap, { backgroundColor: isDark ? "#1E1040" : "#EDE9FE" }]}>
-            <Feather name="check-square" size={17} color="#8B5CF6" />
+            <Feather name="check-square" size={17} color={tint} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={[styles.pollTitle, { color: textColor }]} numberOfLines={2}>{poll.title}</Text>
@@ -172,7 +172,7 @@ function PollCard({ poll, isAdmin, isDark, textColor, muted, tint, borderCol, on
           ) : !hasVoted && isActive ? (
             <TouchableOpacity
               onPress={() => onVote(poll)}
-              style={[styles.voteBtn, { backgroundColor: "#8B5CF6" }]}
+              style={[styles.voteBtn, { backgroundColor: tint }]}
             >
               <Feather name="check-square" size={14} color="#fff" />
               <Text style={styles.voteBtnText}>Cast Your Vote</Text>
@@ -222,7 +222,7 @@ function VoteModal({ poll, visible, onClose, onVote, theme, textColor, tint, mut
           <View style={[styles.sheetHeader, { borderBottomColor: borderCol }]}>
             <View style={styles.sheetHeaderLeft}>
               <View style={[styles.sheetIconWrap, { backgroundColor: "#8B5CF615" }]}>
-                <Feather name="check-square" size={18} color="#8B5CF6" />
+                <Feather name="check-square" size={18} color={tint} />
               </View>
               <View>
                 <Text style={[styles.sheetTitle, { color: textColor }]} numberOfLines={1}>{poll.title}</Text>
@@ -279,7 +279,7 @@ function VoteModal({ poll, visible, onClose, onVote, theme, textColor, tint, mut
               <Text style={[styles.btnOutlineText, { color: muted }]}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.btnPrimary, { backgroundColor: "#8B5CF6", flex: 1.5, opacity: loading || !selected ? 0.5 : 1 }]}
+              style={[styles.btnPrimary, { backgroundColor: tint, flex: 1.5, opacity: loading || !selected ? 0.5 : 1 }]}
               onPress={handleVote} disabled={loading || !selected}
             >
               {loading
@@ -338,7 +338,7 @@ function CreatePollModal({ visible, onClose, onSubmit, theme, textColor, tint, m
           <View style={[styles.sheetHeader, { borderBottomColor: borderCol }]}>
             <View style={styles.sheetHeaderLeft}>
               <View style={[styles.sheetIconWrap, { backgroundColor: "#8B5CF615" }]}>
-                <Feather name="check-square" size={18} color="#8B5CF6" />
+                <Feather name="check-square" size={18} color={tint} />
               </View>
               <Text style={[styles.sheetTitle, { color: textColor }]}>Create Poll</Text>
             </View>
@@ -412,8 +412,8 @@ function CreatePollModal({ visible, onClose, onSubmit, theme, textColor, tint, m
               onPress={addCandidate}
               style={[styles.addCandidateBtn, { borderColor: "#8B5CF650", backgroundColor: "#8B5CF610" }]}
             >
-              <Feather name="plus-circle" size={15} color="#8B5CF6" />
-              <Text style={[styles.addCandidateText, { color: "#8B5CF6" }]}>Add Candidate</Text>
+              <Feather name="plus-circle" size={15} color={tint} />
+              <Text style={[styles.addCandidateText, { color: tint }]}>Add Candidate</Text>
             </TouchableOpacity>
           </ScrollView>
 
@@ -422,7 +422,7 @@ function CreatePollModal({ visible, onClose, onSubmit, theme, textColor, tint, m
               <Text style={[styles.btnOutlineText, { color: muted }]}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.btnPrimary, { backgroundColor: "#8B5CF6", flex: 1.5, opacity: loading || !title.trim() ? 0.5 : 1 }]}
+              style={[styles.btnPrimary, { backgroundColor: tint, flex: 1.5, opacity: loading || !title.trim() ? 0.5 : 1 }]}
               onPress={handleSubmit} disabled={loading || !title.trim()}
             >
               <Text style={styles.btnPrimaryText}>{loading ? "Creating..." : "Create Poll"}</Text>
@@ -466,7 +466,7 @@ export default function ElectionPolls() {
       const [token, communityId, user] = await Promise.all([getToken(), getCommunityId(), getUser()]);
       setIsAdmin(user?.role === "ADMIN");
       if (!communityId) { showError("Community not found."); return; }
-      const res = await axios.get(`${url}/polls`, {
+      const res = await axios.get(`${url}/resident/polls`, {
         headers: { Authorization: `Bearer ${token}` },
         params:  { communityId },
       });
@@ -484,7 +484,7 @@ export default function ElectionPolls() {
 
   const handleCreate = async (data) => {
     const [token, communityId] = await Promise.all([getToken(), getCommunityId()]);
-    await axios.post(`${url}/polls`, { ...data, communityId }, {
+    await axios.post(`${url}/resident/polls`, { ...data, communityId }, {
       headers: { Authorization: `Bearer ${token}` },
     });
     showSuccess("Poll created!");
@@ -493,7 +493,7 @@ export default function ElectionPolls() {
 
   const handleVote = async (pollId, candidateId) => {
     const [token, user] = await Promise.all([getToken(), getUser()]);
-    await axios.post(`${url}/polls/${pollId}/vote`, { candidateId, userId: user?.id }, {
+    await axios.post(`${url}/resident/polls/${pollId}/vote`, { candidateId, userId: user?.id }, {
       headers: { Authorization: `Bearer ${token}` },
     });
     showSuccess("Vote cast successfully!");
@@ -504,7 +504,7 @@ export default function ElectionPolls() {
     setDeleting(true);
     try {
       const token = await getToken();
-      await axios.delete(`${url}/polls/${deleteConfirmId}`, {
+      await axios.delete(`${url}/resident/polls/${deleteConfirmId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setPolls((prev) => prev.filter((p) => p.id !== deleteConfirmId));
@@ -561,7 +561,7 @@ export default function ElectionPolls() {
           </View>
         </View>
         {isAdmin && (
-          <TouchableOpacity style={[styles.headerBtn, { backgroundColor: "#8B5CF6" }]} onPress={() => setShowCreateModal(true)}>
+          <TouchableOpacity style={[styles.headerBtn, { backgroundColor: tint }]} onPress={() => setShowCreateModal(true)}>
             <Feather name="plus" size={16} color="#ffffff" />
             <Text style={styles.headerBtnText}>Create</Text>
           </TouchableOpacity>
@@ -577,7 +577,7 @@ export default function ElectionPolls() {
           {/* Stats grid */}
           <View style={styles.statsGrid}>
             {[
-              { icon: "check-square", label: "Total Polls",    value: stats.total,       color: "#8B5CF6" },
+              { icon: "check-square", label: "Total Polls",    value: stats.total,       color: tint },
               { icon: "zap",          label: "Active",         value: stats.active,       color: "#10B981" },
               { icon: "users",        label: "Votes Cast",     value: totalVotesCast,     color: "#3B82F6" },
               { icon: "archive",      label: "Closed",         value: stats.closed,       color: "#64748B" },
@@ -600,14 +600,14 @@ export default function ElectionPolls() {
                 return (
                   <TouchableOpacity
                     key={t.key}
-                    style={[styles.tab, { backgroundColor: isActive ? "#8B5CF6" : "transparent", borderColor: isActive ? "#8B5CF6" : borderCol }]}
+                    style={[styles.tab, { backgroundColor: isActive ? tint : "transparent", borderColor: isActive ? tint : borderCol }]}
                     onPress={() => setActiveTab(t.key)}
                   >
                     <Feather name={t.icon} size={12} color={isActive ? "#fff" : muted} />
                     <Text style={[styles.tabText, { color: isActive ? "#fff" : muted }]}>{t.label}</Text>
                     {stats[t.key] > 0 && (
                       <View style={[styles.tabCount, { backgroundColor: isActive ? "rgba(255,255,255,0.25)" : "#8B5CF620" }]}>
-                        <Text style={[styles.tabCountText, { color: isActive ? "#fff" : "#8B5CF6" }]}>{stats[t.key]}</Text>
+                        <Text style={[styles.tabCountText, { color: isActive ? "#fff" : tint }]}>{stats[t.key]}</Text>
                       </View>
                     )}
                   </TouchableOpacity>
@@ -620,7 +620,7 @@ export default function ElectionPolls() {
           <View style={[styles.card, { backgroundColor: cardBg, borderColor: borderCol }]}>
             <View style={styles.listHeader}>
               <View style={styles.listHeaderLeft}>
-                <Feather name="check-square" size={16} color="#8B5CF6" />
+                <Feather name="check-square" size={16} color={tint} />
                 <Text style={[styles.listHeaderTitle, { color: textColor }]}>
                   {tabs.find((t) => t.key === activeTab)?.label} Polls
                 </Text>
@@ -634,7 +634,7 @@ export default function ElectionPolls() {
                 <Text style={[styles.emptyText, { color: muted }]}>No {activeTab} polls</Text>
                 {isAdmin && activeTab === "active" && (
                   <TouchableOpacity
-                    style={[styles.emptyCreateBtn, { backgroundColor: "#8B5CF6" }]}
+                    style={[styles.emptyCreateBtn, { backgroundColor: tint }]}
                     onPress={() => setShowCreateModal(true)}
                   >
                     <Feather name="plus" size={14} color="#fff" />

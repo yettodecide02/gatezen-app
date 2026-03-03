@@ -1,6 +1,13 @@
 ﻿// @ts-nocheck
 import React, { useEffect, useState } from "react";
-import { ScrollView, Text, View, Pressable, ActivityIndicator, TextInput } from "react-native";
+import {
+  ScrollView,
+  Text,
+  View,
+  Pressable,
+  ActivityIndicator,
+  TextInput,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -30,10 +37,21 @@ export default function Profile() {
   const [editing, setEditing] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [profile, setProfile] = useState({ id: "", name: "", email: "", block: "", unit: "", communityName: "" });
+  const [profile, setProfile] = useState({
+    id: "",
+    name: "",
+    email: "",
+    block: "",
+    unit: "",
+    communityName: "",
+    phone: "",
+    vehicles: [] as string[],
+  });
   const { toast, showSuccess, showError, showWarning, hideToast } = useToast();
 
-  useEffect(() => { loadProfile(); }, []);
+  useEffect(() => {
+    loadProfile();
+  }, []);
 
   const loadProfile = async () => {
     try {
@@ -46,6 +64,8 @@ export default function Profile() {
         block: user?.blockName || user?.block || "",
         unit: user?.unitNumber || user?.unit || "",
         communityName: user?.communityName || "",
+        phone: user?.phone || "",
+        vehicles: user?.vehicles || [],
       };
       if (token && user?.id) {
         try {
@@ -55,46 +75,108 @@ export default function Profile() {
           });
           if (res.data?.success) {
             const d = res.data.data;
-            setProfile({ id: d.id, name: d.name, email: d.email, block: d.blockName || basicProfile.block, unit: d.unitNumber || basicProfile.unit, communityName: d.communityName || basicProfile.communityName });
+            setProfile({
+              id: d.id,
+              name: d.name,
+              email: d.email,
+              block: d.blockName || basicProfile.block,
+              unit: d.unitNumber || basicProfile.unit,
+              communityName: d.communityName || basicProfile.communityName,
+              phone: d.phone || "",
+              vehicles: d.vehicles || [],
+            });
             return;
           }
         } catch {}
       }
       setProfile(basicProfile);
-    } catch { } finally { setLoading(false); }
+    } catch {
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSave = async () => {
-    if (!profile.name.trim()) { showWarning("Name cannot be empty."); return; }
+    if (!profile.name.trim()) {
+      showWarning("Name cannot be empty.");
+      return;
+    }
     try {
       setSaving(true);
       const token = await getToken();
-      const res = await axios.patch(`${config.backendUrl}/resident/profile`, { name: profile.name.trim() }, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await axios.patch(
+        `${config.backendUrl}/resident/profile`,
+        {
+          name: profile.name.trim(),
+          phone: profile.phone?.trim() || null,
+          vehicles: profile.vehicles.map((v) => v.trim()).filter(Boolean),
+        },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
       if (res.data?.success) {
         const cached = await getUser();
-        if (cached) await setUser({ ...cached, name: res.data.data.name });
-        setProfile((p) => ({ ...p, name: res.data.data.name }));
+        if (cached)
+          await setUser({
+            ...cached,
+            name: res.data.data.name,
+            phone: res.data.data.phone,
+            vehicles: res.data.data.vehicles,
+          });
+        setProfile((p) => ({
+          ...p,
+          name: res.data.data.name,
+          phone: res.data.data.phone || "",
+          vehicles: res.data.data.vehicles || [],
+        }));
       }
       showSuccess("Profile updated!");
       setEditing(false);
-    } catch { showError("Failed to update profile."); } finally { setSaving(false); }
+    } catch {
+      showError("Failed to update profile.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const confirmLogout = async () => {
     setLoggingOut(true);
-    try { await logout(); router.replace("/login"); }
-    catch { showError("Logout failed."); setLoggingOut(false); }
-    finally { setShowLogoutConfirm(false); }
+    try {
+      await logout();
+      router.replace("/auth/login");
+    } catch {
+      showError("Logout failed.");
+      setLoggingOut(false);
+    } finally {
+      setShowLogoutConfirm(false);
+    }
   };
 
-  const getInitials = (name) => name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+  const getInitials = (name) =>
+    name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
 
   if (loading) {
-    return <View style={{ flex: 1, backgroundColor: bg, alignItems: "center", justifyContent: "center" }}><ActivityIndicator size="large" color={tint} /></View>;
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: bg,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <ActivityIndicator size="large" color={tint} />
+      </View>
+    );
   }
 
   const INFO_ROWS = [
     { icon: "mail", label: "Email", value: profile.email },
+    { icon: "phone", label: "Phone", value: profile.phone || "—" },
     { icon: "home", label: "Community", value: profile.communityName || "—" },
     { icon: "layers", label: "Block", value: profile.block || "—" },
     { icon: "hash", label: "Unit", value: profile.unit || "—" },
@@ -103,70 +185,389 @@ export default function Profile() {
   return (
     <View style={{ flex: 1, backgroundColor: bg }}>
       {/* Header */}
-      <View style={{ paddingTop: Math.max(insets.top, 16), paddingBottom: 14, paddingHorizontal: 20, backgroundColor: bg, borderBottomWidth: 1, borderBottomColor: borderCol }}>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <Text style={{ fontSize: 22, fontWeight: "700", color: text }}>Profile</Text>
+      <View
+        style={{
+          paddingTop: Math.max(insets.top, 16),
+          paddingBottom: 14,
+          paddingHorizontal: 20,
+          backgroundColor: bg,
+          borderBottomWidth: 1,
+          borderBottomColor: borderCol,
+        }}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <Text style={{ fontSize: 22, fontWeight: "700", color: text }}>
+            Profile
+          </Text>
           <View style={{ flexDirection: "row", gap: 8 }}>
             {editing && (
-              <Pressable onPress={handleSave} disabled={saving}
-                style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: saving ? tint + "80" : tint }}>
+              <Pressable
+                onPress={handleSave}
+                disabled={saving}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 5,
+                  paddingHorizontal: 14,
+                  paddingVertical: 8,
+                  borderRadius: 20,
+                  backgroundColor: saving ? tint + "80" : tint,
+                }}
+              >
                 <Feather name="check" size={14} color="#fff" />
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#fff" }}>{saving ? "Saving…" : "Save"}</Text>
+                <Text
+                  style={{ fontSize: 13, fontWeight: "600", color: "#fff" }}
+                >
+                  {saving ? "Saving…" : "Save"}
+                </Text>
               </Pressable>
             )}
-            <Pressable onPress={() => setEditing(!editing)} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: tint + "15", alignItems: "center", justifyContent: "center" }}>
+            <Pressable
+              onPress={() => setEditing(!editing)}
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                backgroundColor: tint + "15",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
               <Feather name={editing ? "x" : "edit-2"} size={16} color={tint} />
             </Pressable>
-            <Pressable onPress={() => setShowLogoutConfirm(true)} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#EF444415", alignItems: "center", justifyContent: "center" }}>
+            <Pressable
+              onPress={() => setShowLogoutConfirm(true)}
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                backgroundColor: "#EF444415",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
               <Feather name="log-out" size={16} color="#EF4444" />
             </Pressable>
           </View>
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 20, gap: 16, paddingBottom: insets.bottom + 24 }} showsVerticalScrollIndicator={false}>
-
+      <ScrollView
+        contentContainerStyle={{
+          padding: 20,
+          gap: 16,
+          paddingBottom: insets.bottom + 24,
+        }}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Avatar */}
         <View style={{ alignItems: "center", paddingVertical: 10 }}>
-          <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: tint + "20", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
-            <Text style={{ fontSize: 28, fontWeight: "700", color: tint }}>{getInitials(profile.name || "R")}</Text>
+          <View
+            style={{
+              width: 80,
+              height: 80,
+              borderRadius: 40,
+              backgroundColor: tint + "20",
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: 12,
+            }}
+          >
+            <Text style={{ fontSize: 28, fontWeight: "700", color: tint }}>
+              {getInitials(profile.name || "R")}
+            </Text>
           </View>
           {editing ? (
             <TextInput
               value={profile.name}
               onChangeText={(v) => setProfile((p) => ({ ...p, name: v }))}
-              style={{ fontSize: 20, fontWeight: "700", color: text, textAlign: "center", borderBottomWidth: 2, borderBottomColor: tint, paddingBottom: 4, minWidth: 160 }}
+              style={{
+                fontSize: 20,
+                fontWeight: "700",
+                color: text,
+                textAlign: "center",
+                borderBottomWidth: 2,
+                borderBottomColor: tint,
+                paddingBottom: 4,
+                minWidth: 160,
+              }}
               placeholder="Your name"
               placeholderTextColor={muted}
             />
           ) : (
-            <Text style={{ fontSize: 20, fontWeight: "700", color: text }}>{profile.name}</Text>
+            <Text style={{ fontSize: 20, fontWeight: "700", color: text }}>
+              {profile.name}
+            </Text>
           )}
-          <Text style={{ fontSize: 13, color: muted, marginTop: 3 }}>{profile.email}</Text>
+          <Text style={{ fontSize: 13, color: muted, marginTop: 3 }}>
+            {profile.email}
+          </Text>
         </View>
 
         {/* Info Card */}
-        <View style={{ backgroundColor: cardBg, borderRadius: 16, borderWidth: 1, borderColor: borderCol, overflow: "hidden" }}>
+        <View
+          style={{
+            backgroundColor: cardBg,
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: borderCol,
+            overflow: "hidden",
+          }}
+        >
           {INFO_ROWS.map((row, idx) => (
-            <View key={row.label} style={{ flexDirection: "row", alignItems: "center", padding: 14, gap: 12, borderTopWidth: idx > 0 ? 1 : 0, borderTopColor: borderCol }}>
-              <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: tint + "15", alignItems: "center", justifyContent: "center" }}>
+            <View
+              key={row.label}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                padding: 14,
+                gap: 12,
+                borderTopWidth: idx > 0 ? 1 : 0,
+                borderTopColor: borderCol,
+              }}
+            >
+              <View
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 10,
+                  backgroundColor: tint + "15",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
                 <Feather name={row.icon} size={16} color={tint} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 11, color: muted, fontWeight: "500", textTransform: "uppercase", letterSpacing: 0.5 }}>{row.label}</Text>
-                <Text style={{ fontSize: 15, color: text, fontWeight: "500", marginTop: 1 }}>{row.value}</Text>
+                <Text
+                  style={{
+                    fontSize: 11,
+                    color: muted,
+                    fontWeight: "500",
+                    textTransform: "uppercase",
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  {row.label}
+                </Text>
+                {editing && row.label === "Phone" ? (
+                  <TextInput
+                    value={profile.phone}
+                    onChangeText={(v) =>
+                      setProfile((p) => ({ ...p, phone: v }))
+                    }
+                    style={{
+                      fontSize: 15,
+                      color: text,
+                      fontWeight: "500",
+                      marginTop: 1,
+                      borderBottomWidth: 1,
+                      borderBottomColor: tint + "60",
+                      paddingBottom: 2,
+                    }}
+                    placeholder="+91 98765 43210"
+                    placeholderTextColor={muted}
+                    keyboardType="phone-pad"
+                  />
+                ) : (
+                  <Text
+                    style={{
+                      fontSize: 15,
+                      color: text,
+                      fontWeight: "500",
+                      marginTop: 1,
+                    }}
+                  >
+                    {row.value}
+                  </Text>
+                )}
               </View>
             </View>
           ))}
         </View>
 
-        {/* Logout Button */}
-        <Pressable onPress={() => setShowLogoutConfirm(true)}
-          style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: "#EF444430", backgroundColor: pressed ? "#EF44441A" : "#EF44440D" })}>
-          <Feather name="log-out" size={16} color="#EF4444" />
-          <Text style={{ fontSize: 15, fontWeight: "600", color: "#EF4444" }}>Logout</Text>
-        </Pressable>
+        {/* Vehicles Card */}
+        <View
+          style={{
+            backgroundColor: cardBg,
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: borderCol,
+            overflow: "hidden",
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: 14,
+              borderBottomWidth: profile.vehicles.length > 0 || editing ? 1 : 0,
+              borderBottomColor: borderCol,
+            }}
+          >
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
+            >
+              <View
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 10,
+                  backgroundColor: tint + "15",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Feather name="truck" size={16} color={tint} />
+              </View>
+              <Text
+                style={{
+                  fontSize: 11,
+                  color: muted,
+                  fontWeight: "500",
+                  textTransform: "uppercase",
+                  letterSpacing: 0.5,
+                }}
+              >
+                Vehicles
+              </Text>
+            </View>
+            {editing && (
+              <Pressable
+                onPress={() =>
+                  setProfile((p) => ({ ...p, vehicles: [...p.vehicles, ""] }))
+                }
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 4,
+                  paddingHorizontal: 10,
+                  paddingVertical: 5,
+                  borderRadius: 8,
+                  backgroundColor: tint + "15",
+                }}
+              >
+                <Feather name="plus" size={13} color={tint} />
+                <Text style={{ fontSize: 12, fontWeight: "600", color: tint }}>
+                  Add
+                </Text>
+              </Pressable>
+            )}
+          </View>
 
+          {!editing && profile.vehicles.length === 0 && (
+            <View style={{ padding: 14 }}>
+              <Text style={{ fontSize: 14, color: muted }}>—</Text>
+            </View>
+          )}
+
+          {profile.vehicles.map((v, i) => (
+            <View
+              key={i}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                gap: 10,
+                borderBottomWidth: i < profile.vehicles.length - 1 ? 1 : 0,
+                borderBottomColor: borderCol,
+              }}
+            >
+              <View
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 8,
+                  backgroundColor: isDark ? "#252525" : "#F1F5F9",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Text style={{ fontSize: 11, fontWeight: "700", color: muted }}>
+                  #{i + 1}
+                </Text>
+              </View>
+              {editing ? (
+                <TextInput
+                  value={v}
+                  onChangeText={(val) =>
+                    setProfile((p) => ({
+                      ...p,
+                      vehicles: p.vehicles.map((x, idx) =>
+                        idx === i ? val : x,
+                      ),
+                    }))
+                  }
+                  style={{
+                    flex: 1,
+                    fontSize: 14,
+                    fontWeight: "600",
+                    color: text,
+                    borderBottomWidth: 1,
+                    borderBottomColor: tint + "60",
+                    paddingBottom: 2,
+                    letterSpacing: 1,
+                  }}
+                  placeholder="e.g. MH01AB1234"
+                  placeholderTextColor={muted}
+                  autoCapitalize="characters"
+                />
+              ) : (
+                <Text
+                  style={{
+                    flex: 1,
+                    fontSize: 14,
+                    fontWeight: "600",
+                    color: text,
+                    letterSpacing: 1,
+                  }}
+                >
+                  {v}
+                </Text>
+              )}
+              {editing && (
+                <Pressable
+                  onPress={() =>
+                    setProfile((p) => ({
+                      ...p,
+                      vehicles: p.vehicles.filter((_, idx) => idx !== i),
+                    }))
+                  }
+                  hitSlop={8}
+                >
+                  <Feather name="trash-2" size={15} color="#EF4444" />
+                </Pressable>
+              )}
+            </View>
+          ))}
+        </View>
+        <Pressable
+          onPress={() => setShowLogoutConfirm(true)}
+          style={({ pressed }) => ({
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            padding: 14,
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: "#EF444430",
+            backgroundColor: pressed ? "#EF44441A" : "#EF44440D",
+          })}
+        >
+          <Feather name="log-out" size={16} color="#EF4444" />
+          <Text style={{ fontSize: 15, fontWeight: "600", color: "#EF4444" }}>
+            Logout
+          </Text>
+        </Pressable>
       </ScrollView>
 
       <ConfirmModal

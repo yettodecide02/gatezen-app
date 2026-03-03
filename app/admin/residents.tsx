@@ -83,6 +83,16 @@ function ResidentCard({
           <Text style={[styles.residentMeta, { color: muted }]}>
             {resident.email}
           </Text>
+          {(resident.phone || resident.phoneNumber) && (
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+            >
+              <Feather name="phone" size={11} color={muted} />
+              <Text style={[styles.residentMeta, { color: muted }]}>
+                {resident.phone || resident.phoneNumber}
+              </Text>
+            </View>
+          )}
           <Text style={[styles.residentMeta, { color: muted }]}>
             Joined {new Date(resident.createdAt).toLocaleDateString()}
           </Text>

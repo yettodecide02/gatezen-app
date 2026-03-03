@@ -29,7 +29,7 @@ export default function AuthCallback() {
         if (!session) {
           showError("Authentication session not found");
           setMessage("No session found. Redirecting to login…");
-          setTimeout(() => router.replace("/login"), 1500);
+          setTimeout(() => router.replace("/auth/login"), 1500);
           return;
         }
 
@@ -47,12 +47,12 @@ export default function AuthCallback() {
           registerForPushNotifications(response.data.jwttoken).catch(() => {});
           const u = response.data.user;
           if (u.status === "PENDING") {
-            router.replace("/pending");
+            router.replace("/auth/pending");
           } else if (u.status === "REJECTED") {
             showError(
               "Your account has been rejected. Please contact your community admin.",
             );
-            setTimeout(() => router.replace("/login"), 2000);
+            setTimeout(() => router.replace("/auth/login"), 2000);
           } else if (u.role === "ADMIN") {
             router.replace("/admin");
           } else if (u.role === "GATEKEEPER") {
@@ -85,7 +85,7 @@ export default function AuthCallback() {
         console.error("OAuth callback error:", error);
         setMessage("Authentication failed. Returning to login…");
         showError("Authentication failed. Please try again.");
-        setTimeout(() => router.replace("/login"), 1500);
+        setTimeout(() => router.replace("/auth/login"), 1500);
       }
     })();
   }, []);

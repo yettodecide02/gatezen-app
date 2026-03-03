@@ -4,7 +4,7 @@ import { router } from "expo-router";
 
 export default function IndexRedirect() {
   useEffect(() => {
-    router.replace("/login");
+    router.replace("/auth/login");
   }, []);
   return (
     <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>

@@ -1,6 +1,8 @@
 ﻿// @ts-nocheck
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   Text,
   View,
@@ -64,6 +66,41 @@ function fmtDate(iso) {
     month: "short",
     day: "numeric",
   });
+}
+
+const FACILITY_ICONS: Record<string, string> = {
+  gym: "activity",
+  fitness: "activity",
+  pool: "droplet",
+  swimming: "droplet",
+  clubhouse: "home",
+  hall: "home",
+  lounge: "home",
+  tennis: "circle",
+  badminton: "circle",
+  court: "circle",
+  library: "book-open",
+  reading: "book-open",
+  parking: "truck",
+  playground: "smile",
+  kids: "smile",
+  garden: "feather",
+  park: "feather",
+  terrace: "sun",
+  rooftop: "sun",
+  yoga: "wind",
+  spa: "wind",
+  cafe: "coffee",
+  restaurant: "coffee",
+};
+
+function getFacilityIcon(name?: string): string {
+  if (!name) return "grid";
+  const lower = name.toLowerCase();
+  for (const [key, icon] of Object.entries(FACILITY_ICONS)) {
+    if (lower.includes(key)) return icon;
+  }
+  return "grid";
 }
 
 export default function BookingsScreen() {
@@ -410,7 +447,11 @@ export default function BookingsScreen() {
                     justifyContent: "center",
                   }}
                 >
-                  <Feather name="layers" size={14} color={tint} />
+                  <Feather
+                    name={getFacilityIcon(facility?.name)}
+                    size={14}
+                    color={tint}
+                  />
                 </View>
                 <View>
                   <Text
@@ -499,7 +540,7 @@ export default function BookingsScreen() {
 
           {/* Facility info */}
           {facility && (
-            <View style={{ flexDirection: "row", gap: 8 }}>
+            <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
               {facility.operatingHours && (
                 <View
                   style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
@@ -537,6 +578,31 @@ export default function BookingsScreen() {
                   {Math.floor(minsLeft / 60)}h {minsLeft % 60}m left today
                 </Text>
               </View>
+              {slots.length > 0 &&
+                (() => {
+                  const available = slots.filter(
+                    (s) => !isSlotBooked(s) && !isSlotPast(s),
+                  ).length;
+                  const slotColor = available > 0 ? "#10B981" : "#EF4444";
+                  return (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 4,
+                      }}
+                    >
+                      <Feather
+                        name="check-circle"
+                        size={11}
+                        color={slotColor}
+                      />
+                      <Text style={{ fontSize: 11, color: slotColor }}>
+                        {available} slot{available !== 1 ? "s" : ""} free
+                      </Text>
+                    </View>
+                  );
+                })()}
             </View>
           )}
         </View>
@@ -709,12 +775,13 @@ export default function BookingsScreen() {
         transparent
         onRequestClose={() => setShowBookForm(false)}
       >
-        <View
+        <KeyboardAvoidingView
           style={{
             flex: 1,
             backgroundColor: "rgba(0,0,0,0.5)",
             justifyContent: "flex-end",
           }}
+          behavior={Platform.select({ ios: "padding", android: "height" })}
         >
           <ScrollView
             style={{
@@ -725,6 +792,7 @@ export default function BookingsScreen() {
               paddingHorizontal: 20,
               paddingTop: 20,
             }}
+            keyboardShouldPersistTaps="handled"
           >
             <View
               style={{
@@ -915,7 +983,7 @@ export default function BookingsScreen() {
               )}
             </Pressable>
           </ScrollView>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Facility picker modal */}
@@ -993,7 +1061,11 @@ export default function BookingsScreen() {
                     justifyContent: "center",
                   }}
                 >
-                  <Feather name="layers" size={16} color={tint} />
+                  <Feather
+                    name={getFacilityIcon(f.name)}
+                    size={16}
+                    color={tint}
+                  />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text

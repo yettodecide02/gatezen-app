@@ -24,7 +24,7 @@ const QUICK_LINKS = [
     title: "Payments",
     subtitle: "Pay your bills",
     icon: "credit-card",
-    href: "/payments",
+    href: "/resident/payments",
     color: "#F59E0B",
   },
   {
@@ -32,7 +32,7 @@ const QUICK_LINKS = [
     title: "Maintenance",
     subtitle: "Repair & upkeep",
     icon: "tool",
-    href: "/maintenance",
+    href: "/resident/maintenance",
     color: "#8B5CF6",
   },
   {
@@ -40,7 +40,7 @@ const QUICK_LINKS = [
     title: "Visitors",
     subtitle: "Manage visitors",
     icon: "users",
-    href: "/visitors",
+    href: "/resident/visitors",
     color: "#06B6D4",
   },
   {
@@ -48,7 +48,7 @@ const QUICK_LINKS = [
     title: "Bookings",
     subtitle: "Amenities & events",
     icon: "calendar",
-    href: "/bookings",
+    href: "/resident/bookings",
     color: "#14B8A6",
   },
   {
@@ -56,7 +56,7 @@ const QUICK_LINKS = [
     title: "Documents",
     subtitle: "Policies & forms",
     icon: "file-text",
-    href: "/documents",
+    href: "/resident/documents",
     color: "#6366F1",
   },
   {
@@ -64,7 +64,7 @@ const QUICK_LINKS = [
     title: "Help",
     subtitle: "Support & FAQs",
     icon: "help-circle",
-    href: "/help",
+    href: "/resident/help",
     color: "#10B981",
   },
   {
@@ -72,7 +72,7 @@ const QUICK_LINKS = [
     title: "Directory",
     subtitle: "Browse residents",
     icon: "book",
-    href: "/directory",
+    href: "/resident/directory",
     color: "#3B82F6",
   },
   {
@@ -80,7 +80,7 @@ const QUICK_LINKS = [
     title: "Notice Board",
     subtitle: "Community notices",
     icon: "clipboard",
-    href: "/notice-board",
+    href: "/resident/notice-board",
     color: "#F97316",
   },
   {
@@ -88,7 +88,7 @@ const QUICK_LINKS = [
     title: "Surveys",
     subtitle: "Share your feedback",
     icon: "bar-chart-2",
-    href: "/surveys",
+    href: "/resident/surveys",
     color: "#10B981",
   },
   {
@@ -96,7 +96,7 @@ const QUICK_LINKS = [
     title: "Election Polls",
     subtitle: "Vote on community matters",
     icon: "check-square",
-    href: "/election-polls",
+    href: "/resident/election-polls",
     color: "#8B5CF6",
   },
 ];
@@ -178,28 +178,28 @@ export default function Dashboard() {
       title: "Announcements",
       value: stats.announcements,
       color: "#3B82F6",
-      href: "/announcements",
+      href: "/resident/announcements",
     },
     {
       icon: "tool",
       title: "Open Tickets",
       value: stats.maintenanceOpen,
       color: "#8B5CF6",
-      href: "/maintenance",
+      href: "/resident/maintenance",
     },
     {
       icon: "alert-circle",
       title: "Overdue Bills",
       value: stats.paymentsOverdue,
       color: "#EF4444",
-      href: "/payments",
+      href: "/resident/payments",
     },
     {
       icon: "calendar",
       title: "Upcoming Bookings",
       value: stats.upcomingBookings,
       color: "#14B8A6",
-      href: "/bookings",
+      href: "/resident/bookings",
     },
   ];
 
@@ -211,7 +211,7 @@ export default function Dashboard() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: bg }}>
+    <View style={{ flex: 1, paddingBottom: 70, backgroundColor: bg }}>
       <View
         style={{
           paddingTop: Math.max(insets.top, 16),
@@ -384,7 +384,7 @@ export default function Dashboard() {
               Quick Access
             </Text>
             <Pressable
-              onPress={() => router.push("/quick-links")}
+              onPress={() => router.push("/resident/quick-links")}
               style={({ pressed }) => ({
                 opacity: pressed ? 0.6 : 1,
                 flexDirection: "row",

@@ -320,6 +320,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [showAllActions, setShowAllActions] = useState(false);
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>(
     {},
   );
@@ -426,7 +427,7 @@ export default function AdminDashboard() {
     setLoggingOut(true);
     try {
       await logout();
-      router.replace("/login");
+      router.replace("/auth/login");
     } finally {
       setLoggingOut(false);
       setShowLogoutConfirm(false);
@@ -634,39 +635,54 @@ export default function AdminDashboard() {
                 onPress={() => router.push("/admin/visitorlog")}
                 theme={theme}
               />
-              <ActionTile
-                icon="clipboard"
-                label="Notice Board"
-                desc="Post notices"
-                color="#F97316"
-                onPress={() => router.push("/notice-board")}
-                theme={theme}
-              />
-              <ActionTile
-                icon="bar-chart-2"
-                label="Surveys"
-                desc="Create & review"
-                color="#10B981"
-                onPress={() => router.push("/surveys")}
-                theme={theme}
-              />
-              <ActionTile
-                icon="check-square"
-                label="Polls"
-                desc="Election polls"
-                color="#8B5CF6"
-                onPress={() => router.push("/election-polls")}
-                theme={theme}
-              />
-              <ActionTile
-                icon="book"
-                label="Directory"
-                desc="Resident list"
-                color="#3B82F6"
-                onPress={() => router.push("/directory")}
-                theme={theme}
-              />
+              {showAllActions && (
+                <>
+                  <ActionTile
+                    icon="clipboard"
+                    label="Notice Board"
+                    desc="Post notices"
+                    color="#F97316"
+                    onPress={() => router.push("/admin/notice-board")}
+                    theme={theme}
+                  />
+                  <ActionTile
+                    icon="bar-chart-2"
+                    label="Surveys"
+                    desc="Create & review"
+                    color="#10B981"
+                    onPress={() => router.push("/admin/surveys")}
+                    theme={theme}
+                  />
+                  <ActionTile
+                    icon="check-square"
+                    label="Polls"
+                    desc="Election polls"
+                    color="#8B5CF6"
+                    onPress={() => router.push("/admin/election-polls")}
+                    theme={theme}
+                  />
+                </>
+              )}
             </View>
+            <TouchableOpacity
+              onPress={() => setShowAllActions((v) => !v)}
+              style={[
+                styles.expandActionsBtn,
+                {
+                  borderColor: borderCol,
+                  backgroundColor: isDark ? "#252525" : "#F8FAFC",
+                },
+              ]}
+            >
+              <Text style={[styles.expandActionsBtnText, { color: muted }]}>
+                {showAllActions ? "Show less" : "Show 3 more"}
+              </Text>
+              <Feather
+                name={showAllActions ? "chevron-up" : "chevron-down"}
+                size={14}
+                color={muted}
+              />
+            </TouchableOpacity>
           </View>
 
           {/* Pending Resident Requests */}
@@ -1125,6 +1141,17 @@ const styles = StyleSheet.create({
   },
   actionTileLabel: { fontSize: 14, fontWeight: "600" },
   actionTileDesc: { fontSize: 11 },
+  expandActionsBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingVertical: 10,
+    marginTop: 4,
+  },
+  expandActionsBtnText: { fontSize: 13, fontWeight: "600" },
   // Create announcement button
   createBtn: {
     flexDirection: "row",

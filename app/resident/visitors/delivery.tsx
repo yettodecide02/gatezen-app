@@ -4,7 +4,10 @@ import { router } from "expo-router";
 
 export default function DeliveryRedirect() {
   useEffect(() => {
-    router.replace({ pathname: "/visitors", params: { visitorType: "DELIVERY" } });
+    router.replace({
+      pathname: "/resident/visitors",
+      params: { visitorType: "DELIVERY" },
+    });
   }, []);
   return null;
 }

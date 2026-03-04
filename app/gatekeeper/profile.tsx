@@ -134,10 +134,35 @@ export default function GatekeeperProfile() {
           borderBottomColor: borderCol,
         }}
       >
-        <Text style={{ fontSize: 22, fontWeight: "800", color: text }}>
-          Profile
-        </Text>
-        <Text style={{ fontSize: 13, color: muted }}>Gatekeeper account</Text>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <View>
+            <Text style={{ fontSize: 22, fontWeight: "800", color: text }}>
+              Profile
+            </Text>
+            <Text style={{ fontSize: 13, color: muted }}>
+              Gatekeeper account
+            </Text>
+          </View>
+          <Pressable
+            onPress={() => setShowLogout(true)}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              backgroundColor: "#EF444415",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Feather name="log-out" size={16} color="#EF4444" />
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView
@@ -299,37 +324,6 @@ export default function GatekeeperProfile() {
             ))}
           </View>
         )}
-
-        {/* Logout */}
-        <Pressable
-          onPress={() => setShowLogout(true)}
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 10,
-            backgroundColor: "#EF444410",
-            borderRadius: 14,
-            borderWidth: 1,
-            borderColor: "#EF444425",
-            padding: 14,
-          }}
-        >
-          <View
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 10,
-              backgroundColor: "#EF444418",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Feather name="log-out" size={16} color="#EF4444" />
-          </View>
-          <Text style={{ fontSize: 14, fontWeight: "600", color: "#EF4444" }}>
-            Sign Out
-          </Text>
-        </Pressable>
       </ScrollView>
 
       <ConfirmModal

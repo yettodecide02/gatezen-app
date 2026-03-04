@@ -14,6 +14,7 @@ import axios from "axios";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useToast } from "@/hooks/useToast";
+import Toast from "@/components/Toast";
 import { getToken, getUser } from "@/lib/auth";
 import { config } from "@/lib/config";
 import { router } from "expo-router";

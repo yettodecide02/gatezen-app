@@ -848,6 +848,15 @@ export default function BookingsScreen() {
                   const past = isSlotPast(slot);
                   const sel = selectedSlot === slot.start;
                   const disabled = booked || past;
+                  const cap = facility?.capacity || 1;
+                  const bookedPeople = bookings
+                    .filter(
+                      (b) =>
+                        +new Date(b.startsAt) === +new Date(slot.start) &&
+                        b.status === "confirmed",
+                    )
+                    .reduce((sum, b) => sum + (b.peopleCount || 1), 0);
+                  const remaining = Math.max(0, cap - bookedPeople);
                   return (
                     <Pressable
                       key={slot.start}
@@ -870,6 +879,7 @@ export default function BookingsScreen() {
                             ? borderCol
                             : borderCol,
                         opacity: disabled ? 0.5 : 1,
+                        alignItems: "center",
                       }}
                     >
                       <Text
@@ -881,17 +891,23 @@ export default function BookingsScreen() {
                       >
                         {fmtTime(slot.start)}
                       </Text>
-                      {booked && (
-                        <Text
-                          style={{
-                            fontSize: 9,
-                            color: muted,
-                            textAlign: "center",
-                          }}
-                        >
-                          Full
-                        </Text>
-                      )}
+                      <Text
+                        style={{
+                          fontSize: 9,
+                          fontWeight: "500",
+                          color: sel
+                            ? "rgba(255,255,255,0.75)"
+                            : booked
+                              ? "#EF4444"
+                              : remaining <= 2
+                                ? "#F59E0B"
+                                : muted,
+                          textAlign: "center",
+                          marginTop: 2,
+                        }}
+                      >
+                        {booked ? "Full" : `${remaining} left`}
+                      </Text>
                     </Pressable>
                   );
                 })}

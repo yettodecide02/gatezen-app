@@ -437,9 +437,9 @@ export default function VehicleSearch() {
   };
 
   // ── Format query as vehicle plate (uppercase, trim spaces) ──
-  const handleChangeText = (text) => {
+  const handleChangeText = useCallback((text) => {
     setQuery(text.toUpperCase().replace(/[^A-Z0-9\s-]/g, ""));
-  };
+  }, []);
 
   return (
     <View style={{ flex: 1, backgroundColor: pageBg }}>
@@ -485,12 +485,7 @@ export default function VehicleSearch() {
             styles.searchBar,
             {
               backgroundColor: inputBg,
-              borderColor: query.length > 0 ? tint : borderCol,
-              shadowColor: query.length > 0 ? tint : "transparent",
-              shadowOpacity: 0.15,
-              shadowRadius: 8,
-              shadowOffset: { width: 0, height: 2 },
-              elevation: query.length > 0 ? 3 : 0,
+              borderColor: borderCol,
             },
           ]}
         >
@@ -511,18 +506,20 @@ export default function VehicleSearch() {
             onChangeText={handleChangeText}
             placeholder="e.g. MH12AB1234"
             placeholderTextColor={muted}
-            autoCapitalize="characters"
+            autoCapitalize="none"
             autoCorrect={false}
             returnKeyType="search"
             onSubmitEditing={() => handleSearch()}
             maxLength={15}
           />
 
-          {query.length > 0 && (
-            <TouchableOpacity onPress={handleClear} style={styles.clearBtn}>
-              <Feather name="x-circle" size={18} color={muted} />
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            onPress={handleClear}
+            style={[styles.clearBtn, { opacity: query.length > 0 ? 1 : 0 }]}
+            pointerEvents={query.length > 0 ? "auto" : "none"}
+          >
+            <Feather name="x-circle" size={18} color={muted} />
+          </TouchableOpacity>
         </View>
 
         {/* Search button */}

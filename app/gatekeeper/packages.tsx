@@ -17,7 +17,7 @@ import * as ImagePicker from "expo-image-picker";
 import axios from "axios";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
-import { getToken, getUser } from "@/lib/auth";
+import { getToken, getUser, getEnabledFeatures } from "@/lib/auth";
 import { config } from "@/lib/config";
 import Toast from "@/components/Toast";
 import { useToast } from "@/hooks/useToast";
@@ -65,6 +65,14 @@ export default function GatekeeperPackages() {
   const [updating2, setUpdating2] = useState(false);
   const [resSearch, setResSearch] = useState("");
   const imageCallbackRef = useRef(null);
+
+  useEffect(() => {
+    getEnabledFeatures().then((feats) => {
+      if (feats.length > 0 && !feats.includes("DELIVERY_MANAGEMENT")) {
+        router.replace("/gatekeeper");
+      }
+    });
+  }, []);
 
   useEffect(() => {
     (async () => {

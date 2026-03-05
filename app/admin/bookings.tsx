@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
-import { getToken, getCommunityId } from "@/lib/auth";
+import { getToken, getCommunityId, getEnabledFeatures } from "@/lib/auth";
 import { config } from "@/lib/config";
 import Toast from "@/components/Toast";
 import { useToast } from "@/hooks/useToast";
@@ -159,6 +159,14 @@ export default function AdminBookings() {
 
   const { toast, showError, hideToast } = useToast();
   const url = config.backendUrl;
+
+  useEffect(() => {
+    getEnabledFeatures().then((feats) => {
+      if (feats.length > 0 && !feats.includes("AMENITY_BOOKING")) {
+        router.replace("/admin");
+      }
+    });
+  }, []);
 
   useEffect(() => {
     fetchBookings();

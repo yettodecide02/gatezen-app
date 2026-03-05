@@ -20,7 +20,7 @@ import Toast from "@/components/Toast";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useToast } from "@/hooks/useToast";
-import { getCommunityId, getToken } from "@/lib/auth";
+import { getCommunityId, getToken, getEnabledFeatures } from "@/lib/auth";
 import { config } from "@/lib/config";
 
 // --- Category config ---
@@ -479,6 +479,14 @@ export default function AdminNoticeBoard() {
 
   const { toast, showError, showSuccess, hideToast } = useToast();
   const url = config.backendUrl;
+
+  useEffect(() => {
+    getEnabledFeatures().then((feats) => {
+      if (feats.length > 0 && !feats.includes("NOTICE_BOARD")) {
+        router.replace("/admin");
+      }
+    });
+  }, []);
 
   useEffect(() => {
     fetchNotices();

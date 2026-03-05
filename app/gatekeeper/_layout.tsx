@@ -1,13 +1,24 @@
 // @ts-nocheck
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Tabs } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { Platform } from "react-native";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { BlurView } from "expo-blur";
+import { getEnabledFeatures } from "@/lib/auth";
 
 export default function GatekeeperTabsLayout() {
   const colorScheme = useColorScheme();
+  const [enabledFeatures, setEnabledFeatures] = useState<string[]>([]);
+
+  useEffect(() => {
+    getEnabledFeatures().then(setEnabledFeatures);
+  }, []);
+
+  const hideTab = (feature: string) =>
+    enabledFeatures.length > 0 && !enabledFeatures.includes(feature)
+      ? { tabBarButton: () => null, tabBarItemStyle: { display: "none" } }
+      : {};
 
   return (
     <Tabs
@@ -72,6 +83,7 @@ export default function GatekeeperTabsLayout() {
         name="vehicle-search"
         options={{
           title: "Vehicles",
+          ...hideTab("VEHICLE_SEARCH"),
           tabBarIcon: ({ color, focused }) => (
             <Feather name="search" size={focused ? 26 : 22} color={color} />
           ),
@@ -81,6 +93,7 @@ export default function GatekeeperTabsLayout() {
         name="packages"
         options={{
           title: "Packages",
+          ...hideTab("DELIVERY_MANAGEMENT"),
           tabBarIcon: ({ color, focused }) => (
             <Feather name="package" size={focused ? 26 : 22} color={color} />
           ),

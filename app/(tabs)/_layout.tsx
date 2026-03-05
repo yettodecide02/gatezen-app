@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Tabs } from "expo-router/tabs";
 import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
@@ -7,7 +7,7 @@ import { Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
-import { getUser } from "@/lib/auth";
+import { getUser, getEnabledFeatures } from "@/lib/auth";
 import { router } from "expo-router";
 
 export default function TabsLayout() {
@@ -17,6 +17,7 @@ export default function TabsLayout() {
   const text = useThemeColor({}, "text");
   const bg = useThemeColor({}, "background");
   const isDark = colorScheme === "dark";
+  const [enabledFeatures, setEnabledFeatures] = useState<string[]>([]);
 
   useEffect(() => {
     // Check if user is admin or gatekeeper and redirect to appropriate dashboard
@@ -34,6 +35,7 @@ export default function TabsLayout() {
     };
 
     checkUserRole();
+    getEnabledFeatures().then(setEnabledFeatures);
   }, []);
 
   const bottomInset = Math.max(insets.bottom ?? 0, 8);
@@ -100,6 +102,10 @@ export default function TabsLayout() {
           tabBarLabel: "My Packages",
           headerTitle: "",
           headerShown: false,
+          ...(enabledFeatures.length > 0 &&
+          !enabledFeatures.includes("DELIVERY_MANAGEMENT")
+            ? { tabBarButton: () => null, tabBarItemStyle: { display: "none" } }
+            : {}),
           tabBarIcon: ({ color, size }) => (
             <Feather
               name="package"

@@ -24,7 +24,7 @@ import Toast from "@/components/Toast";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useToast } from "@/hooks/useToast";
-import { getCommunityId, getToken } from "@/lib/auth";
+import { getCommunityId, getToken, getEnabledFeatures } from "@/lib/auth";
 import { config } from "@/lib/config";
 
 // --- Helpers ---
@@ -769,6 +769,14 @@ export default function AdminElectionPolls() {
 
   const { toast, showError, showSuccess, hideToast } = useToast();
   const url = config.backendUrl;
+
+  useEffect(() => {
+    getEnabledFeatures().then((feats) => {
+      if (feats.length > 0 && !feats.includes("ELECTION_POLLS")) {
+        router.replace("/admin");
+      }
+    });
+  }, []);
 
   useEffect(() => {
     fetchPolls();

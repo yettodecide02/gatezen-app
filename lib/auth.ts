@@ -50,6 +50,46 @@ export async function getCommunityId(): Promise<string | null> {
   }
 }
 
+// ─── Plan / Feature helpers ─────────────────────────────────────────────────
+
+/**
+ * Returns the list of feature keys enabled for the current user's community.
+ * The value is stored inside the user object as `enabledFeatures`.
+ */
+export async function getEnabledFeatures(): Promise<string[]> {
+  try {
+    const user = await getUser<{ enabledFeatures?: string[] }>();
+    return user?.enabledFeatures ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Returns true when the given feature key is included in the community's plan.
+ */
+export async function hasFeature(featureKey: string): Promise<boolean> {
+  const features = await getEnabledFeatures();
+  return features.includes(featureKey);
+}
+
+/**
+ * Returns the plan info (id + name) for the current user's community, if any.
+ */
+export async function getCurrentPlan(): Promise<{
+  id: string;
+  name: string;
+} | null> {
+  try {
+    const user = await getUser<{
+      plan?: { id: string; name: string } | null;
+    }>();
+    return user?.plan ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function logout() {
   try {
     await supabase.auth.signOut();

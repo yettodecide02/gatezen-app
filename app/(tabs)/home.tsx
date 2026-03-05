@@ -3,7 +3,7 @@ import Toast from "@/components/Toast";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useToast } from "@/hooks/useToast";
-import { getToken, getUser } from "@/lib/auth";
+import { getToken, getUser, getEnabledFeatures } from "@/lib/auth";
 import { config } from "@/lib/config";
 import { Feather } from "@expo/vector-icons";
 import axios from "axios";
@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 const QUICK_LINKS = [
   {
     key: "payments",
+    featureKey: "UTILITY_PAYMENT",
     title: "Payments",
     subtitle: "Pay your bills",
     icon: "credit-card",
@@ -29,6 +30,7 @@ const QUICK_LINKS = [
   },
   {
     key: "maintenance",
+    featureKey: "HELPDESK",
     title: "Maintenance",
     subtitle: "Repair & upkeep",
     icon: "tool",
@@ -37,6 +39,7 @@ const QUICK_LINKS = [
   },
   {
     key: "visitors",
+    featureKey: "VISITOR_MANAGEMENT",
     title: "Visitors",
     subtitle: "Manage visitors",
     icon: "users",
@@ -45,6 +48,7 @@ const QUICK_LINKS = [
   },
   {
     key: "bookings",
+    featureKey: "AMENITY_BOOKING",
     title: "Bookings",
     subtitle: "Amenities & events",
     icon: "calendar",
@@ -53,6 +57,7 @@ const QUICK_LINKS = [
   },
   {
     key: "documents",
+    featureKey: "DOCUMENTS_UPLOADING",
     title: "Documents",
     subtitle: "Policies & forms",
     icon: "file-text",
@@ -61,6 +66,7 @@ const QUICK_LINKS = [
   },
   {
     key: "help",
+    featureKey: null, // always visible
     title: "Help",
     subtitle: "Support & FAQs",
     icon: "help-circle",
@@ -69,6 +75,7 @@ const QUICK_LINKS = [
   },
   {
     key: "directory",
+    featureKey: "DIRECTORY",
     title: "Directory",
     subtitle: "Browse residents",
     icon: "book",
@@ -77,6 +84,7 @@ const QUICK_LINKS = [
   },
   {
     key: "notice-board",
+    featureKey: "NOTICE_BOARD",
     title: "Notice Board",
     subtitle: "Community notices",
     icon: "clipboard",
@@ -85,6 +93,7 @@ const QUICK_LINKS = [
   },
   {
     key: "surveys",
+    featureKey: "SURVEYS",
     title: "Surveys",
     subtitle: "Share your feedback",
     icon: "bar-chart-2",
@@ -93,6 +102,7 @@ const QUICK_LINKS = [
   },
   {
     key: "polls",
+    featureKey: "ELECTION_POLLS",
     title: "Election Polls",
     subtitle: "Vote on community matters",
     icon: "check-square",
@@ -114,6 +124,7 @@ export default function Dashboard() {
 
   const [loading, setLoading] = useState(true);
   const [user, setUserState] = useState(null);
+  const [enabledFeatures, setEnabledFeatures] = useState<string[]>([]);
   const [stats, setStats] = useState({
     announcements: 0,
     maintenanceOpen: 0,
@@ -131,6 +142,9 @@ export default function Dashboard() {
           return;
         }
         setUserState(userData);
+        // Load enabled features for this community's plan
+        const features = await getEnabledFeatures();
+        setEnabledFeatures(features);
         if (userData?.id && userData?.communityId) {
           try {
             const token = await getToken();
@@ -175,6 +189,7 @@ export default function Dashboard() {
   const STAT_CARDS = [
     {
       icon: "bell",
+      featureKey: "COMMUNICATION",
       title: "Announcements",
       value: stats.announcements,
       color: "#3B82F6",
@@ -182,6 +197,7 @@ export default function Dashboard() {
     },
     {
       icon: "tool",
+      featureKey: "HELPDESK",
       title: "Open Tickets",
       value: stats.maintenanceOpen,
       color: "#8B5CF6",
@@ -189,6 +205,7 @@ export default function Dashboard() {
     },
     {
       icon: "alert-circle",
+      featureKey: "UTILITY_PAYMENT",
       title: "Overdue Bills",
       value: stats.paymentsOverdue,
       color: "#EF4444",
@@ -196,6 +213,7 @@ export default function Dashboard() {
     },
     {
       icon: "calendar",
+      featureKey: "AMENITY_BOOKING",
       title: "Upcoming Bookings",
       value: stats.upcomingBookings,
       color: "#14B8A6",
@@ -305,7 +323,9 @@ export default function Dashboard() {
             Overview
           </Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-            {STAT_CARDS.map((s) => (
+            {STAT_CARDS.filter(
+              (s) => !s.featureKey || enabledFeatures.includes(s.featureKey),
+            ).map((s) => (
               <Pressable
                 key={s.icon}
                 onPress={() => router.push(s.href)}
@@ -407,7 +427,10 @@ export default function Dashboard() {
               overflow: "hidden",
             }}
           >
-            {QUICK_LINKS.map((item, idx) => (
+            {QUICK_LINKS.filter(
+              (item) =>
+                !item.featureKey || enabledFeatures.includes(item.featureKey),
+            ).map((item, idx) => (
               <Pressable
                 key={item.key}
                 onPress={() => router.push(item.href)}

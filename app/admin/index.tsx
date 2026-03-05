@@ -22,7 +22,12 @@ import Toast from "@/components/Toast";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useToast } from "@/hooks/useToast";
-import { getCommunityId, getToken, logout } from "@/lib/auth";
+import {
+  getCommunityId,
+  getToken,
+  getEnabledFeatures,
+  logout,
+} from "@/lib/auth";
 import { config } from "@/lib/config";
 
 // ─── Helpers ───────────────────────────────────
@@ -321,6 +326,7 @@ export default function AdminDashboard() {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [showAllActions, setShowAllActions] = useState(false);
+  const [enabledFeatures, setEnabledFeatures] = useState<string[]>([]);
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>(
     {},
   );
@@ -331,6 +337,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     fetchAdminData();
+    getEnabledFeatures().then(setEnabledFeatures);
   }, []);
 
   const fetchAdminData = async () => {
@@ -627,62 +634,76 @@ export default function AdminDashboard() {
                 onPress={() => router.push("/admin/staffmanagement")}
                 theme={theme}
               />
-              <ActionTile
-                icon="users"
-                label="Visitors"
-                desc="Visitor log"
-                color="#F59E0B"
-                onPress={() => router.push("/admin/visitorlog")}
-                theme={theme}
-              />
+              {enabledFeatures.includes("VISITOR_MANAGEMENT") && (
+                <ActionTile
+                  icon="users"
+                  label="Visitors"
+                  desc="Visitor log"
+                  color="#F59E0B"
+                  onPress={() => router.push("/admin/visitorlog")}
+                  theme={theme}
+                />
+              )}
               {showAllActions && (
                 <>
-                  <ActionTile
-                    icon="clipboard"
-                    label="Notice Board"
-                    desc="Post notices"
-                    color="#F97316"
-                    onPress={() => router.push("/admin/notice-board")}
-                    theme={theme}
-                  />
-                  <ActionTile
-                    icon="bar-chart-2"
-                    label="Surveys"
-                    desc="Create & review"
-                    color="#10B981"
-                    onPress={() => router.push("/admin/surveys")}
-                    theme={theme}
-                  />
-                  <ActionTile
-                    icon="check-square"
-                    label="Polls"
-                    desc="Election polls"
-                    color="#8B5CF6"
-                    onPress={() => router.push("/admin/election-polls")}
-                    theme={theme}
-                  />
+                  {enabledFeatures.includes("NOTICE_BOARD") && (
+                    <ActionTile
+                      icon="clipboard"
+                      label="Notice Board"
+                      desc="Post notices"
+                      color="#F97316"
+                      onPress={() => router.push("/admin/notice-board")}
+                      theme={theme}
+                    />
+                  )}
+                  {enabledFeatures.includes("SURVEYS") && (
+                    <ActionTile
+                      icon="bar-chart-2"
+                      label="Surveys"
+                      desc="Create & review"
+                      color="#10B981"
+                      onPress={() => router.push("/admin/surveys")}
+                      theme={theme}
+                    />
+                  )}
+                  {enabledFeatures.includes("ELECTION_POLLS") && (
+                    <ActionTile
+                      icon="check-square"
+                      label="Polls"
+                      desc="Election polls"
+                      color="#8B5CF6"
+                      onPress={() => router.push("/admin/election-polls")}
+                      theme={theme}
+                    />
+                  )}
                 </>
               )}
             </View>
-            <TouchableOpacity
-              onPress={() => setShowAllActions((v) => !v)}
-              style={[
-                styles.expandActionsBtn,
-                {
-                  borderColor: borderCol,
-                  backgroundColor: isDark ? "#252525" : "#F8FAFC",
-                },
-              ]}
-            >
-              <Text style={[styles.expandActionsBtnText, { color: muted }]}>
-                {showAllActions ? "Show less" : "Show 3 more"}
-              </Text>
-              <Feather
-                name={showAllActions ? "chevron-up" : "chevron-down"}
-                size={14}
-                color={muted}
-              />
-            </TouchableOpacity>
+            {["NOTICE_BOARD", "SURVEYS", "ELECTION_POLLS"].some((f) =>
+              enabledFeatures.includes(f),
+            ) && (
+              <TouchableOpacity
+                onPress={() => setShowAllActions((v) => !v)}
+                style={[
+                  styles.expandActionsBtn,
+                  {
+                    borderColor: borderCol,
+                    backgroundColor: isDark ? "#252525" : "#F8FAFC",
+                  },
+                ]}
+              >
+                <Text style={[styles.expandActionsBtnText, { color: muted }]}>
+                  {showAllActions
+                    ? "Show less"
+                    : `Show ${["NOTICE_BOARD", "SURVEYS", "ELECTION_POLLS"].filter((f) => enabledFeatures.includes(f)).length} more`}
+                </Text>
+                <Feather
+                  name={showAllActions ? "chevron-up" : "chevron-down"}
+                  size={14}
+                  color={muted}
+                />
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Pending Resident Requests */}
@@ -807,219 +828,229 @@ export default function AdminDashboard() {
           </View>
 
           {/* Announcements */}
-          <View
-            style={[
-              styles.card,
-              { backgroundColor: cardBg, borderColor: borderCol },
-            ]}
-          >
-            <SectionHeader
-              icon="bell"
-              title="Latest Announcements"
-              onSeeAll={() => router.push("/admin/announcements")}
-              tint={tint}
-              textColor={textColor}
-            />
-            <TouchableOpacity
+          {enabledFeatures.includes("COMMUNICATION") && (
+            <View
               style={[
-                styles.createBtn,
-                {
-                  backgroundColor: isDark ? "#252525" : "#F8FAFC",
-                  borderColor: borderCol,
-                },
+                styles.card,
+                { backgroundColor: cardBg, borderColor: borderCol },
               ]}
-              onPress={() => setShowAnnouncementModal(true)}
             >
-              <Feather name="plus" size={14} color={tint} />
-              <Text style={[styles.createBtnText, { color: tint }]}>
-                New Announcement
-              </Text>
-            </TouchableOpacity>
-            {announcements.length === 0 ? (
-              <View style={[styles.emptyState, { marginTop: 8 }]}>
-                <Feather
-                  name="message-square"
-                  size={28}
-                  color={muted}
-                  style={{ opacity: 0.4 }}
-                />
-                <Text style={[styles.emptyText, { color: muted }]}>
-                  No announcements yet
+              <SectionHeader
+                icon="bell"
+                title="Latest Announcements"
+                onSeeAll={() => router.push("/admin/announcements")}
+                tint={tint}
+                textColor={textColor}
+              />
+              <TouchableOpacity
+                style={[
+                  styles.createBtn,
+                  {
+                    backgroundColor: isDark ? "#252525" : "#F8FAFC",
+                    borderColor: borderCol,
+                  },
+                ]}
+                onPress={() => setShowAnnouncementModal(true)}
+              >
+                <Feather name="plus" size={14} color={tint} />
+                <Text style={[styles.createBtnText, { color: tint }]}>
+                  New Announcement
                 </Text>
-              </View>
-            ) : (
-              announcements.slice(0, 3).map((ann, idx) => (
-                <View
-                  key={ann.id}
-                  style={[
-                    styles.annRow,
-                    {
-                      borderTopColor: borderCol,
-                      borderTopWidth: 1,
-                      marginTop: idx === 0 ? 12 : 0,
-                    },
-                  ]}
-                >
-                  <View style={[styles.annDot, { backgroundColor: tint }]} />
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <Text style={[styles.listPrimary, { color: textColor }]}>
-                      {ann.title}
-                    </Text>
-                    <Text
-                      style={[styles.listSecondary, { color: muted }]}
-                      numberOfLines={2}
-                    >
-                      {ann.content}
-                    </Text>
-                    <Text style={[styles.listCaption, { color: muted }]}>
-                      {new Date(ann.createdAt).toLocaleDateString()}
-                    </Text>
-                  </View>
+              </TouchableOpacity>
+              {announcements.length === 0 ? (
+                <View style={[styles.emptyState, { marginTop: 8 }]}>
+                  <Feather
+                    name="message-square"
+                    size={28}
+                    color={muted}
+                    style={{ opacity: 0.4 }}
+                  />
+                  <Text style={[styles.emptyText, { color: muted }]}>
+                    No announcements yet
+                  </Text>
                 </View>
-              ))
-            )}
-          </View>
+              ) : (
+                announcements.slice(0, 3).map((ann, idx) => (
+                  <View
+                    key={ann.id}
+                    style={[
+                      styles.annRow,
+                      {
+                        borderTopColor: borderCol,
+                        borderTopWidth: 1,
+                        marginTop: idx === 0 ? 12 : 0,
+                      },
+                    ]}
+                  >
+                    <View style={[styles.annDot, { backgroundColor: tint }]} />
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text style={[styles.listPrimary, { color: textColor }]}>
+                        {ann.title}
+                      </Text>
+                      <Text
+                        style={[styles.listSecondary, { color: muted }]}
+                        numberOfLines={2}
+                      >
+                        {ann.content}
+                      </Text>
+                      <Text style={[styles.listCaption, { color: muted }]}>
+                        {new Date(ann.createdAt).toLocaleDateString()}
+                      </Text>
+                    </View>
+                  </View>
+                ))
+              )}
+            </View>
+          )}
 
           {/* Open Maintenance */}
-          <View
-            style={[
-              styles.card,
-              { backgroundColor: cardBg, borderColor: borderCol },
-            ]}
-          >
-            <SectionHeader
-              icon="tool"
-              title="Open Maintenance"
-              onSeeAll={() => router.push("/admin/maintenance")}
-              tint={tint}
-              textColor={textColor}
-            />
-            {(() => {
-              const open = maintenance.filter(
-                (m) => m.status !== "RESOLVED" && m.status !== "CLOSED",
-              );
-              if (open.length === 0)
-                return (
-                  <View style={styles.emptyState}>
-                    <Feather
-                      name="check-circle"
-                      size={28}
-                      color={muted}
-                      style={{ opacity: 0.4 }}
-                    />
-                    <Text style={[styles.emptyText, { color: muted }]}>
-                      All requests resolved
-                    </Text>
-                  </View>
+          {enabledFeatures.includes("HELPDESK") && (
+            <View
+              style={[
+                styles.card,
+                { backgroundColor: cardBg, borderColor: borderCol },
+              ]}
+            >
+              <SectionHeader
+                icon="tool"
+                title="Open Maintenance"
+                onSeeAll={() => router.push("/admin/maintenance")}
+                tint={tint}
+                textColor={textColor}
+              />
+              {(() => {
+                const open = maintenance.filter(
+                  (m) => m.status !== "RESOLVED" && m.status !== "CLOSED",
                 );
-              return open.slice(0, 5).map((item, idx) => {
-                const pill = getStatusPill(item.status);
-                return (
-                  <View
-                    key={item.id}
-                    style={[
-                      styles.listRow,
-                      {
-                        borderTopColor: borderCol,
-                        borderTopWidth: idx === 0 ? 0 : 1,
-                      },
-                    ]}
-                  >
+                if (open.length === 0)
+                  return (
+                    <View style={styles.emptyState}>
+                      <Feather
+                        name="check-circle"
+                        size={28}
+                        color={muted}
+                        style={{ opacity: 0.4 }}
+                      />
+                      <Text style={[styles.emptyText, { color: muted }]}>
+                        All requests resolved
+                      </Text>
+                    </View>
+                  );
+                return open.slice(0, 5).map((item, idx) => {
+                  const pill = getStatusPill(item.status);
+                  return (
                     <View
+                      key={item.id}
                       style={[
-                        styles.iconCircle,
-                        { backgroundColor: "#FEF3C7" },
+                        styles.listRow,
+                        {
+                          borderTopColor: borderCol,
+                          borderTopWidth: idx === 0 ? 0 : 1,
+                        },
                       ]}
                     >
-                      <Feather name="tool" size={14} color="#D97706" />
+                      <View
+                        style={[
+                          styles.iconCircle,
+                          { backgroundColor: "#FEF3C7" },
+                        ]}
+                      >
+                        <Feather name="tool" size={14} color="#D97706" />
+                      </View>
+                      <View style={styles.listInfo}>
+                        <Text
+                          style={[styles.listPrimary, { color: textColor }]}
+                        >
+                          {item.title || "Maintenance Request"}
+                        </Text>
+                        <Text style={[styles.listSecondary, { color: muted }]}>
+                          {item.category || "General"} ·{" "}
+                          {new Date(item.createdAt).toLocaleDateString()}
+                        </Text>
+                      </View>
+                      <View style={[styles.pill, { backgroundColor: pill.bg }]}>
+                        <Text style={[styles.pillText, { color: pill.text }]}>
+                          {item.status?.replace("_", " ")}
+                        </Text>
+                      </View>
                     </View>
-                    <View style={styles.listInfo}>
-                      <Text style={[styles.listPrimary, { color: textColor }]}>
-                        {item.title || "Maintenance Request"}
-                      </Text>
-                      <Text style={[styles.listSecondary, { color: muted }]}>
-                        {item.category || "General"} ·{" "}
-                        {new Date(item.createdAt).toLocaleDateString()}
-                      </Text>
-                    </View>
-                    <View style={[styles.pill, { backgroundColor: pill.bg }]}>
-                      <Text style={[styles.pillText, { color: pill.text }]}>
-                        {item.status?.replace("_", " ")}
-                      </Text>
-                    </View>
-                  </View>
-                );
-              });
-            })()}
-          </View>
+                  );
+                });
+              })()}
+            </View>
+          )}
 
           {/* Recent Bookings */}
-          <View
-            style={[
-              styles.card,
-              { backgroundColor: cardBg, borderColor: borderCol },
-            ]}
-          >
-            <SectionHeader
-              icon="calendar"
-              title="Recent Bookings"
-              onSeeAll={() => router.push("/admin/bookings")}
-              tint={tint}
-              textColor={textColor}
-            />
-            {bookings.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Feather
-                  name="calendar"
-                  size={28}
-                  color={muted}
-                  style={{ opacity: 0.4 }}
-                />
-                <Text style={[styles.emptyText, { color: muted }]}>
-                  No bookings yet
-                </Text>
-              </View>
-            ) : (
-              bookings.slice(0, 5).map((booking, idx) => {
-                const pill = getStatusPill(booking.status);
-                return (
-                  <View
-                    key={booking.id}
-                    style={[
-                      styles.listRow,
-                      {
-                        borderTopColor: borderCol,
-                        borderTopWidth: idx === 0 ? 0 : 1,
-                      },
-                    ]}
-                  >
+          {enabledFeatures.includes("AMENITY_BOOKING") && (
+            <View
+              style={[
+                styles.card,
+                { backgroundColor: cardBg, borderColor: borderCol },
+              ]}
+            >
+              <SectionHeader
+                icon="calendar"
+                title="Recent Bookings"
+                onSeeAll={() => router.push("/admin/bookings")}
+                tint={tint}
+                textColor={textColor}
+              />
+              {bookings.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Feather
+                    name="calendar"
+                    size={28}
+                    color={muted}
+                    style={{ opacity: 0.4 }}
+                  />
+                  <Text style={[styles.emptyText, { color: muted }]}>
+                    No bookings yet
+                  </Text>
+                </View>
+              ) : (
+                bookings.slice(0, 5).map((booking, idx) => {
+                  const pill = getStatusPill(booking.status);
+                  return (
                     <View
+                      key={booking.id}
                       style={[
-                        styles.iconCircle,
-                        { backgroundColor: "#DBEAFE" },
+                        styles.listRow,
+                        {
+                          borderTopColor: borderCol,
+                          borderTopWidth: idx === 0 ? 0 : 1,
+                        },
                       ]}
                     >
-                      <Feather name="calendar" size={14} color="#2563EB" />
+                      <View
+                        style={[
+                          styles.iconCircle,
+                          { backgroundColor: "#DBEAFE" },
+                        ]}
+                      >
+                        <Feather name="calendar" size={14} color="#2563EB" />
+                      </View>
+                      <View style={styles.listInfo}>
+                        <Text
+                          style={[styles.listPrimary, { color: textColor }]}
+                        >
+                          {booking.facility?.name || "Amenity"}
+                        </Text>
+                        <Text style={[styles.listSecondary, { color: muted }]}>
+                          {booking.user?.name} ·{" "}
+                          {new Date(booking.startsAt).toLocaleDateString()}
+                        </Text>
+                      </View>
+                      <View style={[styles.pill, { backgroundColor: pill.bg }]}>
+                        <Text style={[styles.pillText, { color: pill.text }]}>
+                          {booking.status}
+                        </Text>
+                      </View>
                     </View>
-                    <View style={styles.listInfo}>
-                      <Text style={[styles.listPrimary, { color: textColor }]}>
-                        {booking.facility?.name || "Amenity"}
-                      </Text>
-                      <Text style={[styles.listSecondary, { color: muted }]}>
-                        {booking.user?.name} ·{" "}
-                        {new Date(booking.startsAt).toLocaleDateString()}
-                      </Text>
-                    </View>
-                    <View style={[styles.pill, { backgroundColor: pill.bg }]}>
-                      <Text style={[styles.pillText, { color: pill.text }]}>
-                        {booking.status}
-                      </Text>
-                    </View>
-                  </View>
-                );
-              })
-            )}
-          </View>
+                  );
+                })
+              )}
+            </View>
+          )}
         </View>
       </ScrollView>
 

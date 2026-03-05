@@ -1,20 +1,24 @@
 ﻿// @ts-nocheck
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { ScrollView, Text, View, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
+import { getEnabledFeatures } from "@/lib/auth";
 
+// featureKey: null → always visible; string → requires that feature
 const SECTIONS = [
   {
     title: "Visitors",
     icon: "users",
     color: "#06B6D4",
+    featureKey: "VISITOR_MANAGEMENT",
     items: [
       {
         key: "invite",
+        featureKey: "VISITOR_MANAGEMENT",
         title: "Invite Guest",
         subtitle: "Send invitations",
         icon: "user-plus",
@@ -22,6 +26,7 @@ const SECTIONS = [
       },
       {
         key: "transport",
+        featureKey: "VISITOR_MANAGEMENT",
         title: "Cab / Auto",
         subtitle: "Book transportation",
         icon: "truck",
@@ -29,6 +34,7 @@ const SECTIONS = [
       },
       {
         key: "delivery",
+        featureKey: "DELIVERY_MANAGEMENT",
         title: "Delivery",
         subtitle: "Manage deliveries",
         icon: "package",
@@ -36,6 +42,7 @@ const SECTIONS = [
       },
       {
         key: "passes",
+        featureKey: "VISITOR_MANAGEMENT",
         title: "My Passes",
         subtitle: "View visitor passes",
         icon: "credit-card",
@@ -43,6 +50,7 @@ const SECTIONS = [
       },
       {
         key: "kids",
+        featureKey: "KIDS_CHECKOUT",
         title: "Kids Exit",
         subtitle: "Child permissions",
         icon: "shield",
@@ -54,9 +62,11 @@ const SECTIONS = [
     title: "Security",
     icon: "shield",
     color: "#EF4444",
+    featureKey: null, // always visible
     items: [
       {
         key: "call",
+        featureKey: null,
         title: "Call Security",
         subtitle: "Emergency contact",
         icon: "phone-call",
@@ -64,6 +74,7 @@ const SECTIONS = [
       },
       {
         key: "msg",
+        featureKey: "E_INTERCOM",
         title: "Message",
         subtitle: "Send message",
         icon: "message-circle",
@@ -71,6 +82,7 @@ const SECTIONS = [
       },
       {
         key: "guard",
+        featureKey: null,
         title: "Guard Info",
         subtitle: "Guard information",
         icon: "user-check",
@@ -82,9 +94,11 @@ const SECTIONS = [
     title: "Community",
     icon: "home",
     color: "#8B5CF6",
+    featureKey: null,
     items: [
       {
         key: "maint",
+        featureKey: "HELPDESK",
         title: "Maintenance",
         subtitle: "Repair requests",
         icon: "tool",
@@ -92,6 +106,7 @@ const SECTIONS = [
       },
       {
         key: "meter",
+        featureKey: "UTILITY_PAYMENT",
         title: "Meter Reading",
         subtitle: "Reading & bills",
         icon: "activity",
@@ -99,6 +114,7 @@ const SECTIONS = [
       },
       {
         key: "emergency",
+        featureKey: null,
         title: "Emergency Numbers",
         subtitle: "Important contacts",
         icon: "phone",
@@ -106,10 +122,67 @@ const SECTIONS = [
       },
       {
         key: "bookings",
+        featureKey: "AMENITY_BOOKING",
         title: "Bookings",
         subtitle: "Book facilities",
         icon: "calendar",
         href: "/resident/bookings",
+      },
+      {
+        key: "payments",
+        featureKey: "UTILITY_PAYMENT",
+        title: "Pay Bills",
+        subtitle: "Utility payments",
+        icon: "credit-card",
+        href: "/resident/payments",
+      },
+      {
+        key: "directory",
+        featureKey: "DIRECTORY",
+        title: "Directory",
+        subtitle: "Browse residents",
+        icon: "book",
+        href: "/resident/directory",
+      },
+      {
+        key: "documents",
+        featureKey: "DOCUMENTS_UPLOADING",
+        title: "Documents",
+        subtitle: "Policies & forms",
+        icon: "file-text",
+        href: "/resident/documents",
+      },
+    ],
+  },
+  {
+    title: "Engagement",
+    icon: "layers",
+    color: "#10B981",
+    featureKey: null,
+    items: [
+      {
+        key: "notice-board",
+        featureKey: "NOTICE_BOARD",
+        title: "Notice Board",
+        subtitle: "Community notices",
+        icon: "clipboard",
+        href: "/resident/notice-board",
+      },
+      {
+        key: "surveys",
+        featureKey: "SURVEYS",
+        title: "Surveys",
+        subtitle: "Share your feedback",
+        icon: "bar-chart-2",
+        href: "/resident/surveys",
+      },
+      {
+        key: "polls",
+        featureKey: "ELECTION_POLLS",
+        title: "Election Polls",
+        subtitle: "Vote on community matters",
+        icon: "check-square",
+        href: "/resident/election-polls",
       },
     ],
   },
@@ -117,9 +190,11 @@ const SECTIONS = [
     title: "Help",
     icon: "help-circle",
     color: "#10B981",
+    featureKey: null,
     items: [
       {
         key: "help",
+        featureKey: null,
         title: "Support",
         subtitle: "Get assistance",
         icon: "help-circle",
@@ -127,6 +202,7 @@ const SECTIONS = [
       },
       {
         key: "faq",
+        featureKey: null,
         title: "FAQ",
         subtitle: "Common questions",
         icon: "list",
@@ -134,6 +210,7 @@ const SECTIONS = [
       },
       {
         key: "contact",
+        featureKey: null,
         title: "Contact Us",
         subtitle: "Reach out to us",
         icon: "mail",
@@ -153,6 +230,23 @@ export default function QuickLinks() {
   const muted = isDark ? "#94A3B8" : "#64748B";
   const borderCol = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)";
   const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
+
+  const [enabledFeatures, setEnabledFeatures] = useState<string[]>([]);
+
+  useEffect(() => {
+    getEnabledFeatures().then(setEnabledFeatures);
+  }, []);
+
+  const visibleSections = SECTIONS.map((section) => ({
+    ...section,
+    items: section.items.filter(
+      (item) => !item.featureKey || enabledFeatures.includes(item.featureKey),
+    ),
+  })).filter(
+    (section) =>
+      (!section.featureKey || enabledFeatures.includes(section.featureKey)) &&
+      section.items.length > 0,
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: bg }}>
@@ -201,7 +295,7 @@ export default function QuickLinks() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        {SECTIONS.map((section) => (
+        {visibleSections.map((section) => (
           <View key={section.title}>
             <View
               style={{

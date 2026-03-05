@@ -21,7 +21,12 @@ import Toast from "@/components/Toast";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useToast } from "@/hooks/useToast";
-import { getCommunityId, getToken, getUser } from "@/lib/auth";
+import {
+  getCommunityId,
+  getToken,
+  getUser,
+  getEnabledFeatures,
+} from "@/lib/auth";
 import { config } from "@/lib/config";
 
 // ── Vehicle type config ────────────────────────────────────────
@@ -365,6 +370,15 @@ export default function VehicleSearch() {
 
   const inputRef = useRef(null);
   const { toast, showError, hideToast } = useToast();
+
+  // Feature guard
+  useEffect(() => {
+    getEnabledFeatures().then((feats) => {
+      if (feats.length > 0 && !feats.includes("VEHICLE_SEARCH")) {
+        router.replace("/gatekeeper");
+      }
+    });
+  }, []);
 
   // Auto-focus input on mount
   useEffect(() => {

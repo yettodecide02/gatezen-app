@@ -1,5 +1,5 @@
 ﻿// @ts-nocheck
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   ScrollView,
   Text,
@@ -7,15 +7,19 @@ import {
   Pressable,
   ActivityIndicator,
   Image,
+  Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import DateTimePicker from "@react-native-community/datetimepicker";
-import axios from "axios";
+import DateTimePicker, {
+  DateTimePickerAndroid,
+} from "@react-native-community/datetimepicker";
+import { useQuery } from "@tanstack/react-query";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
-import { getUser, getToken } from "@/lib/auth";
-import { config } from "@/lib/config";
+import { useAppContext } from "@/contexts/AppContext";
+import { queryKeys } from "@/lib/queryKeys";
+import { fetchResidentPackages } from "@/lib/queries/resident";
 import Toast from "@/components/Toast";
 import { useToast } from "@/hooks/useToast";
 
@@ -44,8 +48,6 @@ export default function MyPackages() {
   const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
   const fieldBg = isDark ? "#111111" : "#F8FAFC";
 
-  const [loading, setLoading] = useState(true);
-  const [packages, setPackages] = useState([]);
   const [dateRange, setDateRange] = useState({
     from: new Date(Date.now() - 30 * 864e5),
     to: new Date(),
@@ -53,44 +55,34 @@ export default function MyPackages() {
   const [showFromPicker, setShowFromPicker] = useState(false);
   const [showToPicker, setShowToPicker] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
-  const [user, setUserState] = useState(null);
-  const [token, setTokenState] = useState(null);
   const { toast, showError, hideToast } = useToast();
 
-  useEffect(() => {
-    const init = async () => {
-      const u = await getUser();
-      const t = await getToken();
-      setUserState(u);
-      setTokenState(t);
-    };
-    init();
-  }, []);
+  const { user, token } = useAppContext();
+  const fromStr = dateRange.from.toISOString().split("T")[0];
+  const toStr = dateRange.to.toISOString().split("T")[0];
 
-  useEffect(() => {
-    if (user && token) load();
-  }, [user, token]);
-
-  const load = async () => {
-    if (!token || !user) return;
-    setLoading(true);
-    try {
-      const res = await axios.get(`${config.backendUrl}/resident/packages`, {
-        headers: { Authorization: `Bearer ${token}` },
-        params: {
-          communityId: user.communityId,
-          userId: user.id,
-          from: dateRange.from.toISOString().split("T")[0],
-          to: dateRange.to.toISOString().split("T")[0],
-        },
-      });
-      setPackages(res.data || []);
-    } catch (err) {
-      showError(err.response?.data?.error || "Failed to load packages");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const {
+    data: packages = [],
+    isLoading: loading,
+    refetch: load,
+  } = useQuery({
+    queryKey: queryKeys.resident.packages(
+      user?.id ?? "",
+      user?.communityId ?? "",
+      fromStr,
+      toStr,
+    ),
+    queryFn: () =>
+      fetchResidentPackages(
+        token,
+        user!.id,
+        user!.communityId as string,
+        fromStr,
+        toStr,
+      ),
+    enabled: !!user?.id && !!user?.communityId,
+    staleTime: 3 * 60 * 1000, // 3 minutes
+  });
 
   const fmtShort = (d) =>
     new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -196,7 +188,21 @@ export default function MyPackages() {
           </Text>
           <View style={{ flexDirection: "row", gap: 10 }}>
             <Pressable
-              onPress={() => setShowFromPicker(true)}
+              onPress={() => {
+                if (Platform.OS === "android") {
+                  DateTimePickerAndroid.open({
+                    value: dateRange.from,
+                    mode: "date",
+                    maximumDate: dateRange.to,
+                    onChange: (e, d) => {
+                      if (e.type === "set" && d)
+                        setDateRange((p) => ({ ...p, from: d }));
+                    },
+                  });
+                } else {
+                  setShowFromPicker(true);
+                }
+              }}
               style={{
                 flex: 1,
                 flexDirection: "row",
@@ -218,7 +224,22 @@ export default function MyPackages() {
               <Text style={{ color: muted, fontSize: 12 }}>to</Text>
             </View>
             <Pressable
-              onPress={() => setShowToPicker(true)}
+              onPress={() => {
+                if (Platform.OS === "android") {
+                  DateTimePickerAndroid.open({
+                    value: dateRange.to,
+                    mode: "date",
+                    minimumDate: dateRange.from,
+                    maximumDate: new Date(),
+                    onChange: (e, d) => {
+                      if (e.type === "set" && d)
+                        setDateRange((p) => ({ ...p, to: d }));
+                    },
+                  });
+                } else {
+                  setShowToPicker(true);
+                }
+              }}
               style={{
                 flex: 1,
                 flexDirection: "row",
@@ -424,7 +445,7 @@ export default function MyPackages() {
         )}
       </ScrollView>
 
-      {showFromPicker && (
+      {Platform.OS === "ios" && showFromPicker && (
         <DateTimePicker
           value={dateRange.from}
           mode="date"
@@ -435,7 +456,7 @@ export default function MyPackages() {
           }}
         />
       )}
-      {showToPicker && (
+      {Platform.OS === "ios" && showToPicker && (
         <DateTimePicker
           value={dateRange.to}
           mode="date"

@@ -1,5 +1,5 @@
 ﻿// @ts-nocheck
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   StyleSheet,
   Text,
@@ -13,15 +13,18 @@ import {
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
-import axios from "axios";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
-import { getToken, getCommunityId } from "@/lib/auth";
-import { config } from "@/lib/config";
 import Toast from "@/components/Toast";
 import ConfirmModal from "@/components/ConfirmModal";
 import { useToast } from "@/hooks/useToast";
+import { useAppContext } from "@/contexts/AppContext";
+import { queryKeys } from "@/lib/queryKeys";
+import { fetchAdminStaff, deleteAdminStaff } from "@/lib/queries/admin";
+import axios from "axios";
+import { config } from "@/lib/config";
 
 export default function StaffManagement() {
   const theme = useColorScheme() ?? "light";
@@ -34,14 +37,9 @@ export default function StaffManagement() {
   const borderCol = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)";
   const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
 
-  const [gatekeepers, setGatekeepers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
-  const [deleting, setDeleting] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -49,48 +47,65 @@ export default function StaffManagement() {
   });
 
   const { toast, showError, showSuccess, hideToast } = useToast();
-  const url = config.backendUrl;
+  const { user, token } = useAppContext();
+  const queryClient = useQueryClient();
+  const staffKey = queryKeys.admin.staff(user?.communityId ?? "");
 
-  useEffect(() => {
-    fetchGatekeepers();
-  }, []);
+  const {
+    data: gatekeepers = [],
+    isLoading: loading,
+    isFetching,
+    refetch,
+  } = useQuery({
+    queryKey: staffKey,
+    queryFn: () => fetchAdminStaff(token, user!.communityId as string),
+    enabled: !!user?.communityId,
+    staleTime: 10 * 60 * 1000,
+  });
+  const refreshing = isFetching && !loading;
 
-  const fetchGatekeepers = async () => {
-    try {
-      const token = await getToken();
-      const communityId = await getCommunityId();
-      const res = await axios.get(`${url}/admin/gatekeepers`, {
-        headers: { Authorization: `Bearer ${token}` },
-        params: { communityId },
-      });
-      setGatekeepers(res.data || []);
-    } catch {
-      showError("Failed to fetch gatekeepers");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  const confirmDelete = async () => {
-    const id = deleteConfirmId;
-    setDeleting(true);
-    try {
-      const token = await getToken();
-      await axios.delete(`${url}/admin/gatekeepers/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteAdminStaff(token, id),
+    onSuccess: () => {
       showSuccess("Gatekeeper removed successfully");
-      fetchGatekeepers();
-    } catch (e) {
-      showError(e.response?.data?.error || "Failed to remove gatekeeper");
-    } finally {
-      setDeleting(false);
+      queryClient.invalidateQueries({ queryKey: staffKey });
+    },
+    onError: (e: any) =>
+      showError(e?.response?.data?.error || "Failed to remove gatekeeper"),
+    onSettled: () => {
       setDeleteConfirmId(null);
-    }
+    },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: object) => {
+      const res = await axios.post(
+        `${config.backendUrl}/admin/gatekeeper-signup`,
+        data,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+      return res.data;
+    },
+    onSuccess: () => {
+      showSuccess("Gatekeeper created successfully");
+      setFormData({ name: "", email: "", password: "" });
+      setShowModal(false);
+      queryClient.invalidateQueries({ queryKey: staffKey });
+    },
+    onError: (e: any) =>
+      showError(e?.response?.data?.error || "Failed to create gatekeeper"),
+  });
+
+  const confirmDelete = () => {
+    if (deleteConfirmId) deleteMutation.mutate(deleteConfirmId);
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!formData.name || !formData.email || !formData.password) {
       showError("All fields are required");
       return;
@@ -99,29 +114,7 @@ export default function StaffManagement() {
       showError("Please enter a valid email address");
       return;
     }
-    setSubmitting(true);
-    try {
-      const token = await getToken();
-      const communityId = await getCommunityId();
-      await axios.post(
-        `${url}/admin/gatekeeper-signup`,
-        { ...formData, communityId },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        },
-      );
-      setFormData({ name: "", email: "", password: "" });
-      setShowModal(false);
-      showSuccess("Gatekeeper created successfully");
-      fetchGatekeepers();
-    } catch (e) {
-      showError(e.response?.data?.error || "Failed to create gatekeeper");
-    } finally {
-      setSubmitting(false);
-    }
+    createMutation.mutate({ ...formData, communityId: user?.communityId });
   };
 
   const stats = [
@@ -193,7 +186,7 @@ export default function StaffManagement() {
         message="Are you sure you want to remove this gatekeeper?"
         onConfirm={confirmDelete}
         onCancel={() => setDeleteConfirmId(null)}
-        loading={deleting}
+        loading={deleteMutation.isPending}
         confirmText="Remove"
         confirmColor="#EF4444"
       />
@@ -240,10 +233,7 @@ export default function StaffManagement() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              fetchGatekeepers();
-            }}
+            onRefresh={() => refetch()}
             tintColor={tint}
           />
         }
@@ -476,13 +466,16 @@ export default function StaffManagement() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleSubmit}
-                disabled={submitting}
+                disabled={createMutation.isPending}
                 style={[
                   styles.submitBtn,
-                  { backgroundColor: tint, opacity: submitting ? 0.6 : 1 },
+                  {
+                    backgroundColor: tint,
+                    opacity: createMutation.isPending ? 0.6 : 1,
+                  },
                 ]}
               >
-                {submitting ? (
+                {createMutation.isPending ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
                   <Text style={styles.submitBtnText}>Create Gatekeeper</Text>

@@ -1,5 +1,5 @@
 ﻿// @ts-nocheck
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -11,17 +11,25 @@ import {
   TextInput,
   Modal,
 } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import DateTimePicker, {
+  DateTimePickerAndroid,
+} from "@react-native-community/datetimepicker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
-import axios from "axios";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
-import { getToken, getUser } from "@/lib/auth";
 import { useToast } from "@/hooks/useToast";
 import Toast from "@/components/Toast";
-import { config } from "@/lib/config";
+import { useAppContext } from "@/contexts/AppContext";
+import { queryKeys } from "@/lib/queryKeys";
+import {
+  fetchResidentFacilities,
+  fetchResidentFacilityBookings,
+  createResidentFacilityBooking,
+  cancelResidentFacilityBooking,
+} from "@/lib/queries/resident";
 
 function pad(n) {
   return String(n).padStart(2, "0");
@@ -116,93 +124,95 @@ export default function BookingsScreen() {
   const fieldBg = isDark ? "#111111" : "#F8FAFC";
 
   const { toast, showError, showSuccess, hideToast } = useToast();
-  const [user, setUserState] = useState(null);
-  const [token, setTokenState] = useState(null);
-  const [facilities, setFacilities] = useState([]);
+  const { user, token } = useAppContext();
+  const queryClient = useQueryClient();
+
   const [facilityId, setFacilityId] = useState("");
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [bookings, setBookings] = useState([]);
-  const [userBookings, setUserBookings] = useState([]);
   const [slots, setSlots] = useState([]);
   const [selectedSlot, setSelectedSlot] = useState("");
   const [note, setNote] = useState("");
   const [peopleCount, setPeopleCount] = useState("");
-  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showFacilityModal, setShowFacilityModal] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showBookForm, setShowBookForm] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      const [t, u] = await Promise.all([getToken(), getUser()]);
-      setTokenState(t);
-      setUserState(u);
-    })();
-  }, []);
-
-  const authHeaders = useMemo(
-    () => (token ? { Authorization: `Bearer ${token}` } : {}),
-    [token],
-  );
-
-  const loadFacilities = useCallback(async () => {
-    if (!user?.communityId || !token) return;
-    try {
-      const res = await axios.get(`${config.backendUrl}/resident/facilities`, {
-        params: { communityId: user.communityId },
-        headers: authHeaders,
-      });
-      const f = Array.isArray(res.data?.data)
-        ? res.data.data
-        : Array.isArray(res.data)
-          ? res.data
-          : [];
-      const mapped = f.map((a) => ({
+  // Facilities query
+  const { data: rawFacilities = [] } = useQuery({
+    queryKey: queryKeys.resident.facilities(user?.communityId ?? ""),
+    queryFn: () => fetchResidentFacilities(token, user!.communityId as string),
+    enabled: !!user?.communityId && !!token,
+    staleTime: 30 * 60 * 1000,
+  });
+  const facilities = useMemo(
+    () =>
+      rawFacilities.map((a) => ({
         ...a,
         facilityType: a.facilityType?.replace(/_/g, " ") ?? a.facilityType,
-      }));
-      setFacilities(mapped);
-      if (!facilityId && mapped[0]?.id) setFacilityId(mapped[0].id);
-    } catch {
-      showError("Failed to load facilities");
-    }
-  }, [user?.communityId, token, authHeaders, facilityId]);
+      })),
+    [rawFacilities],
+  );
 
-  const loadBookings = useCallback(async () => {
-    if (!facilityId || !date || !token) return;
-    setLoading(true);
-    try {
-      const [bRes, uRes] = await Promise.all([
-        axios.get(`${config.backendUrl}/resident/bookings`, {
-          params: { facilityId, date },
-          headers: authHeaders,
-        }),
-        user?.id
-          ? axios.get(`${config.backendUrl}/resident/user-bookings`, {
-              params: { userId: user.id, date },
-              headers: authHeaders,
-            })
-          : Promise.resolve({ data: [] }),
-      ]);
-      const list = Array.isArray(bRes.data) ? bRes.data : [];
-      setBookings(
-        list.sort((a, b) => +new Date(a.startsAt) - +new Date(b.startsAt)),
-      );
-      setUserBookings(Array.isArray(uRes.data) ? uRes.data : []);
-    } catch {
-      showError("Failed to load bookings");
-    } finally {
-      setLoading(false);
-    }
-  }, [facilityId, date, token, user?.id, authHeaders]);
+  // Auto-select first facility
+  useEffect(() => {
+    if (facilities.length > 0 && !facilityId) setFacilityId(facilities[0].id);
+  }, [facilities]);
 
-  useEffect(() => {
-    if (user) loadFacilities();
-  }, [user]);
-  useEffect(() => {
-    if (facilityId && date && token) loadBookings();
-  }, [facilityId, date, token]);
+  // Facility bookings query
+  const {
+    data: bookingData,
+    isLoading: loading,
+    refetch: refetchBookings,
+  } = useQuery({
+    queryKey: queryKeys.resident.facilityBookings(
+      facilityId,
+      date,
+      user?.id ?? "",
+    ),
+    queryFn: () =>
+      fetchResidentFacilityBookings(token, facilityId, date, user?.id),
+    enabled: !!facilityId && !!date && !!token,
+    staleTime: 3 * 60 * 1000,
+  });
+  const { bookings = [], userBookings = [] } = bookingData ?? {};
+
+  const createMutation = useMutation({
+    mutationFn: (payload: object) =>
+      createResidentFacilityBooking(token, payload),
+    onSuccess: () => {
+      showSuccess("Booking confirmed!");
+      setNote("");
+      setSelectedSlot("");
+      setPeopleCount("");
+      setShowBookForm(false);
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.resident.facilityBookings(
+          facilityId,
+          date,
+          user?.id ?? "",
+        ),
+      });
+    },
+    onError: (e: any) =>
+      showError(e?.response?.data?.error || "Booking failed"),
+    onSettled: () => setSubmitting(false),
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: (id: string) => cancelResidentFacilityBooking(token, id),
+    onSuccess: () => {
+      showSuccess("Booking cancelled");
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.resident.facilityBookings(
+          facilityId,
+          date,
+          user?.id ?? "",
+        ),
+      });
+    },
+    onError: () => showError("Failed to cancel booking"),
+  });
   useEffect(() => {
     const fac = facilities.find((f) => f.id === facilityId) || null;
     setSlots(buildSlots(fac, date));
@@ -239,7 +249,7 @@ export default function BookingsScreen() {
     setDate(d.toISOString().slice(0, 10));
   };
 
-  const createBooking = async () => {
+  const createBooking = () => {
     if (!facilityId || !selectedSlot) {
       showError("Select a facility and time slot");
       return;
@@ -273,53 +283,19 @@ export default function BookingsScreen() {
       return;
     }
     setSubmitting(true);
-    try {
-      const res = await axios.post(
-        `${config.backendUrl}/resident/bookings`,
-        {
-          userId: user?.id,
-          facilityId,
-          startsAt: slot.start,
-          endsAt: slot.end,
-          note: note.trim() || undefined,
-          peopleCount: count,
-          communityId: user?.communityId,
-        },
-        { headers: authHeaders },
-      );
-      showSuccess("Booking confirmed!");
-      setNote("");
-      setSelectedSlot("");
-      setPeopleCount("");
-      setShowBookForm(false);
-      setBookings((prev) =>
-        [res.data, ...prev].sort(
-          (a, b) => +new Date(a.startsAt) - +new Date(b.startsAt),
-        ),
-      );
-      loadBookings();
-    } catch (e) {
-      showError(e?.response?.data?.error || "Booking failed");
-    } finally {
-      setSubmitting(false);
-    }
+    createMutation.mutate({
+      userId: user?.id,
+      facilityId,
+      startsAt: slot.start,
+      endsAt: slot.end,
+      note: note.trim() || undefined,
+      peopleCount: count,
+      communityId: user?.communityId,
+    });
   };
 
-  const cancelBooking = async (id) => {
-    try {
-      await axios.patch(
-        `${config.backendUrl}/resident/bookings/${id}/cancel`,
-        {},
-        { headers: authHeaders },
-      );
-      showSuccess("Booking cancelled");
-      setBookings((prev) =>
-        prev.map((b) => (b.id === id ? { ...b, status: "cancelled" } : b)),
-      );
-      loadBookings();
-    } catch {
-      showError("Failed to cancel booking");
-    }
+  const cancelBooking = (id) => {
+    cancelMutation.mutate(id);
   };
 
   const SC = {
@@ -505,7 +481,20 @@ export default function BookingsScreen() {
                 <Feather name="chevron-left" size={16} color={text} />
               </Pressable>
               <Pressable
-                onPress={() => setShowDatePicker(true)}
+                onPress={() => {
+                  if (Platform.OS === "android") {
+                    DateTimePickerAndroid.open({
+                      value: new Date(date + "T00:00:00"),
+                      mode: "date",
+                      onChange: (e, d) => {
+                        if (e.type === "set" && d)
+                          setDate(d.toISOString().slice(0, 10));
+                      },
+                    });
+                  } else {
+                    setShowDatePicker(true);
+                  }
+                }}
                 style={{
                   flex: 1,
                   alignItems: "center",
@@ -1104,7 +1093,7 @@ export default function BookingsScreen() {
         </View>
       </Modal>
 
-      {showDatePicker && (
+      {Platform.OS === "ios" && showDatePicker && (
         <DateTimePicker
           value={new Date(date + "T00:00:00")}
           mode="date"

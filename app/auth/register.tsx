@@ -18,6 +18,7 @@ import { Feather } from "@expo/vector-icons";
 import axios from "axios";
 import { router } from "expo-router";
 import { isAuthed, setToken, setUser } from "@/lib/auth";
+import { useAppContext } from "@/contexts/AppContext";
 import GoogleSignin from "@/components/GoogleSignin";
 import Toast from "@/components/Toast";
 import FormField from "@/components/FormField";
@@ -56,6 +57,7 @@ export default function RegisterScreen() {
   const passwordRef = useRef<TextInput>(null);
 
   const { toast, showError, showSuccess, hideToast } = useToast();
+  const { refreshUser } = useAppContext();
   const theme = useColorScheme() ?? "light";
   const bg = useThemeColor({}, "background");
   const textColor = useThemeColor({}, "text");
@@ -206,6 +208,7 @@ export default function RegisterScreen() {
       await setToken(res.data.jwttoken);
       const user = res.data.user ?? null;
       if (user) await setUser(user);
+      await refreshUser();
       showSuccess("Registration successful! Welcome to CGate.");
       if (user?.status === "PENDING") router.replace("/auth/pending");
       else router.replace("/(tabs)/home");
@@ -526,7 +529,7 @@ export default function RegisterScreen() {
                 Already have an account?{" "}
                 <Text
                   style={[styles.link, { color: tint }]}
-                  onPress={() => router.push("/auth/login")}
+                  onPress={() => router.replace("/auth/login")}
                 >
                   Log in
                 </Text>

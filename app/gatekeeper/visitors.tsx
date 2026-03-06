@@ -1,5 +1,5 @@
 ﻿// @ts-nocheck
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   ScrollView,
   Text,
@@ -9,11 +9,17 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import axios from "axios";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
-import { getToken, getUser, getEnabledFeatures } from "@/lib/auth";
-import { config } from "@/lib/config";
+import { useAppContext } from "@/contexts/AppContext";
+import { queryKeys } from "@/lib/queryKeys";
+import {
+  fetchGatekeeperVisitors,
+  fetchGatekeeperKidPasses,
+  updateGatekeeperVisitor,
+  updateGatekeeperKidPass,
+} from "@/lib/queries/gatekeeper";
 import Toast from "@/components/Toast";
 import { useToast } from "@/hooks/useToast";
 
@@ -43,84 +49,60 @@ export default function GatekeeperVisitors() {
   const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
 
   const { toast, showError, showSuccess, hideToast } = useToast();
-  const [user, setUserState] = useState(null);
-  const [token, setTokenState] = useState(null);
+  const { user, token, enabledFeatures } = useAppContext();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("visitors");
-  const [visitors, setVisitors] = useState([]);
-  const [kidPasses, setKidPasses] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(null);
-  const [enabledFeatures, setEnabledFeatures] = useState<string[]>([]);
 
-  useEffect(() => {
-    (async () => {
-      const [t, u, feats] = await Promise.all([
-        getToken(),
-        getUser(),
-        getEnabledFeatures(),
-      ]);
-      setTokenState(t);
-      setUserState(u);
-      setEnabledFeatures(feats);
-    })();
-  }, []);
+  const visitorsKey = queryKeys.gatekeeper.visitors();
+  const kidPassesKey = queryKeys.gatekeeper.kidPasses();
 
-  const load = useCallback(async () => {
-    // Build headers inside the callback so they always use the current token
-    const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
-    setLoading(true);
-    try {
-      const [vRes, kRes] = await Promise.all([
-        axios.get(`${config.backendUrl}/gatekeeper`, { headers: authHeaders }),
-        axios.get(`${config.backendUrl}/gatekeeper/kid-passes`, {
-          headers: authHeaders,
-        }),
-      ]);
-      setVisitors(Array.isArray(vRes.data) ? vRes.data : []);
-      setKidPasses(Array.isArray(kRes.data) ? kRes.data : []);
-    } catch {
-      showError("Failed to load data");
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
+  const { data: visitors = [], isLoading: loading } = useQuery({
+    queryKey: visitorsKey,
+    queryFn: () => fetchGatekeeperVisitors(token),
+    enabled: !!token,
+    staleTime: 2 * 60 * 1000,
+  });
 
-  useEffect(() => {
-    if (user) load();
-  }, [user]);
+  const { data: kidPasses = [] } = useQuery({
+    queryKey: kidPassesKey,
+    queryFn: () => fetchGatekeeperKidPasses(token),
+    enabled: !!token,
+    staleTime: 2 * 60 * 1000,
+  });
 
-  const updateVisitor = async (id, status) => {
+  const visitorMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) =>
+      updateGatekeeperVisitor(token, id, status),
+    onSuccess: (data, vars) => {
+      showSuccess(`Visitor ${vars.status.replace("_", " ")}`);
+      queryClient.invalidateQueries({ queryKey: visitorsKey });
+    },
+    onError: (e: any) =>
+      showError(e?.response?.data?.error || "Failed to update"),
+    onSettled: () => setUpdating(null),
+  });
+
+  const kidPassMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) =>
+      updateGatekeeperKidPass(token, id, status),
+    onSuccess: (_data, vars) => {
+      showSuccess(`Kid pass ${vars.status.toLowerCase()}`);
+      queryClient.invalidateQueries({ queryKey: kidPassesKey });
+    },
+    onError: (e: any) =>
+      showError(e?.response?.data?.error || "Failed to update"),
+    onSettled: () => setUpdating(null),
+  });
+
+  const updateVisitor = (id: string, status: string) => {
     setUpdating(id);
-    try {
-      const res = await axios.post(
-        `${config.backendUrl}/gatekeeper`,
-        { id, status },
-        { headers: authHeaders },
-      );
-      setVisitors((prev) => prev.map((v) => (v.id === id ? res.data : v)));
-      showSuccess(`Visitor ${status.replace("_", " ")}`);
-    } catch (e) {
-      showError(e?.response?.data?.error || "Failed to update");
-    } finally {
-      setUpdating(null);
-    }
+    visitorMutation.mutate({ id, status });
   };
 
-  const updateKidPass = async (id, status) => {
+  const updateKidPass = (id: string, status: string) => {
     setUpdating(id);
-    try {
-      const res = await axios.post(
-        `${config.backendUrl}/gatekeeper/kid-passes/${id}`,
-        { status },
-        { headers: authHeaders },
-      );
-      setKidPasses((prev) => prev.map((p) => (p.id === id ? res.data : p)));
-      showSuccess(`Kid pass ${status.toLowerCase()}`);
-    } catch (e) {
-      showError(e?.response?.data?.error || "Failed to update");
-    } finally {
-      setUpdating(null);
-    }
+    kidPassMutation.mutate({ id, status });
   };
 
   const fmt = (d) =>

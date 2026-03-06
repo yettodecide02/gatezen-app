@@ -13,6 +13,7 @@ import {
 import axios from "axios";
 import { router } from "expo-router";
 import { isAuthed, setToken, setUser } from "@/lib/auth";
+import { useAppContext } from "@/contexts/AppContext";
 import GoogleSignin from "@/components/GoogleSignin";
 import Toast from "@/components/Toast";
 import FormField from "@/components/FormField";
@@ -33,6 +34,7 @@ export default function LoginScreen() {
   const pwRef = useRef<TextInput>(null);
 
   const { toast, showError, showSuccess, hideToast } = useToast();
+  const { refreshUser } = useAppContext();
   const theme = useColorScheme() ?? "light";
   const bg = useThemeColor({}, "background") as string;
   const textColor = useThemeColor({}, "text") as string;
@@ -82,6 +84,7 @@ export default function LoginScreen() {
       await setToken(res.data.jwttoken);
       const user = res.data.user ?? null;
       if (user) await setUser(user);
+      await refreshUser();
       registerForPushNotifications(res.data.jwttoken).catch(() => {});
       showSuccess("Welcome back!");
       if (user?.status === "PENDING") router.replace("/auth/pending");
@@ -218,7 +221,7 @@ export default function LoginScreen() {
                 New here?{" "}
                 <Text
                   style={[styles.link, { color: tint }]}
-                  onPress={() => router.push("/auth/register")}
+                  onPress={() => router.replace("/auth/register")}
                 >
                   Create an account
                 </Text>

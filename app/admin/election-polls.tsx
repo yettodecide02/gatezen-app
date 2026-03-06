@@ -1,9 +1,10 @@
 // @ts-nocheck
-import DateTimePicker from "@react-native-community/datetimepicker";
+import DateTimePicker, {
+  DateTimePickerAndroid,
+} from "@react-native-community/datetimepicker";
 import { Feather } from "@expo/vector-icons";
-import axios from "axios";
 import { router } from "expo-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -24,8 +25,14 @@ import Toast from "@/components/Toast";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useToast } from "@/hooks/useToast";
-import { getCommunityId, getToken, getEnabledFeatures } from "@/lib/auth";
-import { config } from "@/lib/config";
+import { useAppContext } from "@/contexts/AppContext";
+import { queryKeys } from "@/lib/queryKeys";
+import {
+  fetchAdminElectionPolls,
+  createAdminElectionPoll,
+  deleteAdminElectionPoll,
+} from "@/lib/queries/admin";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 // --- Helpers ---
 function pollStatus(poll) {
@@ -499,7 +506,20 @@ function CreatePollModal({
                   CLOSE DATE *
                 </Text>
                 <TouchableOpacity
-                  onPress={() => setShowDatePicker(true)}
+                  onPress={() => {
+                    if (Platform.OS === "android") {
+                      DateTimePickerAndroid.open({
+                        value: endDate,
+                        mode: "date",
+                        minimumDate: new Date(),
+                        onChange: (_, date) => {
+                          if (date) setEndDate(date);
+                        },
+                      });
+                    } else {
+                      setShowDatePicker(true);
+                    }
+                  }}
                   style={[
                     styles.input,
                     {
@@ -649,20 +669,6 @@ function CreatePollModal({
           </View>
         </KeyboardAvoidingView>
 
-        {/* Date Picker — Android: native dialog rendered directly */}
-        {showDatePicker && Platform.OS === "android" && (
-          <DateTimePicker
-            value={endDate}
-            onChange={(_event, date) => {
-              setShowDatePicker(false);
-              if (date) setEndDate(date);
-            }}
-            mode="date"
-            display="default"
-            minimumDate={new Date()}
-          />
-        )}
-
         {/* Date Picker — iOS: bottom-sheet spinner */}
         {Platform.OS === "ios" && (
           <Modal visible={showDatePicker} transparent animationType="slide">
@@ -759,87 +765,57 @@ export default function AdminElectionPolls() {
   const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
   const insets = useSafeAreaInsets();
 
-  const [polls, setPolls] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState("active");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
-  const [deleting, setDeleting] = useState(false);
 
   const { toast, showError, showSuccess, hideToast } = useToast();
-  const url = config.backendUrl;
+  const { user, token } = useAppContext();
+  const queryClient = useQueryClient();
+  const pollsKey = queryKeys.admin.electionPolls(user?.communityId ?? "");
 
-  useEffect(() => {
-    getEnabledFeatures().then((feats) => {
-      if (feats.length > 0 && !feats.includes("ELECTION_POLLS")) {
-        router.replace("/admin");
-      }
-    });
-  }, []);
+  const {
+    data: polls = [],
+    isLoading: loading,
+    isFetching,
+    refetch,
+  } = useQuery({
+    queryKey: pollsKey,
+    queryFn: () => fetchAdminElectionPolls(token, user!.communityId as string),
+    enabled: !!user?.communityId,
+    staleTime: 5 * 60 * 1000,
+    select: (data) => {
+      const raw = data?.polls ?? data?.data ?? data ?? [];
+      return Array.isArray(raw) ? raw : [];
+    },
+  });
+  const refreshing = isFetching && !loading;
 
-  useEffect(() => {
-    fetchPolls();
-  }, []);
+  const createMutation = useMutation({
+    mutationFn: (data: object) =>
+      createAdminElectionPoll(token, {
+        ...data,
+        communityId: user?.communityId,
+      }),
+    onSuccess: () => {
+      showSuccess("Poll created!");
+      queryClient.invalidateQueries({ queryKey: pollsKey });
+    },
+    onError: () => showError("Failed to create poll."),
+  });
 
-  const fetchPolls = async () => {
-    try {
-      const [token, communityId] = await Promise.all([
-        getToken(),
-        getCommunityId(),
-      ]);
-      if (!communityId) {
-        showError("Community information not found.");
-        return;
-      }
-      const res = await axios.get(`${url}/admin/polls`, {
-        headers: { Authorization: `Bearer ${token}` },
-        params: { communityId },
-      });
-      const raw = res.data?.polls ?? res.data?.data ?? res.data ?? [];
-      setPolls(Array.isArray(raw) ? raw : []);
-    } catch (e) {
-      showError("Failed to load polls.");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  const handleRefresh = () => {
-    setRefreshing(true);
-    fetchPolls();
-  };
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteAdminElectionPoll(token, id),
+    onSuccess: () => {
+      showSuccess("Poll deleted.");
+      queryClient.invalidateQueries({ queryKey: pollsKey });
+    },
+    onError: () => showError("Failed to delete poll."),
+    onSettled: () => setDeleteConfirmId(null),
+  });
 
   const handleViewResults = (pollId) => {
     router.push(`/admin/poll-results?id=${pollId}`);
-  };
-
-  const handleCreate = async (data) => {
-    const token = await getToken();
-    if (!token) throw new Error("No token");
-    await axios.post(`${url}/admin/polls/`, data, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    showSuccess("Poll created!");
-    fetchPolls();
-  };
-
-  const confirmDelete = async () => {
-    setDeleting(true);
-    try {
-      const token = await getToken();
-      await axios.delete(`${url}/admin/polls/${deleteConfirmId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setPolls((prev) => prev.filter((p) => p.id !== deleteConfirmId));
-      showSuccess("Poll deleted.");
-    } catch (e) {
-      showError("Failed to delete poll.");
-    } finally {
-      setDeleting(false);
-      setDeleteConfirmId(null);
-    }
   };
 
   const tabs = [
@@ -934,7 +910,7 @@ export default function AdminElectionPolls() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={handleRefresh}
+            onRefresh={() => refetch()}
             tintColor={tint}
           />
         }
@@ -1120,7 +1096,7 @@ export default function AdminElectionPolls() {
       <CreatePollModal
         visible={showCreateModal}
         onClose={() => setShowCreateModal(false)}
-        onSubmit={handleCreate}
+        onSubmit={(data) => createMutation.mutate(data)}
         theme={theme}
         textColor={textColor}
         tint={tint}
@@ -1135,8 +1111,8 @@ export default function AdminElectionPolls() {
         confirmLabel="Delete"
         confirmColor="#EF4444"
         icon="trash-2"
-        loading={deleting}
-        onConfirm={confirmDelete}
+        loading={deleteMutation.isPending}
+        onConfirm={() => deleteMutation.mutate(deleteConfirmId)}
         onCancel={() => setDeleteConfirmId(null)}
       />
 

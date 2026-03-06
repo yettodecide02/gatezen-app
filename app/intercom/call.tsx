@@ -13,12 +13,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
-import { getUser } from "@/lib/auth";
+import { getToken, getUser } from "@/lib/auth";
 import {
   acceptCall,
   endCall,
   generateCallId,
   initiateCall,
+  notifyCallReceiver,
   rejectCall,
   subscribeToUserChannel,
 } from "@/lib/intercom";
@@ -27,7 +28,12 @@ import type { CallPayload, CallType } from "@/lib/intercom";
 type CallMode = "outgoing" | "incoming" | "active" | "declined" | "ended";
 
 const AVATAR_COLORS = [
-  "#6366F1", "#3B82F6", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899",
+  "#6366F1",
+  "#3B82F6",
+  "#10B981",
+  "#F59E0B",
+  "#8B5CF6",
+  "#EC4899",
 ];
 function avatarColor(name = "") {
   let h = 0;
@@ -36,11 +42,19 @@ function avatarColor(name = "") {
 }
 function getInitials(name = "") {
   return (
-    name.split(" ").map((n) => n[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "?"
+    name
+      .split(" ")
+      .map((n) => n[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join("")
+      .toUpperCase() || "?"
   );
 }
 function fmtDuration(sec: number) {
-  const m = Math.floor(sec / 60).toString().padStart(2, "0");
+  const m = Math.floor(sec / 60)
+    .toString()
+    .padStart(2, "0");
   const s = (sec % 60).toString().padStart(2, "0");
   return `${m}:${s}`;
 }
@@ -70,7 +84,7 @@ export default function CallScreen() {
   const tint = useThemeColor({}, "tint");
 
   const [callMode, setCallMode] = useState<CallMode>(
-    params.mode as CallMode ?? "outgoing",
+    (params.mode as CallMode) ?? "outgoing",
   );
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [duration, setDuration] = useState(0);
@@ -149,14 +163,21 @@ export default function CallScreen() {
 
   // ── Initiate outgoing call once user is loaded ────────────────────────────
   useEffect(() => {
-    if (!currentUser?.id || params.mode !== "outgoing" || initiatedRef.current) return;
+    if (!currentUser?.id || params.mode !== "outgoing" || initiatedRef.current)
+      return;
     initiatedRef.current = true;
     const payload = buildPayload();
-    initiateCall(payload).catch(() => router.back());
+    // Initiate Supabase broadcast and send push notification concurrently
+    Promise.all([
+      initiateCall(payload),
+      getToken().then((token) => notifyCallReceiver(payload, token)),
+    ]).catch(() => router.back());
 
     // Auto-cancel if no answer within RING_TIMEOUT_MS
     ringTimeoutRef.current = setTimeout(async () => {
-      try { await endCall(params.peerId, payload); } catch {}
+      try {
+        await endCall(params.peerId, payload);
+      } catch {}
       router.back();
     }, RING_TIMEOUT_MS);
 
@@ -180,7 +201,9 @@ export default function CallScreen() {
   };
 
   const handleDecline = async () => {
-    try { await rejectCall(buildPayload()); } catch {}
+    try {
+      await rejectCall(buildPayload());
+    } catch {}
     router.back();
   };
 
@@ -190,7 +213,9 @@ export default function CallScreen() {
       clearTimeout(ringTimeoutRef.current);
       ringTimeoutRef.current = null;
     }
-    try { await endCall(params.peerId, buildPayload()); } catch {}
+    try {
+      await endCall(params.peerId, buildPayload());
+    } catch {}
     router.back();
   };
 
@@ -358,7 +383,9 @@ export default function CallScreen() {
                 width: 56,
                 height: 56,
                 borderRadius: 28,
-                backgroundColor: isMuted ? "#EF444425" : "rgba(255,255,255,0.08)",
+                backgroundColor: isMuted
+                  ? "#EF444425"
+                  : "rgba(255,255,255,0.08)",
                 alignItems: "center",
                 justifyContent: "center",
               }}
@@ -383,7 +410,9 @@ export default function CallScreen() {
                 width: 56,
                 height: 56,
                 borderRadius: 28,
-                backgroundColor: isSpeaker ? tint + "25" : "rgba(255,255,255,0.08)",
+                backgroundColor: isSpeaker
+                  ? tint + "25"
+                  : "rgba(255,255,255,0.08)",
                 alignItems: "center",
                 justifyContent: "center",
               }}

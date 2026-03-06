@@ -15,7 +15,7 @@ import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useToast } from "@/hooks/useToast";
 import Toast from "@/components/Toast";
-import { getToken, getUser } from "@/lib/auth";
+import { useAppContext } from "@/contexts/AppContext";
 import { config } from "@/lib/config";
 import { router } from "expo-router";
 
@@ -31,21 +31,12 @@ export default function GatekeeperScanner() {
   const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
 
   const { toast, showError, showSuccess, hideToast } = useToast();
-  const [user, setUserState] = useState(null);
-  const [token, setTokenState] = useState(null);
+  const { user, token } = useAppContext();
   const [hasPermission, setHasPermission] = useState(null);
   const [scanning, setScanning] = useState(true);
   const [lastScan, setLastScan] = useState(null);
   const [visitor, setVisitor] = useState(null);
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    (async () => {
-      const [t, u] = await Promise.all([getToken(), getUser()]);
-      setTokenState(t);
-      setUserState(u);
-    })();
-  }, []);
 
   useEffect(() => {
     (async () => {

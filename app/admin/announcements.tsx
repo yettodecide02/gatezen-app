@@ -12,16 +12,21 @@ import {
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
-import axios from "axios";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
-import { getToken, getCommunityId, getEnabledFeatures } from "@/lib/auth";
-import { config } from "@/lib/config";
 import Toast from "@/components/Toast";
 import ConfirmModal from "@/components/ConfirmModal";
 import { useToast } from "@/hooks/useToast";
+import { useAppContext } from "@/contexts/AppContext";
+import { queryKeys } from "@/lib/queryKeys";
+import {
+  createAdminAnnouncement,
+  deleteAdminAnnouncement,
+  fetchAdminAnnouncements,
+} from "@/lib/queries/admin";
 
 // --- Announcement Card ---
 function AnnouncementCard({
@@ -248,87 +253,68 @@ export default function AdminAnnouncements() {
   const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
   const insets = useSafeAreaInsets();
 
-  const [announcements, setAnnouncements] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const { token, communityId, enabledFeatures } = useAppContext();
+  const queryClient = useQueryClient();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
-  const [deleting, setDeleting] = useState(false);
 
   const { toast, showError, showSuccess, hideToast } = useToast();
-  const url = config.backendUrl;
 
   useEffect(() => {
-    getEnabledFeatures().then((feats) => {
-      if (feats.length > 0 && !feats.includes("COMMUNICATION")) {
-        router.replace("/admin");
-      }
-    });
-  }, []);
-
-  useEffect(() => {
-    fetchAnnouncements();
-  }, []);
-
-  const fetchAnnouncements = async () => {
-    try {
-      const token = await getToken();
-      const communityId = await getCommunityId();
-      if (!communityId) {
-        showError("Community information not found.");
-        return;
-      }
-      const res = await axios.get(`${url}/admin/announcements`, {
-        headers: { Authorization: `Bearer ${token}` },
-        params: { communityId },
-      });
-      setAnnouncements(res.data.announcements || []);
-    } catch (e) {
-      showError("Failed to load announcements.");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+    if (
+      enabledFeatures.length > 0 &&
+      !enabledFeatures.includes("COMMUNICATION")
+    ) {
+      router.replace("/admin");
     }
-  };
+  }, [enabledFeatures]);
 
-  const handleRefresh = () => {
-    setRefreshing(true);
-    fetchAnnouncements();
-  };
+  const {
+    data: announcements = [],
+    isLoading: loading,
+    isFetching,
+    refetch,
+  } = useQuery({
+    queryKey: queryKeys.admin.announcements(communityId ?? ""),
+    queryFn: () => fetchAdminAnnouncements(token, communityId),
+    enabled: !!communityId,
+    staleTime: 10 * 60 * 1000,
+  });
 
-  const handleCreate = async ({ title, content }) => {
-    const token = await getToken();
-    const communityId = await getCommunityId();
-    if (!communityId) throw new Error("No community");
-    const res = await axios.post(
-      `${url}/admin/create-announcement`,
-      { title, content, communityId },
-      { headers: { Authorization: `Bearer ${token}` } },
-    );
-    setAnnouncements((prev) => [res.data.announcement, ...prev]);
-    showSuccess("Announcement created!");
+  const refreshing = isFetching && !loading;
+
+  const createMutation = useMutation({
+    mutationFn: (payload) => createAdminAnnouncement(token, payload),
+    onSuccess: () => {
+      showSuccess("Announcement created!");
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.admin.announcements(communityId ?? ""),
+      });
+    },
+    onError: () => showError("Failed to create announcement."),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => deleteAdminAnnouncement(token, id),
+    onSuccess: () => {
+      showSuccess("Announcement deleted.");
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.admin.announcements(communityId ?? ""),
+      });
+    },
+    onError: () => showError("Failed to delete announcement."),
+  });
+
+  const handleCreate = async (payload) => {
+    await createMutation.mutateAsync({ ...payload, communityId });
   };
 
   const handleDelete = (id) => setDeleteConfirmId(id);
 
-  const confirmDelete = async () => {
-    const id = deleteConfirmId;
-    setDeleting(true);
-    try {
-      const token = await getToken();
-      const communityId = await getCommunityId();
-      await axios.delete(`${url}/admin/announcements/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-        params: { communityId },
-      });
-      setAnnouncements((prev) => prev.filter((a) => a.id !== id));
-      showSuccess("Announcement deleted.");
-    } catch (e) {
-      showError("Failed to delete announcement.");
-    } finally {
-      setDeleting(false);
-      setDeleteConfirmId(null);
-    }
+  const confirmDelete = () => {
+    deleteMutation.mutate(deleteConfirmId, {
+      onSettled: () => setDeleteConfirmId(null),
+    });
   };
 
   if (loading) {
@@ -400,7 +386,7 @@ export default function AdminAnnouncements() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={handleRefresh}
+            onRefresh={() => refetch()}
             tintColor={tint}
           />
         }
@@ -513,7 +499,7 @@ export default function AdminAnnouncements() {
         confirmLabel="Delete"
         confirmColor="#EF4444"
         icon="trash-2"
-        loading={deleting}
+        loading={deleteMutation.isPending}
         onConfirm={confirmDelete}
         onCancel={() => setDeleteConfirmId(null)}
       />

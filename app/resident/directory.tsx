@@ -1,8 +1,7 @@
 // @ts-nocheck
 import { Feather } from "@expo/vector-icons";
-import axios from "axios";
 import { router } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Linking,
   RefreshControl,
@@ -14,13 +13,14 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
+import { useQuery } from "@tanstack/react-query";
 import Toast from "@/components/Toast";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useToast } from "@/hooks/useToast";
-import { getCommunityId, getToken } from "@/lib/auth";
-import { config } from "@/lib/config";
+import { useAppContext } from "@/contexts/AppContext";
+import { queryKeys } from "@/lib/queryKeys";
+import { fetchResidentDirectory } from "@/lib/queries/resident";
 
 // --- Helpers ---
 const AVATAR_COLORS = [
@@ -149,45 +149,24 @@ export default function Directory() {
   const fieldBg = isDark ? "#1A1A1A" : "#FFFFFF";
   const insets = useSafeAreaInsets();
 
-  const [residents, setResidents] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState("");
   const [blockFilter, setBlockFilter] = useState("ALL");
 
   const { toast, showError, hideToast } = useToast();
-  const url = config.backendUrl;
+  const { user, token } = useAppContext();
 
-  useEffect(() => {
-    fetchDirectory();
-  }, []);
-
-  const fetchDirectory = async () => {
-    try {
-      const token = await getToken();
-      const communityId = await getCommunityId();
-      if (!communityId) {
-        showError("Community not found.");
-        return;
-      }
-      const res = await axios.get(`${url}/resident/directory`, {
-        headers: { Authorization: `Bearer ${token}` },
-        params: { communityId },
-      });
-      const raw = res.data?.residents ?? res.data?.data ?? res.data ?? [];
-      setResidents(Array.isArray(raw) ? raw : []);
-    } catch (e) {
-      showError("Failed to load directory.");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  const handleRefresh = () => {
-    setRefreshing(true);
-    fetchDirectory();
-  };
+  const {
+    data: residents = [],
+    isLoading: loading,
+    isFetching,
+    refetch,
+  } = useQuery({
+    queryKey: queryKeys.resident.directory(user?.communityId ?? ""),
+    queryFn: () => fetchResidentDirectory(token, user!.communityId as string),
+    enabled: !!user?.communityId,
+    staleTime: 30 * 60 * 1000,
+  });
+  const refreshing = isFetching && !loading;
 
   // Unique block names for filter
   const blocks = useMemo(() => {
@@ -354,7 +333,7 @@ export default function Directory() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={handleRefresh}
+            onRefresh={() => refetch()}
             tintColor={tint}
           />
         }

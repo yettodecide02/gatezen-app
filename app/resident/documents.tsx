@@ -1,5 +1,5 @@
 ﻿// @ts-nocheck
-import React, { useEffect, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   ScrollView,
   Text,
@@ -11,12 +11,14 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
-import axios from "axios";
+import { useQuery } from "@tanstack/react-query";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
-import { getUser, getToken } from "@/lib/auth";
+import { useAppContext } from "@/contexts/AppContext";
+import { queryKeys } from "@/lib/queryKeys";
+import { fetchResidentDocuments } from "@/lib/queries/resident";
 import { config } from "@/lib/config";
 import Toast from "@/components/Toast";
 import { useToast } from "@/hooks/useToast";
@@ -33,55 +35,28 @@ export default function Documents() {
   const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
   const fieldBg = isDark ? "#111111" : "#F8FAFC";
 
-  const [loading, setLoading] = useState(true);
-  const [pdfs, setPdfs] = useState([]);
-  const [filteredPdfs, setFilteredPdfs] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [downloadingId, setDownloadingId] = useState(null);
   const { toast, showError, showSuccess, showInfo, hideToast } = useToast();
+  const { user, token } = useAppContext();
 
-  useEffect(() => {
-    (async () => {
-      const user = await getUser();
-      if (!user?.communityId) {
-        setLoading(false);
-        return;
-      }
-      await fetchPdfs(user.communityId);
-      setLoading(false);
-    })();
-  }, []);
+  const { data: allPdfs = [], isLoading: loading } = useQuery({
+    queryKey: queryKeys.resident.documents(user?.communityId ?? ""),
+    queryFn: () => fetchResidentDocuments(token, user!.communityId as string),
+    enabled: !!user?.communityId,
+    staleTime: 30 * 60 * 1000,
+  });
 
-  useEffect(() => {
-    if (!searchQuery.trim()) {
-      setFilteredPdfs(pdfs);
-      return;
-    }
-    setFilteredPdfs(
-      pdfs.filter((p) =>
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()),
-      ),
+  const pdfs = useMemo(() => {
+    if (!searchQuery.trim()) return allPdfs;
+    return allPdfs.filter((p: any) =>
+      p.name.toLowerCase().includes(searchQuery.toLowerCase()),
     );
-  }, [searchQuery, pdfs]);
-
-  const fetchPdfs = async (cid) => {
-    try {
-      const token = await getToken();
-      const res = await axios.get(
-        `${config.backendUrl}/resident/pdfs?communityId=${cid}`,
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      const list = res.data?.pdfs ?? res.data?.data ?? res.data ?? [];
-      setPdfs(Array.isArray(list) ? list : []);
-    } catch {
-      showError("Failed to load documents");
-    }
-  };
+  }, [allPdfs, searchQuery]);
 
   const downloadPdf = async (pdf) => {
     try {
       setDownloadingId(pdf.id);
-      const token = await getToken();
       const url = `${config.backendUrl}/resident/pdf/${pdf.id}`;
       const dest = `${FileSystem.documentDirectory}${pdf.name.replace(/[^a-zA-Z0-9._-]/g, "_")}.pdf`;
       const res = await FileSystem.downloadAsync(url, dest, {
@@ -186,7 +161,7 @@ export default function Documents() {
           }}
           showsVerticalScrollIndicator={false}
         >
-          {filteredPdfs.length === 0 ? (
+          {pdfs.length === 0 ? (
             <View style={{ alignItems: "center", paddingVertical: 50, gap: 8 }}>
               <View
                 style={{
@@ -210,7 +185,7 @@ export default function Documents() {
               </Text>
             </View>
           ) : (
-            filteredPdfs.map((pdf) => (
+            pdfs.map((pdf) => (
               <View
                 key={pdf.id}
                 style={{

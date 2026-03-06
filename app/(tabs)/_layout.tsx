@@ -1,12 +1,12 @@
 // @ts-nocheck
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Tabs } from "expo-router/tabs";
 import { Feather } from "@expo/vector-icons";
 import { Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
-import { getUser, getEnabledFeatures } from "@/lib/auth";
+import { useAppContext } from "@/contexts/AppContext";
 import { router } from "expo-router";
 
 export default function TabsLayout() {
@@ -16,26 +16,16 @@ export default function TabsLayout() {
   const text = useThemeColor({}, "text");
   const bg = useThemeColor({}, "background");
   const isDark = colorScheme === "dark";
-  const [enabledFeatures, setEnabledFeatures] = useState<string[]>([]);
+  const { user, enabledFeatures } = useAppContext();
 
   useEffect(() => {
-    // Check if user is admin or gatekeeper and redirect to appropriate dashboard
-    const checkUserRole = async () => {
-      try {
-        const user = await getUser();
-        if (user && user.role === "ADMIN") {
-          router.replace("/admin");
-        } else if (user && user.role === "GATEKEEPER") {
-          router.replace("/gatekeeper/visitors");
-        }
-      } catch (error) {
-        console.error("Error checking user role:", error);
-      }
-    };
-
-    checkUserRole();
-    getEnabledFeatures().then(setEnabledFeatures);
-  }, []);
+    if (!user) return;
+    if (user.role === "ADMIN") {
+      router.replace("/admin");
+    } else if (user.role === "GATEKEEPER") {
+      router.replace("/gatekeeper/visitors");
+    }
+  }, [user?.role]);
 
   const bottomInset = Math.max(insets.bottom ?? 0, 8);
   const side = 16;

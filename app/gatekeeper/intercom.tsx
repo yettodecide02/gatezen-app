@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -10,21 +10,28 @@ import {
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
-import { router, useFocusEffect } from "expo-router";
+import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import axios from "axios";
+import { useQuery } from "@tanstack/react-query";
 
 import Toast from "@/components/Toast";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useToast } from "@/hooks/useToast";
-import { getCommunityId, getToken } from "@/lib/auth";
-import { config } from "@/lib/config";
+import { useAppContext } from "@/contexts/AppContext";
+import { queryKeys } from "@/lib/queryKeys";
+import { fetchGatekeeperDirectory } from "@/lib/queries/gatekeeper";
 import { generateCallId } from "@/lib/intercom";
 
 const AVATAR_COLORS = [
-  "#6366F1", "#3B82F6", "#10B981", "#F59E0B",
-  "#8B5CF6", "#EC4899", "#14B8A6", "#F97316",
+  "#6366F1",
+  "#3B82F6",
+  "#10B981",
+  "#F59E0B",
+  "#8B5CF6",
+  "#EC4899",
+  "#14B8A6",
+  "#F97316",
 ];
 function avatarColor(name = "") {
   let h = 0;
@@ -33,7 +40,13 @@ function avatarColor(name = "") {
 }
 function getInitials(name = "") {
   return (
-    name.split(" ").map((n) => n[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "?"
+    name
+      .split(" ")
+      .map((n) => n[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join("")
+      .toUpperCase() || "?"
   );
 }
 
@@ -50,40 +63,24 @@ export default function GatekeeperIntercom() {
   const fieldBg = isDark ? "#111111" : "#F8FAFC";
 
   const { toast, showError, hideToast } = useToast();
-
-  const [residents, setResidents] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState("");
 
-  const loadResidents = useCallback(async () => {
-    try {
-      const [token, communityId] = await Promise.all([getToken(), getCommunityId()]);
-      if (!communityId) return;
-      const res = await axios.get(`${config.backendUrl}/resident/directory`, {
-        params: { communityId },
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      const raw = res.data?.residents ?? res.data?.data ?? res.data ?? [];
-      setResidents(Array.isArray(raw) ? raw : []);
-    } catch {
-      showError("Failed to load residents.");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+  const { user, token } = useAppContext();
+  const communityId = user?.communityId ?? "";
 
-  useFocusEffect(
-    useCallback(() => {
-      loadResidents();
-    }, [loadResidents]),
-  );
-
-  const handleRefresh = () => {
-    setRefreshing(true);
-    loadResidents();
-  };
+  const {
+    data: residents = [],
+    isLoading: loading,
+    isFetching,
+    refetch,
+  } = useQuery({
+    queryKey: queryKeys.gatekeeper.directory(communityId),
+    queryFn: () => fetchGatekeeperDirectory(token, communityId),
+    enabled: !!communityId,
+    staleTime: 10 * 60 * 1000,
+  });
+  const refreshing = isFetching && !loading;
+  const handleRefresh = () => refetch();
 
   const filtered = useMemo(() => {
     if (!query.trim()) return residents;
@@ -174,7 +171,9 @@ export default function GatekeeperIntercom() {
       </View>
 
       {loading ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <View
+          style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
+        >
           <ActivityIndicator size="large" color={tint} />
         </View>
       ) : (
@@ -201,12 +200,19 @@ export default function GatekeeperIntercom() {
                 gap: 10,
               }}
             >
-              <Feather name="users" size={32} color={muted} style={{ opacity: 0.3 }} />
+              <Feather
+                name="users"
+                size={32}
+                color={muted}
+                style={{ opacity: 0.3 }}
+              />
               <Text style={{ fontSize: 15, fontWeight: "600", color: text }}>
                 No residents found
               </Text>
               <Text style={{ fontSize: 13, color: muted, textAlign: "center" }}>
-                {query ? `No results for "${query}"` : "The directory is empty."}
+                {query
+                  ? `No results for "${query}"`
+                  : "The directory is empty."}
               </Text>
             </View>
           ) : (
@@ -253,8 +259,13 @@ export default function GatekeeperIntercom() {
                       {r.name ?? "Resident"}
                     </Text>
                     {(block || unit) && (
-                      <Text style={{ fontSize: 12, color: muted, marginTop: 2 }}>
-                        {[block ? `Block ${block}` : null, unit ? `Unit ${unit}` : null]
+                      <Text
+                        style={{ fontSize: 12, color: muted, marginTop: 2 }}
+                      >
+                        {[
+                          block ? `Block ${block}` : null,
+                          unit ? `Unit ${unit}` : null,
+                        ]
                           .filter(Boolean)
                           .join(" · ")}
                       </Text>

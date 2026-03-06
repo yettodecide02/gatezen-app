@@ -1,8 +1,7 @@
 // @ts-nocheck
 import { Feather } from "@expo/vector-icons";
-import axios from "axios";
 import { router } from "expo-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -15,14 +14,20 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import ConfirmModal from "@/components/ConfirmModal";
 import Toast from "@/components/Toast";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useToast } from "@/hooks/useToast";
-import { getCommunityId, getToken, getUser } from "@/lib/auth";
-import { config } from "@/lib/config";
+import { useAppContext } from "@/contexts/AppContext";
+import { queryKeys } from "@/lib/queryKeys";
+import {
+  fetchResidentSurveys,
+  createResidentSurvey,
+  respondToResidentSurvey,
+  deleteResidentSurvey,
+} from "@/lib/queries/resident";
 
 // --- Helpers ---
 function surveyStatus(survey) {
@@ -980,10 +985,6 @@ export default function Surveys() {
   const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
   const insets = useSafeAreaInsets();
 
-  const [surveys, setSurveys] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [activeTab, setActiveTab] = useState("active");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [takingSurvey, setTakingSurvey] = useState(null);
@@ -991,88 +992,74 @@ export default function Surveys() {
   const [deleting, setDeleting] = useState(false);
 
   const { toast, showError, showSuccess, hideToast } = useToast();
-  const url = config.backendUrl;
+  const { user, token } = useAppContext();
+  const queryClient = useQueryClient();
+  const surveysKey = queryKeys.resident.surveys(
+    user?.id ?? "",
+    user?.communityId ?? "",
+  );
+  const isAdmin = user?.role === "ADMIN";
 
-  useEffect(() => {
-    fetchSurveys();
-  }, []);
+  const {
+    data: surveys = [],
+    isLoading: loading,
+    isFetching,
+    refetch,
+  } = useQuery({
+    queryKey: surveysKey,
+    queryFn: () =>
+      fetchResidentSurveys(token, user!.id, user!.communityId as string),
+    enabled: !!user?.id && !!user?.communityId,
+    staleTime: 10 * 60 * 1000,
+  });
+  const refreshing = isFetching && !loading;
 
-  const fetchSurveys = async () => {
-    try {
-      const [token, communityId, user] = await Promise.all([
-        getToken(),
-        getCommunityId(),
-        getUser(),
-      ]);
-      setIsAdmin(user?.role === "ADMIN");
-      if (!communityId) {
-        showError("Community not found.");
-        return;
-      }
-      const res = await axios.get(`${url}/resident/surveys`, {
-        headers: { Authorization: `Bearer ${token}` },
-        params: { communityId },
-      });
-      const raw = res.data?.surveys ?? res.data?.data ?? res.data ?? [];
-      setSurveys(Array.isArray(raw) ? raw : []);
-    } catch (e) {
-      showError("Failed to load surveys.");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
+  const createMutation = useMutation({
+    mutationFn: (data: object) =>
+      createResidentSurvey(token, { ...data, communityId: user?.communityId }),
+    onSuccess: () => {
+      showSuccess("Survey created!");
+      setShowCreateModal(false);
+      queryClient.invalidateQueries({ queryKey: surveysKey });
+    },
+    onError: () => showError("Failed to create survey."),
+  });
 
-  const handleRefresh = () => {
-    setRefreshing(true);
-    fetchSurveys();
-  };
+  const respondMutation = useMutation({
+    mutationFn: ({ surveyId, answers }: { surveyId: string; answers: any }) =>
+      respondToResidentSurvey(token, surveyId, { answers, userId: user?.id }),
+    onSuccess: () => {
+      showSuccess("Response submitted! Thank you.");
+      setTakingSurvey(null);
+      queryClient.invalidateQueries({ queryKey: surveysKey });
+    },
+    onError: () => showError("Failed to submit response."),
+  });
 
-  const handleCreate = async (data) => {
-    const [token, communityId] = await Promise.all([
-      getToken(),
-      getCommunityId(),
-    ]);
-    await axios.post(
-      `${url}/resident/surveys`,
-      { ...data, communityId },
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    );
-    showSuccess("Survey created!");
-    fetchSurveys();
-  };
-
-  const handleTakeSubmit = async (surveyId, answers) => {
-    const [token, user] = await Promise.all([getToken(), getUser()]);
-    await axios.post(
-      `${url}/resident/surveys/${surveyId}/respond`,
-      { answers, userId: user?.id },
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    );
-    showSuccess("Response submitted! Thank you.");
-    fetchSurveys();
-  };
-
-  const confirmDelete = async () => {
-    setDeleting(true);
-    try {
-      const token = await getToken();
-      await axios.delete(`${url}/resident/surveys/${deleteConfirmId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setSurveys((prev) => prev.filter((s) => s.id !== deleteConfirmId));
+  const deleteMutation = useMutation({
+    mutationFn: (surveyId: string) => deleteResidentSurvey(token, surveyId),
+    onSuccess: () => {
       showSuccess("Survey deleted.");
-    } catch (e) {
-      showError("Failed to delete survey.");
-    } finally {
+      queryClient.invalidateQueries({ queryKey: surveysKey });
+    },
+    onError: () => showError("Failed to delete survey."),
+    onSettled: () => {
       setDeleting(false);
       setDeleteConfirmId(null);
-    }
+    },
+  });
+
+  const handleCreate = async (data) => {
+    await createMutation.mutateAsync(data);
   };
+  const handleTakeSubmit = (surveyId, answers) => {
+    respondMutation.mutate({ surveyId, answers });
+  };
+  const confirmDelete = () => {
+    setDeleting(true);
+    deleteMutation.mutate(deleteConfirmId);
+  };
+  const handleRefresh = () => refetch();
 
   const tabs = [
     { key: "active", label: "Active", icon: "zap" },

@@ -1,5 +1,5 @@
 ﻿// @ts-nocheck
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   StyleSheet,
   Text,
@@ -11,13 +11,18 @@ import {
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
-import axios from "axios";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
-import { getToken, getCommunityId, getEnabledFeatures } from "@/lib/auth";
-import { config } from "@/lib/config";
+import { useAppContext } from "@/contexts/AppContext";
+import { queryKeys } from "@/lib/queryKeys";
+import {
+  fetchAdminMaintenance,
+  updateAdminMaintenanceStatus,
+  addAdminMaintenanceComment,
+} from "@/lib/queries/admin";
 import Toast from "@/components/Toast";
 import { useToast } from "@/hooks/useToast";
 
@@ -349,94 +354,69 @@ export default function AdminMaintenance() {
   const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
   const insets = useSafeAreaInsets();
 
-  const [maintenance, setMaintenance] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const { token, communityId, enabledFeatures } = useAppContext();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("all");
   const [updateLoading, setUpdateLoading] = useState({});
 
   const { toast, showError, showSuccess, hideToast } = useToast();
-  const url = config.backendUrl;
 
-  useEffect(() => {
-    getEnabledFeatures().then((feats) => {
-      if (feats.length > 0 && !feats.includes("HELPDESK")) {
-        router.replace("/admin");
-      }
-    });
-  }, []);
+  React.useEffect(() => {
+    if (enabledFeatures.length > 0 && !enabledFeatures.includes("HELPDESK")) {
+      router.replace("/admin");
+    }
+  }, [enabledFeatures]);
 
-  useEffect(() => {
-    fetchMaintenance();
-  }, []);
+  const {
+    data: maintenance = [],
+    isLoading: loading,
+    isFetching,
+    refetch,
+  } = useQuery({
+    queryKey: queryKeys.admin.maintenance(communityId ?? ""),
+    queryFn: () => fetchAdminMaintenance(token, communityId),
+    enabled: !!communityId,
+    staleTime: 5 * 60 * 1000,
+  });
 
-  const fetchMaintenance = async () => {
-    try {
-      const token = await getToken();
-      const communityId = await getCommunityId();
-      if (!communityId) {
-        showError("Community information not found.");
-        return;
-      }
-      const res = await axios.get(`${url}/admin/maintenance`, {
-        headers: { Authorization: `Bearer ${token}` },
-        params: { communityId },
+  const refreshing = isFetching && !loading;
+
+  const statusMutation = useMutation({
+    mutationFn: ({ ticketId, status }) =>
+      updateAdminMaintenanceStatus(token, ticketId, status),
+    onMutate: ({ ticketId }) =>
+      setUpdateLoading((p) => ({ ...p, [ticketId]: true })),
+    onSuccess: (_, { ticketId, status }) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.admin.maintenance(communityId ?? ""),
       });
-      setMaintenance(res.data.maintenance || []);
-    } catch (e) {
-      showError("Failed to load maintenance data.");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  const handleRefresh = () => {
-    setRefreshing(true);
-    fetchMaintenance();
-  };
-
-  const handleStatusUpdate = async (ticketId, newStatus) => {
-    setUpdateLoading((p) => ({ ...p, [ticketId]: true }));
-    try {
-      const token = await getToken();
-      await axios.post(
-        `${url}/admin/maintenance/update`,
-        { ticketId, status: newStatus },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      setMaintenance((p) =>
-        p.map((i) => (i.id === ticketId ? { ...i, status: newStatus } : i)),
-      );
       showSuccess(
-        `Status updated to ${STATUS_CONFIG[newStatus]?.label || newStatus}`,
+        `Status updated to ${STATUS_CONFIG[status]?.label || status}`,
       );
-    } catch (e) {
-      showError(e.response?.data?.error || "Failed to update status");
-    } finally {
-      setUpdateLoading((p) => ({ ...p, [ticketId]: false }));
-    }
+    },
+    onError: (e) =>
+      showError(e?.response?.data?.error || "Failed to update status"),
+    onSettled: (_, __, { ticketId }) =>
+      setUpdateLoading((p) => ({ ...p, [ticketId]: false })),
+  });
+
+  const commentMutation = useMutation({
+    mutationFn: ({ ticketId, text }) =>
+      addAdminMaintenanceComment(token, ticketId, { text }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.admin.maintenance(communityId ?? ""),
+      }),
+    onError: (e) =>
+      showError(e?.response?.data?.error || "Failed to add comment"),
+  });
+
+  const handleStatusUpdate = (ticketId, newStatus) => {
+    statusMutation.mutate({ ticketId, status: newStatus });
   };
 
   const handleAddComment = async (ticketId, text) => {
-    try {
-      const token = await getToken();
-      const res = await axios.post(
-        `${url}/admin/maintenance/${ticketId}/comments`,
-        { text },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      const newComment = res.data.comment;
-      setMaintenance((p) =>
-        p.map((i) =>
-          i.id === ticketId
-            ? { ...i, comments: [...(i.comments || []), newComment] }
-            : i,
-        ),
-      );
-    } catch (e) {
-      showError(e.response?.data?.error || "Failed to add comment");
-    }
+    await commentMutation.mutateAsync({ ticketId, text });
   };
 
   const getFiltered = () => {
@@ -544,7 +524,7 @@ export default function AdminMaintenance() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={handleRefresh}
+            onRefresh={() => refetch()}
             tintColor={tint}
           />
         }

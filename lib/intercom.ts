@@ -1,5 +1,7 @@
 // @ts-nocheck
+import axios from "axios";
 import supabase from "@/lib/supabase";
+import { config } from "@/lib/config";
 
 export type CallType = "R2R" | "R2G" | "G2R";
 
@@ -87,3 +89,32 @@ export const rejectCall = (p: CallPayload) =>
 /** Send call:ended to the other party. */
 export const endCall = (otherUserId: string, p: CallPayload) =>
   sendToUser(otherUserId, "call:ended", p);
+
+/**
+ * Send a push notification to the call receiver so they get an alert
+ * even when their app is running in the background or closed.
+ * This is best-effort — failures are silently ignored since the
+ * Supabase Realtime broadcast is the primary call-delivery mechanism.
+ */
+export async function notifyCallReceiver(
+  payload: CallPayload,
+  token: string | null,
+): Promise<void> {
+  if (!token || !payload.receiverId) return;
+  try {
+    await axios.post(
+      `${config.backendUrl}/intercom/notify`,
+      {
+        receiverId: payload.receiverId,
+        callerName: payload.callerName,
+        callId: payload.callId,
+        callType: payload.callType,
+        callerUnit: payload.callerUnit ?? "",
+        callerBlock: payload.callerBlock ?? "",
+      },
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+  } catch {
+    // Non-critical — do not block the call
+  }
+}

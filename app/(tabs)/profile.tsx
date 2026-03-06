@@ -1,5 +1,5 @@
 ﻿// @ts-nocheck
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   ScrollView,
   Text,
@@ -11,11 +11,16 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
-import axios from "axios";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
-import { getUser, getToken, setUser, logout } from "@/lib/auth";
-import { config } from "@/lib/config";
+import { setUser, logout } from "@/lib/auth";
+import { useAppContext } from "@/contexts/AppContext";
+import { queryKeys } from "@/lib/queryKeys";
+import {
+  fetchResidentProfile,
+  updateResidentProfile,
+} from "@/lib/queries/resident";
 import Toast from "@/components/Toast";
 import ConfirmModal from "@/components/ConfirmModal";
 import { useToast } from "@/hooks/useToast";
@@ -32,110 +37,72 @@ export default function Profile() {
   const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
   const fieldBg = isDark ? "#111111" : "#F8FAFC";
 
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [profile, setProfile] = useState({
-    id: "",
-    name: "",
-    email: "",
-    block: "",
-    unit: "",
-    communityName: "",
-    phone: "",
-    vehicles: [] as string[],
-  });
+  const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
   const { toast, showSuccess, showError, showWarning, hideToast } = useToast();
 
-  useEffect(() => {
-    loadProfile();
-  }, []);
+  const queryClient = useQueryClient();
+  const { user, token, refreshUser } = useAppContext();
 
-  const loadProfile = async () => {
-    try {
-      const user = await getUser();
-      const token = await getToken();
-      const basicProfile = {
-        id: user?.id || "",
-        name: user?.name || "",
-        email: user?.email || "",
-        block: user?.blockName || user?.block || "",
-        unit: user?.unitNumber || user?.unit || "",
-        communityName: user?.communityName || "",
-        phone: user?.phone || "",
-        vehicles: user?.vehicles || [],
-      };
-      if (token && user?.id) {
-        try {
-          const res = await axios.get(`${config.backendUrl}/resident/profile`, {
-            params: { userId: user.id, communityId: user.communityId },
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (res.data?.success) {
-            const d = res.data.data;
-            setProfile({
-              id: d.id,
-              name: d.name,
-              email: d.email,
-              block: d.blockName || basicProfile.block,
-              unit: d.unitNumber || basicProfile.unit,
-              communityName: d.communityName || basicProfile.communityName,
-              phone: d.phone || "",
-              vehicles: d.vehicles || [],
-            });
-            return;
-          }
-        } catch {}
-      }
-      setProfile(basicProfile);
-    } catch {
-    } finally {
-      setLoading(false);
-    }
+  const { data: profileData, isLoading: loading } = useQuery({
+    queryKey: queryKeys.resident.profile(user?.id ?? ""),
+    queryFn: () =>
+      fetchResidentProfile(token, user!.id, user!.communityId as string),
+    enabled: !!user?.id,
+    staleTime: 15 * 60 * 1000, // 15 minutes
+  });
+
+  // Merge API data with cached user for display
+  const profile = {
+    id: profileData?.id ?? user?.id ?? "",
+    name: profileData?.name ?? user?.name ?? "",
+    email: profileData?.email ?? user?.email ?? "",
+    block: profileData?.blockName ?? user?.blockName ?? user?.block ?? "",
+    unit: profileData?.unitNumber ?? user?.unitNumber ?? user?.unit ?? "",
+    communityName: profileData?.communityName ?? user?.communityName ?? "",
+    phone: profileData?.phone ?? user?.phone ?? "",
   };
 
+  const saveProfileMutation = useMutation({
+    mutationFn: (payload: { name: string; phone?: string | null }) =>
+      updateResidentProfile(token, payload),
+    onSuccess: async (data) => {
+      // Keep AsyncStorage + AppContext in sync
+      const cached = user;
+      if (cached)
+        await setUser({ ...cached, name: data.name, phone: data.phone });
+      await refreshUser();
+      // Invalidate the cached profile so the next read is fresh
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.resident.profile(user?.id ?? ""),
+      });
+      showSuccess("Profile updated!");
+      setEditing(false);
+    },
+    onError: () => showError("Failed to update profile."),
+    onSettled: () => setSaving(false),
+  });
+
   const handleSave = async () => {
-    if (!profile.name.trim()) {
+    if (!editName.trim()) {
       showWarning("Name cannot be empty.");
       return;
     }
-    try {
-      setSaving(true);
-      const token = await getToken();
-      const res = await axios.patch(
-        `${config.backendUrl}/resident/profile`,
-        {
-          name: profile.name.trim(),
-          phone: profile.phone?.trim() || null,
-          vehicles: profile.vehicles.map((v) => v.trim()).filter(Boolean),
-        },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      if (res.data?.success) {
-        const cached = await getUser();
-        if (cached)
-          await setUser({
-            ...cached,
-            name: res.data.data.name,
-            phone: res.data.data.phone,
-            vehicles: res.data.data.vehicles,
-          });
-        setProfile((p) => ({
-          ...p,
-          name: res.data.data.name,
-          phone: res.data.data.phone || "",
-          vehicles: res.data.data.vehicles || [],
-        }));
-      }
-      showSuccess("Profile updated!");
-      setEditing(false);
-    } catch {
-      showError("Failed to update profile.");
-    } finally {
-      setSaving(false);
-    }
+    setSaving(true);
+    saveProfileMutation.mutate({
+      name: editName.trim(),
+      phone: editPhone?.trim() || null,
+    });
+  };
+
+  const startEditing = () => {
+    setEditName(profile.name);
+    setEditPhone(profile.phone);
+    setEditing(true);
   };
 
   const confirmLogout = async () => {
@@ -229,7 +196,7 @@ export default function Profile() {
               </Pressable>
             )}
             <Pressable
-              onPress={() => setEditing(!editing)}
+              onPress={() => (editing ? setEditing(false) : startEditing())}
               style={{
                 width: 36,
                 height: 36,
@@ -285,8 +252,8 @@ export default function Profile() {
           </View>
           {editing ? (
             <TextInput
-              value={profile.name}
-              onChangeText={(v) => setProfile((p) => ({ ...p, name: v }))}
+              value={editName}
+              onChangeText={setEditName}
               style={{
                 fontSize: 20,
                 fontWeight: "700",
@@ -358,10 +325,8 @@ export default function Profile() {
                 </Text>
                 {editing && row.label === "Phone" ? (
                   <TextInput
-                    value={profile.phone}
-                    onChangeText={(v) =>
-                      setProfile((p) => ({ ...p, phone: v }))
-                    }
+                    value={editPhone}
+                    onChangeText={setEditPhone}
                     style={{
                       fontSize: 15,
                       color: text,
@@ -392,163 +357,39 @@ export default function Profile() {
           ))}
         </View>
 
-        {/* Vehicles Card */}
-        <View
-          style={{
-            backgroundColor: cardBg,
+        {/* My Vehicles Nav Row */}
+        <Pressable
+          onPress={() => router.push("/resident/vehicles")}
+          style={({ pressed }) => ({
+            backgroundColor: pressed ? cardBg + "CC" : cardBg,
             borderRadius: 16,
             borderWidth: 1,
             borderColor: borderCol,
-            overflow: "hidden",
-          }}
+            flexDirection: "row",
+            alignItems: "center",
+            padding: 14,
+            gap: 12,
+          })}
         >
           <View
             style={{
-              flexDirection: "row",
+              width: 36,
+              height: 36,
+              borderRadius: 10,
+              backgroundColor: tint + "15",
               alignItems: "center",
-              justifyContent: "space-between",
-              padding: 14,
-              borderBottomWidth: profile.vehicles.length > 0 || editing ? 1 : 0,
-              borderBottomColor: borderCol,
+              justifyContent: "center",
             }}
           >
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
-            >
-              <View
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 10,
-                  backgroundColor: tint + "15",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Feather name="truck" size={16} color={tint} />
-              </View>
-              <Text
-                style={{
-                  fontSize: 11,
-                  color: muted,
-                  fontWeight: "500",
-                  textTransform: "uppercase",
-                  letterSpacing: 0.5,
-                }}
-              >
-                Vehicles
-              </Text>
-            </View>
-            {editing && (
-              <Pressable
-                onPress={() =>
-                  setProfile((p) => ({ ...p, vehicles: [...p.vehicles, ""] }))
-                }
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 4,
-                  paddingHorizontal: 10,
-                  paddingVertical: 5,
-                  borderRadius: 8,
-                  backgroundColor: tint + "15",
-                }}
-              >
-                <Feather name="plus" size={13} color={tint} />
-                <Text style={{ fontSize: 12, fontWeight: "600", color: tint }}>
-                  Add
-                </Text>
-              </Pressable>
-            )}
+            <Feather name="truck" size={16} color={tint} />
           </View>
-
-          {!editing && profile.vehicles.length === 0 && (
-            <View style={{ padding: 14 }}>
-              <Text style={{ fontSize: 14, color: muted }}>—</Text>
-            </View>
-          )}
-
-          {profile.vehicles.map((v, i) => (
-            <View
-              key={i}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                paddingHorizontal: 14,
-                paddingVertical: 10,
-                gap: 10,
-                borderBottomWidth: i < profile.vehicles.length - 1 ? 1 : 0,
-                borderBottomColor: borderCol,
-              }}
-            >
-              <View
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 8,
-                  backgroundColor: isDark ? "#252525" : "#F1F5F9",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Text style={{ fontSize: 11, fontWeight: "700", color: muted }}>
-                  #{i + 1}
-                </Text>
-              </View>
-              {editing ? (
-                <TextInput
-                  value={v}
-                  onChangeText={(val) =>
-                    setProfile((p) => ({
-                      ...p,
-                      vehicles: p.vehicles.map((x, idx) =>
-                        idx === i ? val : x,
-                      ),
-                    }))
-                  }
-                  style={{
-                    flex: 1,
-                    fontSize: 14,
-                    fontWeight: "600",
-                    color: text,
-                    borderBottomWidth: 1,
-                    borderBottomColor: tint + "60",
-                    paddingBottom: 2,
-                    letterSpacing: 1,
-                  }}
-                  placeholder="e.g. MH01AB1234"
-                  placeholderTextColor={muted}
-                  autoCapitalize="characters"
-                />
-              ) : (
-                <Text
-                  style={{
-                    flex: 1,
-                    fontSize: 14,
-                    fontWeight: "600",
-                    color: text,
-                    letterSpacing: 1,
-                  }}
-                >
-                  {v}
-                </Text>
-              )}
-              {editing && (
-                <Pressable
-                  onPress={() =>
-                    setProfile((p) => ({
-                      ...p,
-                      vehicles: p.vehicles.filter((_, idx) => idx !== i),
-                    }))
-                  }
-                  hitSlop={8}
-                >
-                  <Feather name="trash-2" size={15} color="#EF4444" />
-                </Pressable>
-              )}
-            </View>
-          ))}
-        </View>
+          <Text
+            style={{ flex: 1, fontSize: 15, fontWeight: "600", color: text }}
+          >
+            My Vehicles
+          </Text>
+          <Feather name="chevron-right" size={16} color={muted} />
+        </Pressable>
         <Pressable
           onPress={() => setShowLogoutConfirm(true)}
           style={({ pressed }) => ({

@@ -1,5 +1,5 @@
 ﻿// @ts-nocheck
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ScrollView,
   Text,
@@ -14,11 +14,18 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import axios from "axios";
+import { useRouter } from "expo-router";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
-import { getToken, getUser, getEnabledFeatures } from "@/lib/auth";
-import { config } from "@/lib/config";
+import { useAppContext } from "@/contexts/AppContext";
+import { queryKeys } from "@/lib/queryKeys";
+import {
+  fetchGatekeeperPackages,
+  fetchGatekeeperResidents,
+  createGatekeeperPackage,
+  updateGatekeeperPackage,
+} from "@/lib/queries/gatekeeper";
 import Toast from "@/components/Toast";
 import { useToast } from "@/hooks/useToast";
 
@@ -28,7 +35,10 @@ const PKG_STATUS = {
   picked: { color: "#10B981", label: "CLTD" },
 };
 
+const EMPTY_ARRAY: any[] = [];
+
 export default function GatekeeperPackages() {
+  const router = useRouter();
   const theme = useColorScheme() ?? "light";
   const isDark = theme === "dark";
   const bg = useThemeColor({}, "background");
@@ -41,12 +51,12 @@ export default function GatekeeperPackages() {
   const fieldBg = isDark ? "#111111" : "#F8FAFC";
 
   const { toast, showError, showSuccess, hideToast } = useToast();
-  const [user, setUserState] = useState(null);
-  const [token, setTokenState] = useState(null);
-  const [packages, setPackages] = useState([]);
+  const { user, token, enabledFeatures } = useAppContext();
+  const queryClient = useQueryClient();
+  const communityId = user?.communityId ?? "";
+
   const [allPackages, setAllPackages] = useState([]);
-  const [residents, setResidents] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [packages, setPackages] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [updating, setUpdating] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -66,56 +76,43 @@ export default function GatekeeperPackages() {
   const [resSearch, setResSearch] = useState("");
   const imageCallbackRef = useRef(null);
 
+  // Feature guard
   useEffect(() => {
-    getEnabledFeatures().then((feats) => {
-      if (feats.length > 0 && !feats.includes("DELIVERY_MANAGEMENT")) {
-        router.replace("/gatekeeper");
-      }
-    });
-  }, []);
-
-  useEffect(() => {
-    (async () => {
-      const [t, u] = await Promise.all([getToken(), getUser()]);
-      setTokenState(t);
-      setUserState(u);
-    })();
-  }, []);
-
-  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
-
-  const loadData = useCallback(async () => {
-    if (!token || !user) return;
-    setLoading(true);
-    try {
-      const [pRes, rRes] = await Promise.all([
-        axios.get(`${config.backendUrl}/gatekeeper/packages`, {
-          headers: authHeaders,
-          params: { communityId: user.communityId },
-        }),
-        axios.get(`${config.backendUrl}/gatekeeper/residents`, {
-          headers: authHeaders,
-          params: { communityId: user.communityId },
-        }),
-      ]);
-      const pkgs = pRes.data || [];
-      setAllPackages(pkgs);
-      setPackages(pkgs);
-      const uniqueBlocks = [
-        ...new Set(pkgs.map((p) => p.user?.unit?.block?.name).filter(Boolean)),
-      ];
-      setBlocks(uniqueBlocks);
-      setResidents(rRes.data || []);
-    } catch {
-      showError("Failed to load packages");
-    } finally {
-      setLoading(false);
+    if (
+      enabledFeatures.length > 0 &&
+      !enabledFeatures.includes("DELIVERY_MANAGEMENT")
+    ) {
+      router.replace("/gatekeeper");
     }
-  }, [token, user]);
+  }, [enabledFeatures]);
+
+  const packagesKey = queryKeys.gatekeeper.packages(communityId);
+  const residentsKey = queryKeys.gatekeeper.residents(communityId);
+
+  const { data: rawPackages = EMPTY_ARRAY, isLoading: loading } = useQuery({
+    queryKey: packagesKey,
+    queryFn: () => fetchGatekeeperPackages(token, communityId),
+    enabled: !!communityId,
+    staleTime: 2 * 60 * 1000,
+  });
+
+  const { data: residents = EMPTY_ARRAY } = useQuery({
+    queryKey: residentsKey,
+    queryFn: () => fetchGatekeeperResidents(token, communityId),
+    enabled: !!communityId,
+    staleTime: 10 * 60 * 1000,
+  });
 
   useEffect(() => {
-    if (user) loadData();
-  }, [user]);
+    setAllPackages(rawPackages);
+    setPackages(rawPackages);
+    const uniqueBlocks = [
+      ...new Set(
+        rawPackages.map((p: any) => p.user?.unit?.block?.name).filter(Boolean),
+      ),
+    ];
+    setBlocks(uniqueBlocks as string[]);
+  }, [rawPackages]);
 
   useEffect(() => {
     if (!selectedBlock) {
@@ -123,9 +120,46 @@ export default function GatekeeperPackages() {
       return;
     }
     setPackages(
-      allPackages.filter((p) => p.user?.unit?.block?.name === selectedBlock),
+      allPackages.filter(
+        (p: any) => p.user?.unit?.block?.name === selectedBlock,
+      ),
     );
   }, [selectedBlock, allPackages]);
+
+  const createMutation = useMutation({
+    mutationFn: (payload: object) => createGatekeeperPackage(token, payload),
+    onSuccess: () => {
+      showSuccess("Package logged!");
+      setNewPkg({ userId: "", name: "", image: "" });
+      setShowCreate(false);
+      queryClient.invalidateQueries({ queryKey: packagesKey });
+    },
+    onError: () => showError("Failed to create package"),
+    onSettled: () => setSubmitting(false),
+  });
+
+  const editMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: object }) =>
+      updateGatekeeperPackage(token, id, payload),
+    onSuccess: () => {
+      showSuccess("Package updated!");
+      setShowEdit(false);
+      queryClient.invalidateQueries({ queryKey: packagesKey });
+    },
+    onError: () => showError("Failed to update package"),
+    onSettled: () => setUpdating2(false),
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) =>
+      updateGatekeeperPackage(token, id, { status }),
+    onSuccess: (_data: any, vars: any) => {
+      showSuccess(`Marked as ${vars.status}`);
+      queryClient.invalidateQueries({ queryKey: packagesKey });
+    },
+    onError: () => showError("Failed to update status"),
+    onSettled: () => setUpdating(null),
+  });
 
   const openImagePicker = (callback) => {
     imageCallbackRef.current = callback;
@@ -169,7 +203,7 @@ export default function GatekeeperPackages() {
     }
   };
 
-  const createPackage = async () => {
+  const createPackage = () => {
     if (!newPkg.userId) {
       showError("Please select a resident");
       return;
@@ -183,29 +217,15 @@ export default function GatekeeperPackages() {
       return;
     }
     setSubmitting(true);
-    try {
-      await axios.post(
-        `${config.backendUrl}/gatekeeper/packages`,
-        {
-          userId: newPkg.userId,
-          communityId: user.communityId,
-          image: newPkg.image,
-          name: newPkg.name.trim(),
-        },
-        { headers: authHeaders },
-      );
-      showSuccess("Package logged!");
-      setNewPkg({ userId: "", name: "", image: "" });
-      setShowCreate(false);
-      loadData();
-    } catch {
-      showError("Failed to create package");
-    } finally {
-      setSubmitting(false);
-    }
+    createMutation.mutate({
+      userId: newPkg.userId,
+      communityId,
+      image: newPkg.image,
+      name: newPkg.name.trim(),
+    });
   };
 
-  const updatePackageDetails = async () => {
+  const updatePackageDetails = () => {
     if (!editPkg.userId) {
       showError("Please select a resident");
       return;
@@ -215,43 +235,19 @@ export default function GatekeeperPackages() {
       return;
     }
     setUpdating2(true);
-    try {
-      await axios.put(
-        `${config.backendUrl}/gatekeeper/packages/${editPkg.id}`,
-        {
-          userId: editPkg.userId,
-          name: editPkg.name.trim(),
-          image: editPkg.image || undefined,
-        },
-        { headers: authHeaders },
-      );
-      showSuccess("Package updated!");
-      setShowEdit(false);
-      loadData();
-    } catch {
-      showError("Failed to update package");
-    } finally {
-      setUpdating2(false);
-    }
+    editMutation.mutate({
+      id: editPkg.id,
+      payload: {
+        userId: editPkg.userId,
+        name: editPkg.name.trim(),
+        image: editPkg.image || undefined,
+      },
+    });
   };
 
-  const updateStatus = async (id, status) => {
+  const updateStatus = (id: string, status: string) => {
     setUpdating(id);
-    try {
-      await axios.put(
-        `${config.backendUrl}/gatekeeper/packages/${id}`,
-        { status },
-        { headers: authHeaders },
-      );
-      setAllPackages((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, status } : p)),
-      );
-      showSuccess(`Marked as ${status}`);
-    } catch {
-      showError("Failed to update status");
-    } finally {
-      setUpdating(null);
-    }
+    statusMutation.mutate({ id, status });
   };
 
   const selectedResName =

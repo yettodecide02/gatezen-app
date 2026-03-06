@@ -1,8 +1,7 @@
 // @ts-nocheck
 import { Feather } from "@expo/vector-icons";
-import axios from "axios";
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -12,13 +11,14 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
+import { useQuery } from "@tanstack/react-query";
 import Toast from "@/components/Toast";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useToast } from "@/hooks/useToast";
-import { getToken } from "@/lib/auth";
-import { config } from "@/lib/config";
+import { useAppContext } from "@/contexts/AppContext";
+import { queryKeys } from "@/lib/queryKeys";
+import { fetchAdminPollResults } from "@/lib/queries/admin";
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -200,33 +200,19 @@ export default function PollResults() {
   const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
   const insets = useSafeAreaInsets();
 
-  const [poll, setPoll] = useState(null);
-  const [loading, setLoading] = useState(true);
-  // view: "results" | "residents"
   const [view, setView] = useState("results");
-  // For resident view: which candidate is selected (null = all)
   const [selectedCandidate, setSelectedCandidate] = useState(null);
 
   const { toast, showError, hideToast } = useToast();
-  const url = config.backendUrl;
+  const { token } = useAppContext();
 
-  useEffect(() => {
-    if (id) fetchPoll();
-  }, [id]);
-
-  const fetchPoll = async () => {
-    try {
-      const token = await getToken();
-      const res = await axios.get(`${url}/admin/polls/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setPoll(res.data?.data ?? res.data);
-    } catch (e) {
-      showError("Failed to load poll results.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: poll, isLoading: loading } = useQuery({
+    queryKey: queryKeys.admin.pollResults(id as string),
+    queryFn: () => fetchAdminPollResults(token, id as string),
+    enabled: !!id && !!token,
+    staleTime: 30 * 60 * 1000,
+    select: (data) => data?.data ?? data,
+  });
 
   if (loading) {
     return (

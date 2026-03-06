@@ -3,16 +3,22 @@ import Toast from "@/components/Toast";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useToast } from "@/hooks/useToast";
-import { getToken, getUser } from "@/lib/auth";
-import { config } from "@/lib/config";
+import { useAppContext } from "@/contexts/AppContext";
+import { queryKeys } from "@/lib/queryKeys";
+import {
+  fetchResidentVisitors,
+  createResidentVisitor,
+} from "@/lib/queries/resident";
 import { Feather } from "@expo/vector-icons";
-import DateTimePicker from "@react-native-community/datetimepicker";
-import axios from "axios";
+import DateTimePicker, {
+  DateTimePickerAndroid,
+} from "@react-native-community/datetimepicker";
 import { router, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -20,6 +26,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 // ── Overstay limits (minutes) ──────────────────────────────────
 const OVERSTAY_LIMITS = {
@@ -126,10 +133,6 @@ export default function Visitors() {
   const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
   const fieldBg = isDark ? "#111111" : "#F8FAFC";
 
-  const [user, setUserState] = useState(null);
-  const [token, setTokenState] = useState(null);
-  const [visitors, setVisitors] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
   const [from, setFrom] = useState(nowDate());
   const [to, setTo] = useState(nowDate());
@@ -148,19 +151,13 @@ export default function Visitors() {
 
   const { toast, showError, showSuccess, hideToast } = useToast();
   const searchParams = useLocalSearchParams();
+  const { user, token } = useAppContext();
+  const queryClient = useQueryClient();
 
   // Re-render every 60s so overstay durations stay live
   useEffect(() => {
     const id = setInterval(() => setTicker((t) => t + 1), 60000);
     return () => clearInterval(id);
-  }, []);
-
-  useEffect(() => {
-    (async () => {
-      const [t, u] = await Promise.all([getToken(), getUser()]);
-      setTokenState(t);
-      setUserState(u);
-    })();
   }, []);
 
   useEffect(() => {
@@ -170,40 +167,58 @@ export default function Visitors() {
     }
   }, [searchParams.visitorType]);
 
-  const authHeaders = useMemo(
-    () => (token ? { Authorization: `Bearer ${token}` } : {}),
-    [token],
+  const fromISO = (() => {
+    const [y, m, d] = from.split("-").map(Number);
+    return new Date(y, m - 1, d, 0, 0, 0).toISOString();
+  })();
+  const toISO = (() => {
+    const [y, m, d] = to.split("-").map(Number);
+    return new Date(y, m - 1, d, 23, 59, 59).toISOString();
+  })();
+  const visitorsKey = queryKeys.resident.visitors(
+    user?.id ?? "",
+    user?.communityId ?? "",
+    fromISO,
+    toISO,
   );
 
-  const load = useCallback(async () => {
-    if (!user?.id || !user?.communityId) return;
-    setLoading(true);
-    try {
-      const [fy, fm, fd] = from.split("-").map(Number);
-      const [ty, tm, td] = to.split("-").map(Number);
-      const params = new URLSearchParams({
-        communityId: user.communityId,
-        userId: user.id,
-        from: new Date(fy, fm - 1, fd, 0, 0, 0).toISOString(),
-        to: new Date(ty, tm - 1, td, 23, 59, 59).toISOString(),
-      });
-      const res = await axios.get(
-        `${config.backendUrl}/resident/visitors?${params}`,
-        { headers: authHeaders },
-      );
-      setVisitors(Array.isArray(res.data) ? res.data : []);
-    } catch {
-      showError("Failed to load visitors");
-    } finally {
-      setLoading(false);
-    }
-  }, [user, authHeaders, from, to]);
+  const {
+    data: visitors = [],
+    isLoading: loading,
+    refetch: load,
+  } = useQuery({
+    queryKey: visitorsKey,
+    queryFn: () =>
+      fetchResidentVisitors(
+        token,
+        user!.id,
+        user!.communityId as string,
+        fromISO,
+        toISO,
+      ),
+    enabled: !!user?.id && !!user?.communityId,
+    staleTime: 2 * 60 * 1000,
+  });
 
-  useEffect(() => {
-    if (user) load();
-  }, [user]);
+  const createMutation = useMutation({
+    mutationFn: (payload: object) => createResidentVisitor(token, payload),
+    onSuccess: () => {
+      showSuccess("Visitor pre-authorized!");
+      setName("");
+      setEmail("");
+      setType("GUEST");
+      setVehicle("");
+      setExpectedDate(nowDate());
+      setExpectedTime(nowTime());
+      setShowNew(false);
+      queryClient.invalidateQueries({ queryKey: visitorsKey });
+    },
+    onError: (e: any) =>
+      showError(e?.response?.data?.error || "Failed to create visitor pass"),
+    onSettled: () => setSubmitting(false),
+  });
 
-  const createVisitor = async () => {
+  const createVisitor = () => {
     if (!name.trim()) {
       showError("Visitor name is required");
       return;
@@ -217,36 +232,17 @@ export default function Visitors() {
       return;
     }
     setSubmitting(true);
-    try {
-      const [yr, mo, dy] = expectedDate.split("-").map(Number);
-      const [hr, mn] = expectedTime.split(":").map(Number);
-      await axios.post(
-        `${config.backendUrl}/resident/visitor-creation`,
-        {
-          name: name.trim(),
-          contact: email.trim() || null,
-          visitorType: type,
-          visitDate: new Date(yr, mo - 1, dy, hr, mn, 0).toISOString(),
-          vehicleNo: vehicle.trim() || null,
-          communityId: user.communityId,
-          userId: user.id,
-        },
-        { headers: authHeaders },
-      );
-      showSuccess("Visitor pre-authorized!");
-      setName("");
-      setEmail("");
-      setType("GUEST");
-      setVehicle("");
-      setExpectedDate(nowDate());
-      setExpectedTime(nowTime());
-      setShowNew(false);
-      load();
-    } catch (e) {
-      showError(e?.response?.data?.error || "Failed to create visitor pass");
-    } finally {
-      setSubmitting(false);
-    }
+    const [yr, mo, dy] = expectedDate.split("-").map(Number);
+    const [hr, mn] = expectedTime.split(":").map(Number);
+    createMutation.mutate({
+      name: name.trim(),
+      contact: email.trim() || null,
+      visitorType: type,
+      visitDate: new Date(yr, mo - 1, dy, hr, mn, 0).toISOString(),
+      vehicleNo: vehicle.trim() || null,
+      communityId: user?.communityId,
+      userId: user?.id,
+    });
   };
 
   const fmt = (d) =>
@@ -423,8 +419,19 @@ export default function Visitors() {
           <View style={{ flexDirection: "row", gap: 8 }}>
             <Pressable
               onPress={() => {
-                setShowToPicker(false);
-                setShowFromPicker(true);
+                if (Platform.OS === "android") {
+                  DateTimePickerAndroid.open({
+                    value: new Date(from + "T00:00:00"),
+                    mode: "date",
+                    onChange: (e, d) => {
+                      if (e.type === "set" && d)
+                        setFrom(d.toISOString().split("T")[0]);
+                    },
+                  });
+                } else {
+                  setShowToPicker(false);
+                  setShowFromPicker(true);
+                }
               }}
               style={{
                 flex: 1,
@@ -446,8 +453,19 @@ export default function Visitors() {
             <Text style={{ alignSelf: "center", color: muted }}>—</Text>
             <Pressable
               onPress={() => {
-                setShowFromPicker(false);
-                setShowToPicker(true);
+                if (Platform.OS === "android") {
+                  DateTimePickerAndroid.open({
+                    value: new Date(to + "T00:00:00"),
+                    mode: "date",
+                    onChange: (e, d) => {
+                      if (e.type === "set" && d)
+                        setTo(d.toISOString().split("T")[0]);
+                    },
+                  });
+                } else {
+                  setShowFromPicker(false);
+                  setShowToPicker(true);
+                }
               }}
               style={{
                 flex: 1,
@@ -847,7 +865,20 @@ export default function Visitors() {
                   Expected Date
                 </Text>
                 <Pressable
-                  onPress={() => setShowDatePicker(true)}
+                  onPress={() => {
+                    if (Platform.OS === "android") {
+                      DateTimePickerAndroid.open({
+                        value: new Date(expectedDate + "T00:00:00"),
+                        mode: "date",
+                        onChange: (e, d) => {
+                          if (e.type === "set" && d)
+                            setExpectedDate(d.toISOString().split("T")[0]);
+                        },
+                      });
+                    } else {
+                      setShowDatePicker(true);
+                    }
+                  }}
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
@@ -877,7 +908,26 @@ export default function Visitors() {
                   Time
                 </Text>
                 <Pressable
-                  onPress={() => setShowTimePicker(true)}
+                  onPress={() => {
+                    if (Platform.OS === "android") {
+                      const [h, m] = expectedTime.split(":").map(Number);
+                      const t = new Date();
+                      t.setHours(h, m, 0);
+                      DateTimePickerAndroid.open({
+                        value: t,
+                        mode: "time",
+                        is24Hour: true,
+                        onChange: (e, d) => {
+                          if (e.type === "set" && d)
+                            setExpectedTime(
+                              `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`,
+                            );
+                        },
+                      });
+                    } else {
+                      setShowTimePicker(true);
+                    }
+                  }}
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
@@ -923,7 +973,7 @@ export default function Visitors() {
       </Modal>
 
       {/* Date pickers */}
-      {showFromPicker && (
+      {Platform.OS === "ios" && showFromPicker && (
         <DateTimePicker
           value={new Date(from + "T00:00:00")}
           mode="date"
@@ -933,7 +983,7 @@ export default function Visitors() {
           }}
         />
       )}
-      {showToPicker && (
+      {Platform.OS === "ios" && showToPicker && (
         <DateTimePicker
           value={new Date(to + "T00:00:00")}
           mode="date"
@@ -943,7 +993,7 @@ export default function Visitors() {
           }}
         />
       )}
-      {showDatePicker && (
+      {Platform.OS === "ios" && showDatePicker && (
         <DateTimePicker
           value={new Date(expectedDate + "T00:00:00")}
           mode="date"
@@ -954,7 +1004,7 @@ export default function Visitors() {
           }}
         />
       )}
-      {showTimePicker && (
+      {Platform.OS === "ios" && showTimePicker && (
         <DateTimePicker
           value={(() => {
             const [h, m] = expectedTime.split(":").map(Number);

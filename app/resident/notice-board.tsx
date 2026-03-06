@@ -1,8 +1,7 @@
 // @ts-nocheck
 import { Feather } from "@expo/vector-icons";
-import axios from "axios";
 import { router } from "expo-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Modal,
   RefreshControl,
@@ -14,14 +13,19 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import ConfirmModal from "@/components/ConfirmModal";
 import Toast from "@/components/Toast";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useToast } from "@/hooks/useToast";
-import { getCommunityId, getToken, getUser } from "@/lib/auth";
-import { config } from "@/lib/config";
+import { useAppContext } from "@/contexts/AppContext";
+import { queryKeys } from "@/lib/queryKeys";
+import {
+  fetchResidentNoticeBoard,
+  createResidentNotice,
+  deleteResidentNotice,
+} from "@/lib/queries/resident";
 
 // --- Category config ---
 const CATEGORIES = {
@@ -472,90 +476,69 @@ export default function NoticeBoard() {
   const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
   const insets = useSafeAreaInsets();
 
-  const [notices, setNotices] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [activeFilter, setActiveFilter] = useState("ALL");
   const [showPostModal, setShowPostModal] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
   const { toast, showError, showSuccess, hideToast } = useToast();
-  const url = config.backendUrl;
+  const { user, token } = useAppContext();
+  const queryClient = useQueryClient();
+  const noticeBoardKey = queryKeys.resident.noticeBoard(
+    user?.communityId ?? "",
+  );
+  const isAdmin = user?.role === "ADMIN";
 
-  useEffect(() => {
-    fetchNotices();
-  }, []);
+  const {
+    data: rawNotices = [],
+    isLoading: loading,
+    isFetching,
+    refetch,
+  } = useQuery({
+    queryKey: noticeBoardKey,
+    queryFn: () => fetchResidentNoticeBoard(token, user!.communityId as string),
+    enabled: !!user?.communityId,
+    staleTime: 10 * 60 * 1000,
+  });
+  const refreshing = isFetching && !loading;
+  const notices = [...rawNotices].sort(
+    (a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0),
+  );
 
-  const fetchNotices = async () => {
-    try {
-      const [token, communityId, user] = await Promise.all([
-        getToken(),
-        getCommunityId(),
-        getUser(),
-      ]);
-      setIsAdmin(user?.role === "ADMIN");
-      if (!communityId) {
-        showError("Community not found.");
-        return;
-      }
-      const res = await axios.get(`${url}/resident/notice-board`, {
-        headers: { Authorization: `Bearer ${token}` },
-        params: { communityId },
-      });
-      const raw = res.data?.notices ?? res.data?.data ?? res.data ?? [];
-      const list = Array.isArray(raw) ? raw : [];
-      // Pinned notices always first
-      setNotices(
-        [...list].sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0)),
-      );
-    } catch (e) {
-      showError("Failed to load notices.");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
+  const postMutation = useMutation({
+    mutationFn: (data: object) =>
+      createResidentNotice(token, { ...data, communityId: user?.communityId }),
+    onSuccess: () => {
+      showSuccess("Notice posted successfully!");
+      setShowPostModal(false);
+      queryClient.invalidateQueries({ queryKey: noticeBoardKey });
+    },
+    onError: (e: any) => {
+      throw e;
+    },
+  });
 
-  const handleRefresh = () => {
-    setRefreshing(true);
-    fetchNotices();
-  };
-
-  const handlePost = async (data) => {
-    const [token, communityId] = await Promise.all([
-      getToken(),
-      getCommunityId(),
-    ]);
-    await axios.post(
-      `${url}/resident/notice-board`,
-      { ...data, communityId },
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    );
-    showSuccess("Notice posted successfully!");
-    fetchNotices();
-  };
-
-  const confirmDelete = async () => {
-    setDeleting(true);
-    try {
-      const token = await getToken();
-      await axios.delete(`${url}/resident/notice-board/${deleteConfirmId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setNotices((prev) => prev.filter((n) => n.id !== deleteConfirmId));
+  const deleteMutation = useMutation({
+    mutationFn: (noticeId: string) => deleteResidentNotice(token, noticeId),
+    onSuccess: () => {
       showSuccess("Notice deleted.");
-    } catch (e) {
-      showError("Failed to delete notice.");
-    } finally {
+      queryClient.invalidateQueries({ queryKey: noticeBoardKey });
+    },
+    onError: () => showError("Failed to delete notice."),
+    onSettled: () => {
       setDeleting(false);
       setDeleteConfirmId(null);
-    }
+    },
+  });
+
+  const handlePost = async (data) => {
+    await postMutation.mutateAsync(data);
   };
 
+  const confirmDelete = () => {
+    setDeleting(true);
+    deleteMutation.mutate(deleteConfirmId);
+  };
   const visible =
     activeFilter === "ALL"
       ? notices
@@ -679,7 +662,7 @@ export default function NoticeBoard() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={handleRefresh}
+            onRefresh={() => refetch()}
             tintColor={tint}
           />
         }

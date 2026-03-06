@@ -12,9 +12,12 @@ import { Platform, View } from "react-native";
 import "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { QueryClientProvider } from "@tanstack/react-query";
+import { AppContextProvider } from "@/contexts/AppContext";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { setupAxiosInterceptors } from "@/lib/api";
 import { getUser } from "@/lib/auth";
+import queryClient from "@/lib/queryClient";
 import { subscribeToUserChannel } from "@/lib/intercom";
 import { configureNotificationHandler } from "@/lib/notifications";
 
@@ -150,52 +153,57 @@ export default function RootLayout() {
   }
 
   return (
-    <SafeAreaProvider>
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: colorScheme === "dark" ? "#000" : "#fff",
-        }}
-      >
-        <ThemeProvider
-          value={colorScheme === "dark" ? DarkNavTheme : LightNavTheme}
-        >
-          <Stack
-            initialRouteName="auth/login"
-            screenOptions={{
-              headerShown: false,
-              animation: Platform.OS === "ios" ? "slide_from_right" : "fade",
-              contentStyle: {
-                backgroundColor: (colorScheme === "dark"
-                  ? "#000"
-                  : "#fff") as any,
-              },
+    <QueryClientProvider client={queryClient}>
+      <AppContextProvider>
+        <SafeAreaProvider>
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: colorScheme === "dark" ? "#000" : "#fff",
             }}
           >
-            <Stack.Screen name="auth/login" />
-            <Stack.Screen name="auth/register" />
-            <Stack.Screen name="auth/forgot-password" />
-            <Stack.Screen name="auth/pending" />
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="admin/index" />
-            <Stack.Screen name="gatekeeper" />
-            <Stack.Screen name="auth/callback" />
-            <Stack.Screen name="resident/directory" />
-            <Stack.Screen name="resident/notice-board" />
-            <Stack.Screen name="resident/surveys" />
-            <Stack.Screen name="resident/election-polls" />
-            <Stack.Screen
-              name="intercom/call"
-              options={{
-                headerShown: false,
-                presentation: "fullScreenModal",
-                animation: "slide_from_bottom",
-              }}
-            />
-          </Stack>
-          <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
-        </ThemeProvider>
-      </View>
-    </SafeAreaProvider>
+            <ThemeProvider
+              value={colorScheme === "dark" ? DarkNavTheme : LightNavTheme}
+            >
+              <Stack
+                initialRouteName="auth/login"
+                screenOptions={{
+                  headerShown: false,
+                  animation:
+                    Platform.OS === "ios" ? "slide_from_right" : "fade",
+                  contentStyle: {
+                    backgroundColor: (colorScheme === "dark"
+                      ? "#000"
+                      : "#fff") as any,
+                  },
+                }}
+              >
+                <Stack.Screen name="auth/login" />
+                <Stack.Screen name="auth/register" />
+                <Stack.Screen name="auth/forgot-password" />
+                <Stack.Screen name="auth/pending" />
+                <Stack.Screen name="(tabs)" />
+                <Stack.Screen name="admin/index" />
+                <Stack.Screen name="gatekeeper" />
+                <Stack.Screen name="auth/callback" />
+                <Stack.Screen name="resident/directory" />
+                <Stack.Screen name="resident/notice-board" />
+                <Stack.Screen name="resident/surveys" />
+                <Stack.Screen name="resident/election-polls" />
+                <Stack.Screen
+                  name="intercom/call"
+                  options={{
+                    headerShown: false,
+                    presentation: "fullScreenModal",
+                    animation: "slide_from_bottom",
+                  }}
+                />
+              </Stack>
+              <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
+            </ThemeProvider>
+          </View>
+        </SafeAreaProvider>
+      </AppContextProvider>
+    </QueryClientProvider>
   );
 }

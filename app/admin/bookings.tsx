@@ -10,15 +10,16 @@ import {
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
-import axios from "axios";
+import { useQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
-import { getToken, getCommunityId, getEnabledFeatures } from "@/lib/auth";
-import { config } from "@/lib/config";
 import Toast from "@/components/Toast";
 import { useToast } from "@/hooks/useToast";
+import { useAppContext } from "@/contexts/AppContext";
+import { queryKeys } from "@/lib/queryKeys";
+import { fetchAdminBookings } from "@/lib/queries/admin";
 
 function getStatusPill(status) {
   const s = status?.toUpperCase();
@@ -152,51 +153,33 @@ export default function AdminBookings() {
   const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
   const insets = useSafeAreaInsets();
 
-  const [bookings, setBookings] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const { token, communityId, enabledFeatures } = useAppContext();
   const [activeTab, setActiveTab] = useState("all");
 
   const { toast, showError, hideToast } = useToast();
-  const url = config.backendUrl;
 
   useEffect(() => {
-    getEnabledFeatures().then((feats) => {
-      if (feats.length > 0 && !feats.includes("AMENITY_BOOKING")) {
-        router.replace("/admin");
-      }
-    });
-  }, []);
-
-  useEffect(() => {
-    fetchBookings();
-  }, []);
-
-  const fetchBookings = async () => {
-    try {
-      const token = await getToken();
-      const communityId = await getCommunityId();
-      if (!communityId) {
-        showError("Community information not found.");
-        return;
-      }
-      const res = await axios.get(`${url}/admin/bookings`, {
-        headers: { Authorization: `Bearer ${token}` },
-        params: { communityId },
-      });
-      setBookings(res.data.bookings || []);
-    } catch (e) {
-      showError("Failed to load bookings.");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+    if (
+      enabledFeatures.length > 0 &&
+      !enabledFeatures.includes("AMENITY_BOOKING")
+    ) {
+      router.replace("/admin");
     }
-  };
+  }, [enabledFeatures]);
 
-  const handleRefresh = () => {
-    setRefreshing(true);
-    fetchBookings();
-  };
+  const {
+    data: bookings = [],
+    isLoading: loading,
+    isFetching,
+    refetch,
+  } = useQuery({
+    queryKey: queryKeys.admin.bookings(communityId ?? ""),
+    queryFn: () => fetchAdminBookings(token, communityId),
+    enabled: !!communityId,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const refreshing = isFetching && !loading;
 
   const getFiltered = () => {
     if (activeTab === "confirmed")
@@ -281,7 +264,7 @@ export default function AdminBookings() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={handleRefresh}
+            onRefresh={() => refetch()}
             tintColor={tint}
           />
         }

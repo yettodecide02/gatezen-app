@@ -1,11 +1,5 @@
 ﻿// @ts-nocheck
-import React, {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  useMemo,
-} from "react";
+import React, { useRef, useState } from "react";
 import {
   ScrollView,
   Text,
@@ -18,11 +12,16 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
-import axios from "axios";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useColorScheme } from "@/hooks/useColorScheme";
-import { getToken, getUser } from "@/lib/auth";
-import { config } from "@/lib/config";
+import { useAppContext } from "@/contexts/AppContext";
+import { queryKeys } from "@/lib/queryKeys";
+import {
+  fetchResidentMaintenance,
+  createResidentMaintenanceTicket,
+  addResidentMaintenanceComment,
+} from "@/lib/queries/resident";
 import Toast from "@/components/Toast";
 import { useToast } from "@/hooks/useToast";
 
@@ -55,10 +54,6 @@ export default function Maintenance() {
   const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
   const fieldBg = isDark ? "#111111" : "#F8FAFC";
 
-  const [user, setUserState] = useState(null);
-  const [token, setTokenState] = useState(null);
-  const [tickets, setTickets] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
   const [showNew, setShowNew] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
@@ -69,100 +64,84 @@ export default function Maintenance() {
   const [comment, setComment] = useState("");
   const [addingComment, setAddingComment] = useState(false);
   const { toast, showError, showSuccess, hideToast } = useToast();
-
-  useEffect(() => {
-    (async () => {
-      const [t, u] = await Promise.all([getToken(), getUser()]);
-      setTokenState(t);
-      setUserState(u);
-    })();
-  }, []);
-
-  const authHeaders = useMemo(
-    () => (token ? { Authorization: `Bearer ${token}` } : {}),
-    [token],
+  const { user, token } = useAppContext();
+  const queryClient = useQueryClient();
+  const maintenanceKey = queryKeys.resident.maintenance(
+    user?.id ?? "",
+    user?.communityId ?? "",
   );
 
-  const load = useCallback(async () => {
-    if (!user?.id || !user?.communityId) return;
-    setLoading(true);
-    try {
-      const res = await axios.get(`${config.backendUrl}/resident/maintenance`, {
-        params: { communityId: user.communityId, userId: user.id },
-        headers: authHeaders,
-      });
-      const list = Array.isArray(res.data) ? res.data : (res.data?.data ?? []);
-      setTickets(list);
-      setSelected((prev) =>
-        prev ? list.find((t) => t.id === prev.id) || null : null,
-      );
-    } catch {
-      showError("Failed to load tickets");
-    } finally {
-      setLoading(false);
-    }
-  }, [user, authHeaders]);
+  const {
+    data: tickets = [],
+    isLoading: loading,
+    refetch: load,
+  } = useQuery({
+    queryKey: maintenanceKey,
+    queryFn: () =>
+      fetchResidentMaintenance(token, user!.id, user!.communityId as string),
+    enabled: !!user?.id && !!user?.communityId,
+    staleTime: 5 * 60 * 1000,
+  });
 
-  useEffect(() => {
-    if (user) load();
-  }, [user]);
-
-  const submitTicket = async () => {
-    if (!title.trim()) {
-      showError("Title is required");
-      return;
-    }
-    setSubmitting(true);
-    try {
-      const res = await axios.post(
-        `${config.backendUrl}/resident/maintenance`,
-        {
-          userId: user.id,
-          communityId: user.communityId,
-          title: title.trim(),
-          category,
-          description: desc.trim(),
-        },
-        { headers: authHeaders },
-      );
-      setTickets((prev) => [res.data, ...prev]);
+  const submitMutation = useMutation({
+    mutationFn: (payload: object) =>
+      createResidentMaintenanceTicket(token, payload),
+    onSuccess: (newTicket) => {
       setTitle("");
       setCategory("General");
       setDesc("");
       setShowNew(false);
       showSuccess("Ticket created!");
-    } catch (e) {
-      showError(e?.response?.data?.error || "Failed to create ticket");
-    } finally {
-      setSubmitting(false);
-    }
-  };
+      queryClient.invalidateQueries({ queryKey: maintenanceKey });
+    },
+    onError: (e: any) =>
+      showError(e?.response?.data?.error || "Failed to create ticket"),
+    onSettled: () => setSubmitting(false),
+  });
 
-  const addComment = async () => {
-    if (!selected || !comment.trim()) return;
-    setAddingComment(true);
-    try {
-      const res = await axios.post(
-        `${config.backendUrl}/resident/maintenance/${selected.id}/comments`,
-        { userId: user?.id, name: user?.name, text: comment.trim() },
-        { headers: authHeaders },
-      );
+  const commentMutation = useMutation({
+    mutationFn: ({
+      ticketId,
+      payload,
+    }: {
+      ticketId: string;
+      payload: object;
+    }) => addResidentMaintenanceComment(token, ticketId, payload),
+    onSuccess: (newComment) => {
       const updated = {
         ...selected,
-        comments: [...(selected.comments || []), res.data],
+        comments: [...(selected.comments || []), newComment],
       };
       setSelected(updated);
-      setTickets((prev) =>
-        prev.map((t) => (t.id === selected.id ? updated : t)),
-      );
       setComment("");
-    } catch {
-      showError("Failed to add comment");
-    } finally {
-      setAddingComment(false);
+    },
+    onError: () => showError("Failed to add comment"),
+    onSettled: () => setAddingComment(false),
+  });
+
+  const submitTicket = () => {
+    if (!title.trim()) {
+      showError("Title is required");
+      return;
     }
+    setSubmitting(true);
+    submitMutation.mutate({
+      userId: user?.id,
+      communityId: user?.communityId,
+      title: title.trim(),
+      category,
+      description: desc.trim(),
+    });
   };
 
+  const addComment = () => {
+    if (!selected || !comment.trim()) return;
+    setAddingComment(true);
+    commentMutation.mutate({
+      ticketId: selected.id,
+      payload: { userId: user?.id, name: user?.name, text: comment.trim() },
+    });
+  };
   const fmt = (d) =>
     new Date(d).toLocaleDateString("en-US", {
       month: "short",

@@ -2,7 +2,7 @@
 import { Feather } from "@expo/vector-icons";
 import axios from "axios";
 import { router } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -15,6 +15,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import ConfirmModal from "@/components/ConfirmModal";
 import { SkeletonStatCard } from "@/components/SkeletonLoader";
@@ -22,13 +23,14 @@ import Toast from "@/components/Toast";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useToast } from "@/hooks/useToast";
+import { logout } from "@/lib/auth";
+import { useAppContext } from "@/contexts/AppContext";
+import { queryKeys } from "@/lib/queryKeys";
 import {
-  getCommunityId,
-  getToken,
-  getEnabledFeatures,
-  logout,
-} from "@/lib/auth";
-import { config } from "@/lib/config";
+  fetchAdminDashboard,
+  createAdminAnnouncement,
+  adminResidentAction,
+} from "@/lib/queries/admin";
 
 // ─── Helpers ───────────────────────────────────
 function getStatusPill(status: string) {
@@ -167,13 +169,11 @@ function AnnouncementModal({
 
   const handleSubmit = async () => {
     if (!title.trim() || !content.trim()) return;
-    const communityId = await getCommunityId();
     setIsSubmitting(true);
     try {
       await onSubmit({
         title: title.trim(),
         content: content.trim(),
-        communityId,
       });
       setTitle("");
       setContent("");
@@ -314,118 +314,73 @@ export default function AdminDashboard() {
   const muted = isDark ? "#94A3B8" : "#64748B";
   const insets = useSafeAreaInsets();
 
-  const [payments, setPayments] = useState([]);
-  const [maintenance, setMaintenance] = useState([]);
-  const [bookings, setBookings] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [announcements, setAnnouncements] = useState([]);
-  const [pendingRequests, setPendingRequests] = useState([]);
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [showAllActions, setShowAllActions] = useState(false);
-  const [enabledFeatures, setEnabledFeatures] = useState<string[]>([]);
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>(
     {},
   );
 
   const { toast, showError, showSuccess, hideToast } = useToast();
+  const { user, token, enabledFeatures } = useAppContext();
+  const queryClient = useQueryClient();
+  const communityId = user?.communityId ?? "";
+  const dashKey = queryKeys.admin.dashboard(communityId);
 
-  const url = config.backendUrl;
+  const {
+    data: dashData,
+    isLoading: loading,
+    isFetching,
+    refetch,
+  } = useQuery({
+    queryKey: dashKey,
+    queryFn: () => fetchAdminDashboard(token, communityId),
+    enabled: !!communityId,
+    staleTime: 2 * 60 * 1000,
+  });
+  const refreshing = isFetching && !loading;
 
-  useEffect(() => {
-    fetchAdminData();
-    getEnabledFeatures().then(setEnabledFeatures);
-  }, []);
+  const payments = dashData?.payments ?? [];
+  const maintenance = dashData?.maintenance ?? [];
+  const bookings = dashData?.bookings ?? [];
+  const pendingRequests = dashData?.pendingRequests ?? [];
+  const announcements = dashData?.announcements ?? [];
 
-  const fetchAdminData = async () => {
-    try {
-      const token = await getToken();
-      const communityId = await getCommunityId();
+  const announcementMutation = useMutation({
+    mutationFn: (payload: object) => createAdminAnnouncement(token, payload),
+    onSuccess: () => {
+      showSuccess("Announcement created successfully!");
+      queryClient.invalidateQueries({ queryKey: dashKey });
+    },
+    onError: () =>
+      showError("Failed to create announcement. Please try again."),
+  });
 
-      if (!communityId) {
-        showError("Community information not found. Please login again.");
-        return;
-      }
-
-      const res = await axios.get(
-        `${url}/admin/dashboard?communityId=${communityId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
-      const data = res.data;
-      setPayments(data.payments || []);
-      setMaintenance(data.maintenance || []);
-      setBookings(data.bookings || []);
-      setUsers(data.users || []);
-      setAnnouncements(data.announcements || []);
-      setPendingRequests(data.pendingRequests || []);
-    } catch (error) {
-      console.error("Error fetching admin data:", error);
-      showError("Failed to load admin data");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  const handleRefresh = () => {
-    setRefreshing(true);
-    fetchAdminData();
+  const handleCreateAnnouncement = async (data: {
+    title: string;
+    content: string;
+  }) => {
+    announcementMutation.mutate({ ...data, communityId });
   };
 
   const handleResidentAction = async (userId, action) => {
     setActionLoading((prev) => ({ ...prev, [`${userId}_${action}`]: true }));
     try {
-      const token = await getToken();
-      const endpoint =
-        action === "approve"
-          ? "/admin/approve-resident"
-          : "/admin/reject-resident";
-
-      await axios.post(
-        `${url}${endpoint}`,
-        { userId },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
-
+      await adminResidentAction(token, userId, action, communityId);
       showSuccess(
         `Resident ${action === "approve" ? "approved" : "rejected"} successfully.`,
       );
-      fetchAdminData();
+      queryClient.invalidateQueries({ queryKey: dashKey });
     } catch (error) {
-      console.error(`Error ${action}ing resident:`, error);
       showError(`Failed to ${action} resident. Please try again.`);
     } finally {
       setActionLoading((prev) => ({ ...prev, [`${userId}_${action}`]: false }));
     }
   };
 
-  const handleCreateAnnouncement = async (announcementData) => {
-    try {
-      const token = await getToken();
-      await axios.post(`${url}/admin/create-announcement`, announcementData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      showSuccess("Announcement created successfully!");
-      fetchAdminData();
-    } catch (error) {
-      console.error("Error creating announcement:", error);
-      showError("Failed to create announcement. Please try again.");
-      throw error;
-    }
+  const handleRefresh = () => {
+    refetch();
   };
 
   const handleLogout = () => setShowLogoutConfirm(true);
@@ -709,9 +664,14 @@ export default function AdminDashboard() {
                 </>
               )}
             </View>
-            {["NOTICE_BOARD", "SURVEYS", "ELECTION_POLLS", "VEHICLE_MANAGEMENT", "PARKING_RENTAL", "MEETING_ALIGNMENT"].some((f) =>
-              enabledFeatures.includes(f),
-            ) && (
+            {[
+              "NOTICE_BOARD",
+              "SURVEYS",
+              "ELECTION_POLLS",
+              "VEHICLE_MANAGEMENT",
+              "PARKING_RENTAL",
+              "MEETING_ALIGNMENT",
+            ].some((f) => enabledFeatures.includes(f)) && (
               <TouchableOpacity
                 onPress={() => setShowAllActions((v) => !v)}
                 style={[

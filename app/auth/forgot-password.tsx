@@ -280,7 +280,7 @@ export default function ForgotPasswordScreen() {
                 Remember your password?{" "}
                 <Text
                   style={[styles.link, { color: tint }]}
-                  onPress={() => router.push("/auth/login")}
+                  onPress={() => router.replace("/auth/login")}
                 >
                   Sign in
                 </Text>

@@ -21,12 +21,7 @@ import Toast from "@/components/Toast";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useToast } from "@/hooks/useToast";
-import {
-  getCommunityId,
-  getToken,
-  getUser,
-  getEnabledFeatures,
-} from "@/lib/auth";
+import { useAppContext } from "@/contexts/AppContext";
 import { config } from "@/lib/config";
 
 // ── Vehicle type config ────────────────────────────────────────
@@ -309,8 +304,8 @@ function ResultCard({
           </View>
         )}
 
-        {/* Model */}
-        {result.vehicleModel && (
+        {/* Brand */}
+        {result.vehicleBrand && (
           <View style={styles.detailItem}>
             <View
               style={[
@@ -318,7 +313,27 @@ function ResultCard({
                 { backgroundColor: isDark ? "#002030" : "#CFFAFE" },
               ]}
             >
-              <Feather name="settings" size={13} color="#06B6D4" />
+              <Feather name="tag" size={13} color="#06B6D4" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.detailLabel, { color: muted }]}>BRAND</Text>
+              <Text style={[styles.detailValue, { color: textColor }]}>
+                {result.vehicleBrand}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Model */}
+        {result.vehicleModel && (
+          <View style={styles.detailItem}>
+            <View
+              style={[
+                styles.detailIcon,
+                { backgroundColor: isDark ? "#1E1040" : "#EDE9FE" },
+              ]}
+            >
+              <Feather name="settings" size={13} color="#8B5CF6" />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.detailLabel, { color: muted }]}>MODEL</Text>
@@ -370,15 +385,17 @@ export default function VehicleSearch() {
 
   const inputRef = useRef(null);
   const { toast, showError, hideToast } = useToast();
+  const { user, token, enabledFeatures } = useAppContext();
 
   // Feature guard
   useEffect(() => {
-    getEnabledFeatures().then((feats) => {
-      if (feats.length > 0 && !feats.includes("VEHICLE_SEARCH")) {
-        router.replace("/gatekeeper");
-      }
-    });
-  }, []);
+    if (
+      enabledFeatures.length > 0 &&
+      !enabledFeatures.includes("VEHICLE_SEARCH")
+    ) {
+      router.replace("/gatekeeper");
+    }
+  }, [enabledFeatures]);
 
   // Auto-focus input on mount
   useEffect(() => {
@@ -399,19 +416,13 @@ export default function VehicleSearch() {
       setResults([]);
 
       try {
-        const [token, user, communityId] = await Promise.all([
-          getToken(),
-          getUser(),
-          getCommunityId(),
-        ]);
-
         const res = await axios.get(
           `${config.backendUrl}/gatekeeper/vehicle-search`,
           {
-            headers: { Authorization: `Bearer ${token}` },
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
             params: {
               vehicleNo: q,
-              communityId: communityId || user?.communityId,
+              communityId: user?.communityId,
             },
           },
         );

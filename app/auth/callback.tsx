@@ -5,6 +5,7 @@ import axios from "axios";
 import { router } from "expo-router";
 import supabase from "@/lib/supabase";
 import { setToken, setUser } from "@/lib/auth";
+import { useAppContext } from "@/contexts/AppContext";
 import Toast from "@/components/Toast";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useToast } from "@/hooks/useToast";
@@ -16,6 +17,7 @@ export default function AuthCallback() {
   const bg = useThemeColor({}, "background");
   const text = useThemeColor({}, "text");
   const { toast, showError, hideToast } = useToast();
+  const { refreshUser } = useAppContext();
 
   useEffect(() => {
     (async () => {
@@ -49,6 +51,7 @@ export default function AuthCallback() {
           }
           const u = response.data.user ?? null;
           if (u) await setUser(u);
+          await refreshUser();
           if (u?.status === "PENDING") {
             router.replace("/auth/pending");
           } else if (u?.status === "REJECTED") {

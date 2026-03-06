@@ -1,10 +1,11 @@
 ﻿// @ts-nocheck
 import { Feather } from "@expo/vector-icons";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import DateTimePicker, {
+  DateTimePickerAndroid,
+} from "@react-native-community/datetimepicker";
 import { Picker } from "@react-native-picker/picker";
-import axios from "axios";
 import { router } from "expo-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -22,8 +23,10 @@ import Toast from "@/components/Toast";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useToast } from "@/hooks/useToast";
-import { getCommunityId, getToken, getEnabledFeatures } from "@/lib/auth";
-import { config } from "@/lib/config";
+import { useAppContext } from "@/contexts/AppContext";
+import { queryKeys } from "@/lib/queryKeys";
+import { fetchAdminVisitorLogByDate } from "@/lib/queries/admin";
+import { useQuery } from "@tanstack/react-query";
 
 // Overstay limits — must match admin-overstay.tsx
 const OVERSTAY_LIMITS = {
@@ -88,9 +91,6 @@ export default function VisitorLog() {
   const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
   const insets = useSafeAreaInsets();
 
-  const [visitors, setVisitors] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [unitFilter, setUnitFilter] = useState("ALL");
@@ -103,41 +103,30 @@ export default function VisitorLog() {
   const [datePickerMode, setDatePickerMode] = useState("from");
 
   const { toast, showError, hideToast } = useToast();
-  const url = config.backendUrl;
+  const { user, token } = useAppContext();
 
-  useEffect(() => {
-    getEnabledFeatures().then((feats) => {
-      if (feats.length > 0 && !feats.includes("VISITOR_MANAGEMENT")) {
-        router.replace("/admin");
-      }
-    });
-  }, []);
-
-  useEffect(() => {
-    fetchVisitors();
-  }, [fromDate, toDate]);
-
-  const fetchVisitors = async () => {
-    try {
-      const token = await getToken();
-      const communityId = await getCommunityId();
-      const res = await axios.get(`${url}/admin/visitor`, {
-        headers: { Authorization: `Bearer ${token}` },
-        params: { communityId, from: fromDate, to: toDate },
-      });
-      setVisitors(res.data.visitors || []);
-    } catch (e) {
-      showError("Failed to load visitor log");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  const handleRefresh = () => {
-    setRefreshing(true);
-    fetchVisitors();
-  };
+  const {
+    data: visitors = [],
+    isLoading: loading,
+    isFetching,
+    refetch,
+  } = useQuery({
+    queryKey: queryKeys.admin.visitorLogByDate(
+      user?.communityId ?? "",
+      fromDate,
+      toDate,
+    ),
+    queryFn: () =>
+      fetchAdminVisitorLogByDate(
+        token,
+        user!.communityId as string,
+        fromDate,
+        toDate,
+      ),
+    enabled: !!user?.communityId,
+    staleTime: 2 * 60 * 1000,
+  });
+  const refreshing = isFetching && !loading;
 
   const handleDateChange = (event, selectedDate) => {
     if (Platform.OS === "android") setShowDatePicker(false);
@@ -150,7 +139,24 @@ export default function VisitorLog() {
 
   const openDatePicker = (mode) => {
     setDatePickerMode(mode);
-    setShowDatePicker(true);
+    if (Platform.OS === "android") {
+      const currentValue =
+        mode === "from" ? new Date(fromDate) : new Date(toDate);
+      DateTimePickerAndroid.open({
+        value: currentValue,
+        mode: "date",
+        maximumDate: new Date(),
+        onChange: (event, selectedDate) => {
+          if (selectedDate) {
+            const ds = selectedDate.toISOString().split("T")[0];
+            if (mode === "from") setFromDate(ds);
+            else setToDate(ds);
+          }
+        },
+      });
+    } else {
+      setShowDatePicker(true);
+    }
   };
 
   const formatDate = (d) => {
@@ -290,7 +296,7 @@ export default function VisitorLog() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={handleRefresh}
+            onRefresh={() => refetch()}
             tintColor={tint}
           />
         }
@@ -484,7 +490,7 @@ export default function VisitorLog() {
                   </View>
                 </View>
 
-                {showDatePicker && (
+                {Platform.OS === "ios" && showDatePicker && (
                   <DateTimePicker
                     value={
                       datePickerMode === "from"
@@ -559,7 +565,7 @@ export default function VisitorLog() {
 
                 <TouchableOpacity
                   style={[styles.refreshBtn, { backgroundColor: tint }]}
-                  onPress={handleRefresh}
+                  onPress={() => refetch()}
                 >
                   <Feather name="refresh-cw" size={14} color="#fff" />
                   <Text

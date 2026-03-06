@@ -1,5 +1,5 @@
 ﻿// @ts-nocheck
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   ScrollView,
   Text,
@@ -9,16 +9,17 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import axios from "axios";
 import { router } from "expo-router";
+import { useQuery } from "@tanstack/react-query";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
-import { getToken, getUser } from "@/lib/auth";
-import { config } from "@/lib/config";
+import { logout } from "@/lib/auth";
 import Toast from "@/components/Toast";
 import ConfirmModal from "@/components/ConfirmModal";
 import { useToast } from "@/hooks/useToast";
+import { useAppContext } from "@/contexts/AppContext";
+import { queryKeys } from "@/lib/queryKeys";
+import { fetchGatekeeperStats } from "@/lib/queries/gatekeeper";
 
 export default function GatekeeperProfile() {
   const theme = useColorScheme() ?? "light";
@@ -32,44 +33,23 @@ export default function GatekeeperProfile() {
   const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
 
   const { toast, showError, hideToast } = useToast();
-  const [user, setUserState] = useState(null);
-  const [token, setTokenState] = useState(null);
-  const [stats, setStats] = useState(null);
-  const [loadingStats, setLoadingStats] = useState(true);
+  const { user, token } = useAppContext();
   const [showLogout, setShowLogout] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      const [t, u] = await Promise.all([getToken(), getUser()]);
-      setTokenState(t);
-      setUserState(u);
-    })();
-  }, []);
+  const { data: rawStats, isLoading: loadingStats } = useQuery({
+    queryKey: queryKeys.gatekeeper.stats(user?.id ?? ""),
+    queryFn: () => fetchGatekeeperStats(token, user!.id),
+    enabled: !!user?.id,
+    staleTime: 5 * 60 * 1000,
+    select: (data) => data?.today ?? data,
+  });
+  const stats = rawStats;
 
-  const loadStats = useCallback(async () => {
-    if (!token) return;
-    setLoadingStats(true);
-    try {
-      const res = await axios.get(`${config.backendUrl}/gatekeeper/stats`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setStats(res.data.today || res.data);
-    } catch {
-      /* silent */
-    } finally {
-      setLoadingStats(false);
-    }
-  }, [token]);
-
-  useEffect(() => {
-    if (token) loadStats();
-  }, [token]);
-
-  const confirmLogout = useCallback(async () => {
+  const confirmLogout = async () => {
     setLoggingOut(true);
     try {
-      await AsyncStorage.multiRemove(["token", "user"]);
+      await logout();
       router.replace("/auth/login");
     } catch {
       showError("Failed to logout");
@@ -77,7 +57,7 @@ export default function GatekeeperProfile() {
       setLoggingOut(false);
       setShowLogout(false);
     }
-  }, []);
+  };
 
   const initials = (user?.name || "G")
     .split(" ")

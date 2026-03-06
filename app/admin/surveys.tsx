@@ -1,9 +1,10 @@
 // @ts-nocheck
-import DateTimePicker from "@react-native-community/datetimepicker";
+import DateTimePicker, {
+  DateTimePickerAndroid,
+} from "@react-native-community/datetimepicker";
 import { Feather } from "@expo/vector-icons";
-import axios from "axios";
 import { router } from "expo-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -24,8 +25,14 @@ import Toast from "@/components/Toast";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useToast } from "@/hooks/useToast";
-import { getCommunityId, getToken, getEnabledFeatures } from "@/lib/auth";
-import { config } from "@/lib/config";
+import { useAppContext } from "@/contexts/AppContext";
+import { queryKeys } from "@/lib/queryKeys";
+import {
+  fetchAdminSurveys,
+  createAdminSurvey,
+  deleteAdminSurvey,
+} from "@/lib/queries/admin";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 // --- Helpers ---
 function surveyStatus(survey) {
@@ -438,7 +445,20 @@ function CreateSurveyModal({
                   CLOSE DATE *
                 </Text>
                 <TouchableOpacity
-                  onPress={() => setShowDatePicker(true)}
+                  onPress={() => {
+                    if (Platform.OS === "android") {
+                      DateTimePickerAndroid.open({
+                        value: endDate,
+                        mode: "date",
+                        minimumDate: new Date(),
+                        onChange: (_, date) => {
+                          if (date) setEndDate(date);
+                        },
+                      });
+                    } else {
+                      setShowDatePicker(true);
+                    }
+                  }}
                   style={[
                     styles.input,
                     {
@@ -642,20 +662,6 @@ function CreateSurveyModal({
           </View>
         </KeyboardAvoidingView>
 
-        {/* Date Picker — Android: native dialog rendered directly */}
-        {showDatePicker && Platform.OS === "android" && (
-          <DateTimePicker
-            value={endDate}
-            onChange={(_event, date) => {
-              setShowDatePicker(false);
-              if (date) setEndDate(date);
-            }}
-            mode="date"
-            display="default"
-            minimumDate={new Date()}
-          />
-        )}
-
         {/* Date Picker — iOS: bottom-sheet spinner */}
         {Platform.OS === "ios" && (
           <Modal visible={showDatePicker} transparent animationType="slide">
@@ -752,95 +758,52 @@ export default function AdminSurveys() {
   const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
   const insets = useSafeAreaInsets();
 
-  const [surveys, setSurveys] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState("active");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
-  const [deleting, setDeleting] = useState(false);
 
   const { toast, showError, showSuccess, hideToast } = useToast();
-  const url = config.backendUrl;
+  const { user, token, enabledFeatures } = useAppContext();
+  const queryClient = useQueryClient();
+  const surveysKey = queryKeys.admin.surveys(user?.communityId ?? "");
 
-  useEffect(() => {
-    getEnabledFeatures().then((feats) => {
-      if (feats.length > 0 && !feats.includes("SURVEYS")) {
-        router.replace("/admin");
-      }
-    });
-  }, []);
+  const {
+    data: surveysRaw = [],
+    isLoading: loading,
+    isFetching,
+    refetch,
+  } = useQuery({
+    queryKey: surveysKey,
+    queryFn: () => fetchAdminSurveys(token, user!.communityId as string),
+    enabled: !!user?.communityId,
+    staleTime: 10 * 60 * 1000,
+    select: (data) => {
+      const raw = data?.surveys ?? data?.data ?? data ?? [];
+      return Array.isArray(raw) ? raw : [];
+    },
+  });
+  const surveys = surveysRaw;
+  const refreshing = isFetching && !loading;
 
-  useEffect(() => {
-    fetchSurveys();
-  }, []);
+  const createMutation = useMutation({
+    mutationFn: (data: object) =>
+      createAdminSurvey(token, { ...data, communityId: user?.communityId }),
+    onSuccess: () => {
+      showSuccess("Survey created!");
+      queryClient.invalidateQueries({ queryKey: surveysKey });
+    },
+    onError: () => showError("Failed to create survey."),
+  });
 
-  const fetchSurveys = async () => {
-    try {
-      const [token, communityId] = await Promise.all([
-        getToken(),
-        getCommunityId(),
-      ]);
-      if (!communityId) {
-        showError("Community information not found.");
-        return;
-      }
-      const res = await axios.get(`${url}/admin/surveys`, {
-        headers: { Authorization: `Bearer ${token}` },
-        params: { communityId },
-      });
-      const raw = res.data?.surveys ?? res.data?.data ?? res.data ?? [];
-      setSurveys(Array.isArray(raw) ? raw : []);
-    } catch (e) {
-      showError("Failed to load surveys.");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  const handleRefresh = () => {
-    setRefreshing(true);
-    fetchSurveys();
-  };
-
-  const handleCreate = async (data) => {
-    const [token, communityId] = await Promise.all([
-      getToken(),
-      getCommunityId(),
-    ]);
-    if (!token) throw new Error("No token");
-    await axios.post(
-      `${url}/admin/surveys/`,
-      { ...data, communityId },
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    );
-    showSuccess("Survey created!");
-    fetchSurveys();
-  };
-
-  const handleViewResults = (surveyId) => {
-    router.push(`/admin/survey-results?id=${surveyId}`);
-  };
-
-  const confirmDelete = async () => {
-    setDeleting(true);
-    try {
-      const token = await getToken();
-      await axios.delete(`${url}/admin/surveys/${deleteConfirmId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setSurveys((prev) => prev.filter((s) => s.id !== deleteConfirmId));
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteAdminSurvey(token, id),
+    onSuccess: () => {
       showSuccess("Survey deleted.");
-    } catch (e) {
-      showError("Failed to delete survey.");
-    } finally {
-      setDeleting(false);
-      setDeleteConfirmId(null);
-    }
-  };
+      queryClient.invalidateQueries({ queryKey: surveysKey });
+    },
+    onError: () => showError("Failed to delete survey."),
+    onSettled: () => setDeleteConfirmId(null),
+  });
 
   const tabs = [
     { key: "active", label: "Active", icon: "zap" },
@@ -932,7 +895,7 @@ export default function AdminSurveys() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={handleRefresh}
+            onRefresh={() => refetch()}
             tintColor={tint}
           />
         }
@@ -1120,7 +1083,7 @@ export default function AdminSurveys() {
       <CreateSurveyModal
         visible={showCreateModal}
         onClose={() => setShowCreateModal(false)}
-        onSubmit={handleCreate}
+        onSubmit={(data) => createMutation.mutate(data)}
         theme={theme}
         textColor={textColor}
         tint={tint}
@@ -1135,8 +1098,8 @@ export default function AdminSurveys() {
         confirmLabel="Delete"
         confirmColor="#EF4444"
         icon="trash-2"
-        loading={deleting}
-        onConfirm={confirmDelete}
+        loading={deleteMutation.isPending}
+        onConfirm={() => deleteMutation.mutate(deleteConfirmId)}
         onCancel={() => setDeleteConfirmId(null)}
       />
 

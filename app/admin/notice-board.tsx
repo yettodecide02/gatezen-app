@@ -1,6 +1,5 @@
 // @ts-nocheck
 import { Feather } from "@expo/vector-icons";
-import axios from "axios";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -14,14 +13,20 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import ConfirmModal from "@/components/ConfirmModal";
 import Toast from "@/components/Toast";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useToast } from "@/hooks/useToast";
-import { getCommunityId, getToken, getEnabledFeatures } from "@/lib/auth";
-import { config } from "@/lib/config";
+import { useAppContext } from "@/contexts/AppContext";
+import { queryKeys } from "@/lib/queryKeys";
+import {
+  createAdminNotice,
+  deleteAdminNotice,
+  fetchAdminNoticeBoard,
+} from "@/lib/queries/admin";
 
 // --- Category config ---
 const CATEGORIES = {
@@ -469,93 +474,70 @@ export default function AdminNoticeBoard() {
   const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
   const insets = useSafeAreaInsets();
 
-  const [notices, setNotices] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const { token, communityId, enabledFeatures } = useAppContext();
+  const queryClient = useQueryClient();
   const [activeFilter, setActiveFilter] = useState("ALL");
   const [showPostModal, setShowPostModal] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
-  const [deleting, setDeleting] = useState(false);
 
   const { toast, showError, showSuccess, hideToast } = useToast();
-  const url = config.backendUrl;
 
   useEffect(() => {
-    getEnabledFeatures().then((feats) => {
-      if (feats.length > 0 && !feats.includes("NOTICE_BOARD")) {
-        router.replace("/admin");
-      }
-    });
-  }, []);
-
-  useEffect(() => {
-    fetchNotices();
-  }, []);
-
-  const fetchNotices = async () => {
-    try {
-      const [token, communityId] = await Promise.all([
-        getToken(),
-        getCommunityId(),
-      ]);
-      if (!communityId) {
-        showError("Community information not found.");
-        return;
-      }
-      const res = await axios.get(`${url}/admin/notice-board`, {
-        headers: { Authorization: `Bearer ${token}` },
-        params: { communityId },
-      });
-      const raw = res.data?.notices ?? res.data?.data ?? res.data ?? [];
-      const list = Array.isArray(raw) ? raw : [];
-      setNotices(
-        [...list].sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0)),
-      );
-    } catch (e) {
-      showError("Failed to load notices.");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+    if (
+      enabledFeatures.length > 0 &&
+      !enabledFeatures.includes("NOTICE_BOARD")
+    ) {
+      router.replace("/admin");
     }
-  };
+  }, [enabledFeatures]);
 
-  const handleRefresh = () => {
-    setRefreshing(true);
-    fetchNotices();
-  };
+  const {
+    data: noticesRaw = [],
+    isLoading: loading,
+    isFetching,
+    refetch,
+  } = useQuery({
+    queryKey: queryKeys.admin.noticeBoard(communityId ?? ""),
+    queryFn: () => fetchAdminNoticeBoard(token, communityId),
+    enabled: !!communityId,
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const notices = [...noticesRaw].sort(
+    (a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0),
+  );
+  const refreshing = isFetching && !loading;
+
+  const postMutation = useMutation({
+    mutationFn: (payload) => createAdminNotice(token, payload),
+    onSuccess: () => {
+      showSuccess("Notice posted successfully!");
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.admin.noticeBoard(communityId ?? ""),
+      });
+    },
+    onError: () => showError("Failed to post notice."),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => deleteAdminNotice(token, id),
+    onSuccess: () => {
+      showSuccess("Notice deleted.");
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.admin.noticeBoard(communityId ?? ""),
+      });
+    },
+    onError: () => showError("Failed to delete notice."),
+  });
 
   const handlePost = async (data) => {
-    const [token, communityId] = await Promise.all([
-      getToken(),
-      getCommunityId(),
-    ]);
-    if (!communityId) throw new Error("No community");
-    await axios.post(
-      `${url}/admin/notice-board`,
-      { ...data, communityId },
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    );
-    showSuccess("Notice posted successfully!");
-    fetchNotices();
+    await postMutation.mutateAsync({ ...data, communityId });
   };
 
-  const confirmDelete = async () => {
-    setDeleting(true);
-    try {
-      const token = await getToken();
-      await axios.delete(`${url}/admin/notice-board/${deleteConfirmId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setNotices((prev) => prev.filter((n) => n.id !== deleteConfirmId));
-      showSuccess("Notice deleted.");
-    } catch (e) {
-      showError("Failed to delete notice.");
-    } finally {
-      setDeleting(false);
-      setDeleteConfirmId(null);
-    }
+  const confirmDelete = () => {
+    deleteMutation.mutate(deleteConfirmId, {
+      onSettled: () => setDeleteConfirmId(null),
+    });
   };
 
   const visible =
@@ -679,7 +661,7 @@ export default function AdminNoticeBoard() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={handleRefresh}
+            onRefresh={() => refetch()}
             tintColor={tint}
           />
         }
@@ -799,7 +781,7 @@ export default function AdminNoticeBoard() {
         confirmLabel="Delete"
         confirmColor="#EF4444"
         icon="trash-2"
-        loading={deleting}
+        loading={deleteMutation.isPending}
         onConfirm={confirmDelete}
         onCancel={() => setDeleteConfirmId(null)}
       />

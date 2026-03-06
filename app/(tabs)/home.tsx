@@ -1,14 +1,15 @@
 ﻿// @ts-nocheck
 import Toast from "@/components/Toast";
+import { useAppContext } from "@/contexts/AppContext";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useToast } from "@/hooks/useToast";
-import { getToken, getUser, getEnabledFeatures } from "@/lib/auth";
-import { config } from "@/lib/config";
+import { queryKeys } from "@/lib/queryKeys";
+import { fetchResidentDashboard } from "@/lib/queries/resident";
 import { Feather } from "@expo/vector-icons";
-import axios from "axios";
-import { router, useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { router } from "expo-router";
+import { useMemo } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -158,73 +159,33 @@ export default function Dashboard() {
   const borderCol = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)";
   const cardBg = isDark ? "#1A1A1A" : "#FFFFFF";
 
-  const [loading, setLoading] = useState(true);
-  const [user, setUserState] = useState(null);
-  const [enabledFeatures, setEnabledFeatures] = useState<string[]>([]);
-  const [stats, setStats] = useState({
-    announcements: 0,
-    maintenanceOpen: 0,
-    paymentsOverdue: 0,
-    upcomingBookings: 0,
-  });
   const { toast, showWarning, hideToast } = useToast();
+  const { user, token, enabledFeatures } = useAppContext();
 
-  const initialize = useCallback(async () => {
-    setLoading(true);
-    try {
-      const userData = await getUser();
-      if (userData?.role === "ADMIN") {
-        router.replace("/admin");
-        return;
-      }
-      setUserState(userData);
-      const features = await getEnabledFeatures();
-      setEnabledFeatures(features);
-      if (userData?.id && userData?.communityId) {
-        try {
-          const token = await getToken();
-          const res = await axios.get(
-            `${config.backendUrl}/resident/dashboard`,
-            {
-              params: {
-                userId: userData.id,
-                communityId: userData.communityId,
-              },
-              headers: token ? { Authorization: `Bearer ${token}` } : {},
-            },
-          );
-          if (res.data) {
-            setStats({
-              announcements: res.data.announcementsCount || 0,
-              maintenanceOpen:
-                res.data.maintenance?.filter(
-                  (t) =>
-                    !["RESOLVED", "CANCELLED", "CLOSED"].includes(t.status),
-                )?.length || 0,
-              paymentsOverdue:
-                res.data.payments?.filter((p) => p.status === "OVERDUE")
-                  ?.length || 0,
-              upcomingBookings:
-                res.data.bookings?.filter(
-                  (b) => new Date(b.startsAt) > new Date(),
-                )?.length || 0,
-            });
-          }
-        } catch {}
-      }
-    } catch {
-      showWarning("Could not load dashboard data.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const { data: dashboardData, isLoading: loading } = useQuery({
+    queryKey: queryKeys.resident.dashboard(
+      user?.id ?? "",
+      user?.communityId ?? "",
+    ),
+    queryFn: () =>
+      fetchResidentDashboard(token, user!.id, user!.communityId as string),
+    enabled: !!user?.id && !!user?.communityId,
+    staleTime: 2 * 60 * 1000, // 2 minutes
+  });
 
-  // Refresh stats every time the tab comes into focus
-  useFocusEffect(
-    useCallback(() => {
-      initialize();
-    }, [initialize]),
-  );
+  const stats = {
+    announcements: dashboardData?.announcementsCount ?? 0,
+    maintenanceOpen:
+      dashboardData?.maintenance?.filter(
+        (t) => !["RESOLVED", "CANCELLED", "CLOSED"].includes(t.status),
+      )?.length ?? 0,
+    paymentsOverdue:
+      dashboardData?.payments?.filter((p) => p.status === "OVERDUE")?.length ??
+      0,
+    upcomingBookings:
+      dashboardData?.bookings?.filter((b) => new Date(b.startsAt) > new Date())
+        ?.length ?? 0,
+  };
 
   const STAT_CARDS = useMemo(
     () => [

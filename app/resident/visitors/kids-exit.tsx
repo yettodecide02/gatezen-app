@@ -11,7 +11,9 @@ import {
   Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import DateTimePicker, {
+  DateTimePickerAndroid,
+} from "@react-native-community/datetimepicker";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import axios from "axios";
@@ -465,7 +467,20 @@ export default function KidPasses() {
                   Valid From
                 </Text>
                 <Pressable
-                  onPress={() => setShowFromPicker(true)}
+                  onPress={() => {
+                    if (Platform.OS === "android") {
+                      DateTimePickerAndroid.open({
+                        value: new Date(form.validFrom + "T00:00:00"),
+                        mode: "date",
+                        onChange: (e, d) => {
+                          if (e.type === "set" && d)
+                            setForm((p) => ({ ...p, validFrom: isoDate(d) }));
+                        },
+                      });
+                    } else {
+                      setShowFromPicker(true);
+                    }
+                  }}
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
@@ -495,7 +510,21 @@ export default function KidPasses() {
                   Valid To
                 </Text>
                 <Pressable
-                  onPress={() => setShowToPicker(true)}
+                  onPress={() => {
+                    if (Platform.OS === "android") {
+                      DateTimePickerAndroid.open({
+                        value: new Date(form.validTo + "T00:00:00"),
+                        mode: "date",
+                        minimumDate: new Date(form.validFrom + "T00:00:00"),
+                        onChange: (e, d) => {
+                          if (e.type === "set" && d)
+                            setForm((p) => ({ ...p, validTo: isoDate(d) }));
+                        },
+                      });
+                    } else {
+                      setShowToPicker(true);
+                    }
+                  }}
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
@@ -540,7 +569,7 @@ export default function KidPasses() {
         </View>
       </Modal>
 
-      {showFromPicker && (
+      {Platform.OS === "ios" && showFromPicker && (
         <DateTimePicker
           value={new Date(form.validFrom + "T00:00:00")}
           mode="date"
@@ -551,7 +580,7 @@ export default function KidPasses() {
           }}
         />
       )}
-      {showToPicker && (
+      {Platform.OS === "ios" && showToPicker && (
         <DateTimePicker
           value={new Date(form.validTo + "T00:00:00")}
           mode="date"

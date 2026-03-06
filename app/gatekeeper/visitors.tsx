@@ -65,9 +65,9 @@ export default function GatekeeperVisitors() {
     })();
   }, []);
 
-  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
-
   const load = useCallback(async () => {
+    // Build headers inside the callback so they always use the current token
+    const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
     setLoading(true);
     try {
       const [vRes, kRes] = await Promise.all([

@@ -42,20 +42,23 @@ export default function AuthCallback() {
         });
 
         if (response.data?.exists) {
-          if (response.data.jwttoken) await setToken(response.data.jwttoken);
-          if (response.data.user) await setUser(response.data.user);
-          registerForPushNotifications(response.data.jwttoken).catch(() => {});
-          const u = response.data.user;
-          if (u.status === "PENDING") {
+          const jwttoken = response.data.jwttoken;
+          if (jwttoken) {
+            await setToken(jwttoken);
+            registerForPushNotifications(jwttoken).catch(() => {});
+          }
+          const u = response.data.user ?? null;
+          if (u) await setUser(u);
+          if (u?.status === "PENDING") {
             router.replace("/auth/pending");
-          } else if (u.status === "REJECTED") {
+          } else if (u?.status === "REJECTED") {
             showError(
               "Your account has been rejected. Please contact your community admin.",
             );
             setTimeout(() => router.replace("/auth/login"), 2000);
-          } else if (u.role === "ADMIN") {
+          } else if (u?.role === "ADMIN") {
             router.replace("/admin");
-          } else if (u.role === "GATEKEEPER") {
+          } else if (u?.role === "GATEKEEPER") {
             router.replace("/gatekeeper");
           } else {
             router.replace("/(tabs)/home");
@@ -64,23 +67,6 @@ export default function AuthCallback() {
         } else {
           router.replace("/auth/residentform");
         }
-
-        // Register new user
-        // const name =
-        //   session.user.user_metadata?.full_name ||
-        //   session.user.user_metadata?.name ||
-        //   "Google User";
-
-        // const signup = await axios.post(`${backendUrl}/auth/signup`, {
-        //   name,
-        //   email,
-        //   password: "google-oauth-" + Date.now(),
-        // });
-
-        // if (signup?.data?.jwttoken) await setToken(signup.data.jwttoken);
-        // if (signup?.data?.user) await setUser(signup.data.user);
-
-        // router.replace("/(drawer)/dashboard");
       } catch (error) {
         console.error("OAuth callback error:", error);
         setMessage("Authentication failed. Returning to login…");

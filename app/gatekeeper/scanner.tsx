@@ -63,12 +63,17 @@ export default function GatekeeperScanner() {
   const handleBarCodeScanned = useCallback(
     async ({ data }) => {
       if (!scanning || data === lastScan) return;
+      // Block scans until the auth data has loaded to avoid a stale/wrong communityId
+      if (!user?.communityId) {
+        showError("Still loading user data. Please try again.");
+        return;
+      }
       setLastScan(data);
       setScanning(false);
       Vibration.vibrate(100);
       try {
         let visitorId = data;
-        let communityId = user?.communityId || "1";
+        let communityId = user.communityId;
         if (data.includes("scan?id=")) {
           try {
             const url = new URL(data);

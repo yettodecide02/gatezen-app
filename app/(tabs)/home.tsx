@@ -7,8 +7,8 @@ import { getToken, getUser, getEnabledFeatures } from "@/lib/auth";
 import { config } from "@/lib/config";
 import { Feather } from "@expo/vector-icons";
 import axios from "axios";
-import { router } from "expo-router";
-import { useEffect, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -109,6 +109,42 @@ const QUICK_LINKS = [
     href: "/resident/election-polls",
     color: "#8B5CF6",
   },
+  {
+    key: "vehicles",
+    featureKey: "VEHICLE_MANAGEMENT",
+    title: "My Vehicles",
+    subtitle: "Register & track",
+    icon: "truck",
+    href: "/resident/vehicles",
+    color: "#0EA5E9",
+  },
+  {
+    key: "parking",
+    featureKey: "PARKING_RENTAL",
+    title: "Rent Parking",
+    subtitle: "Book a spot",
+    icon: "map-pin",
+    href: "/resident/parking",
+    color: "#EC4899",
+  },
+  {
+    key: "meetings",
+    featureKey: "MEETING_ALIGNMENT",
+    title: "Meetings",
+    subtitle: "Community meetings",
+    icon: "users",
+    href: "/resident/meetings",
+    color: "#22C55E",
+  },
+  {
+    key: "home-planner",
+    featureKey: "HOME_PLANNER",
+    title: "Home Planner",
+    subtitle: "Maintenance tasks",
+    icon: "clipboard",
+    href: "/resident/home-planner",
+    color: "#F97316",
+  },
 ];
 
 export default function Dashboard() {
@@ -133,93 +169,104 @@ export default function Dashboard() {
   });
   const { toast, showWarning, hideToast } = useToast();
 
-  useEffect(() => {
-    const initialize = async () => {
-      try {
-        const userData = await getUser();
-        if (userData?.role === "ADMIN") {
-          router.replace("/admin");
-          return;
-        }
-        setUserState(userData);
-        // Load enabled features for this community's plan
-        const features = await getEnabledFeatures();
-        setEnabledFeatures(features);
-        if (userData?.id && userData?.communityId) {
-          try {
-            const token = await getToken();
-            const res = await axios.get(
-              `${config.backendUrl}/resident/dashboard`,
-              {
-                params: {
-                  userId: userData.id,
-                  communityId: userData.communityId,
-                },
-                headers: token ? { Authorization: `Bearer ${token}` } : {},
-              },
-            );
-            if (res.data) {
-              setStats({
-                announcements: res.data.announcementsCount || 0,
-                maintenanceOpen:
-                  res.data.maintenance?.filter(
-                    (t) =>
-                      !["RESOLVED", "CANCELLED", "CLOSED"].includes(t.status),
-                  )?.length || 0,
-                paymentsOverdue:
-                  res.data.payments?.filter((p) => p.status === "OVERDUE")
-                    ?.length || 0,
-                upcomingBookings:
-                  res.data.bookings?.filter(
-                    (b) => new Date(b.startsAt) > new Date(),
-                  )?.length || 0,
-              });
-            }
-          } catch {}
-        }
-      } catch {
-        showWarning("Could not load dashboard data.");
-      } finally {
-        setLoading(false);
+  const initialize = useCallback(async () => {
+    setLoading(true);
+    try {
+      const userData = await getUser();
+      if (userData?.role === "ADMIN") {
+        router.replace("/admin");
+        return;
       }
-    };
-    initialize();
+      setUserState(userData);
+      const features = await getEnabledFeatures();
+      setEnabledFeatures(features);
+      if (userData?.id && userData?.communityId) {
+        try {
+          const token = await getToken();
+          const res = await axios.get(
+            `${config.backendUrl}/resident/dashboard`,
+            {
+              params: {
+                userId: userData.id,
+                communityId: userData.communityId,
+              },
+              headers: token ? { Authorization: `Bearer ${token}` } : {},
+            },
+          );
+          if (res.data) {
+            setStats({
+              announcements: res.data.announcementsCount || 0,
+              maintenanceOpen:
+                res.data.maintenance?.filter(
+                  (t) =>
+                    !["RESOLVED", "CANCELLED", "CLOSED"].includes(t.status),
+                )?.length || 0,
+              paymentsOverdue:
+                res.data.payments?.filter((p) => p.status === "OVERDUE")
+                  ?.length || 0,
+              upcomingBookings:
+                res.data.bookings?.filter(
+                  (b) => new Date(b.startsAt) > new Date(),
+                )?.length || 0,
+            });
+          }
+        } catch {}
+      }
+    } catch {
+      showWarning("Could not load dashboard data.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const STAT_CARDS = [
-    {
-      icon: "bell",
-      featureKey: "COMMUNICATION",
-      title: "Announcements",
-      value: stats.announcements,
-      color: "#3B82F6",
-      href: "/resident/announcements",
-    },
-    {
-      icon: "tool",
-      featureKey: "HELPDESK",
-      title: "Open Tickets",
-      value: stats.maintenanceOpen,
-      color: "#8B5CF6",
-      href: "/resident/maintenance",
-    },
-    {
-      icon: "alert-circle",
-      featureKey: "UTILITY_PAYMENT",
-      title: "Overdue Bills",
-      value: stats.paymentsOverdue,
-      color: "#EF4444",
-      href: "/resident/payments",
-    },
-    {
-      icon: "calendar",
-      featureKey: "AMENITY_BOOKING",
-      title: "Upcoming Bookings",
-      value: stats.upcomingBookings,
-      color: "#14B8A6",
-      href: "/resident/bookings",
-    },
-  ];
+  // Refresh stats every time the tab comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      initialize();
+    }, [initialize]),
+  );
+
+  const STAT_CARDS = useMemo(
+    () => [
+      {
+        key: "announcements",
+        icon: "bell",
+        featureKey: "COMMUNICATION",
+        title: "Announcements",
+        value: stats.announcements,
+        color: "#3B82F6",
+        href: "/resident/announcements",
+      },
+      {
+        key: "tickets",
+        icon: "tool",
+        featureKey: "HELPDESK",
+        title: "Open Tickets",
+        value: stats.maintenanceOpen,
+        color: "#8B5CF6",
+        href: "/resident/maintenance",
+      },
+      {
+        key: "payments",
+        icon: "alert-circle",
+        featureKey: "UTILITY_PAYMENT",
+        title: "Overdue Bills",
+        value: stats.paymentsOverdue,
+        color: "#EF4444",
+        href: "/resident/payments",
+      },
+      {
+        key: "bookings",
+        icon: "calendar",
+        featureKey: "AMENITY_BOOKING",
+        title: "Upcoming Bookings",
+        value: stats.upcomingBookings,
+        color: "#14B8A6",
+        href: "/resident/bookings",
+      },
+    ],
+    [stats],
+  );
 
   const greeting = () => {
     const h = new Date().getHours();
@@ -327,7 +374,7 @@ export default function Dashboard() {
               (s) => !s.featureKey || enabledFeatures.includes(s.featureKey),
             ).map((s) => (
               <Pressable
-                key={s.icon}
+                key={s.key}
                 onPress={() => router.push(s.href)}
                 style={({ pressed }) => ({
                   width: "48%",

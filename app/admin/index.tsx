@@ -676,10 +676,40 @@ export default function AdminDashboard() {
                       theme={theme}
                     />
                   )}
+                  {enabledFeatures.includes("VEHICLE_MANAGEMENT") && (
+                    <ActionTile
+                      icon="truck"
+                      label="Vehicles"
+                      desc="Approve vehicles"
+                      color="#0EA5E9"
+                      onPress={() => router.push("/admin/vehicles")}
+                      theme={theme}
+                    />
+                  )}
+                  {enabledFeatures.includes("PARKING_RENTAL") && (
+                    <ActionTile
+                      icon="map-pin"
+                      label="Parking"
+                      desc="Manage spots"
+                      color="#EC4899"
+                      onPress={() => router.push("/admin/parking")}
+                      theme={theme}
+                    />
+                  )}
+                  {enabledFeatures.includes("MEETING_ALIGNMENT") && (
+                    <ActionTile
+                      icon="users"
+                      label="Meetings"
+                      desc="Schedule & RSVP"
+                      color="#22C55E"
+                      onPress={() => router.push("/admin/meetings")}
+                      theme={theme}
+                    />
+                  )}
                 </>
               )}
             </View>
-            {["NOTICE_BOARD", "SURVEYS", "ELECTION_POLLS"].some((f) =>
+            {["NOTICE_BOARD", "SURVEYS", "ELECTION_POLLS", "VEHICLE_MANAGEMENT", "PARKING_RENTAL", "MEETING_ALIGNMENT"].some((f) =>
               enabledFeatures.includes(f),
             ) && (
               <TouchableOpacity
@@ -695,7 +725,7 @@ export default function AdminDashboard() {
                 <Text style={[styles.expandActionsBtnText, { color: muted }]}>
                   {showAllActions
                     ? "Show less"
-                    : `Show ${["NOTICE_BOARD", "SURVEYS", "ELECTION_POLLS"].filter((f) => enabledFeatures.includes(f)).length} more`}
+                    : `Show ${["NOTICE_BOARD", "SURVEYS", "ELECTION_POLLS", "VEHICLE_MANAGEMENT", "PARKING_RENTAL", "MEETING_ALIGNMENT"].filter((f) => enabledFeatures.includes(f)).length} more`}
                 </Text>
                 <Feather
                   name={showAllActions ? "chevron-up" : "chevron-down"}

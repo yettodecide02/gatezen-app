@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { Tabs } from "expo-router";
 import { Feather } from "@expo/vector-icons";
-import { Platform } from "react-native";
+import { Platform, View } from "react-native";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { BlurView } from "expo-blur";
 import { getEnabledFeatures } from "@/lib/auth";
@@ -27,20 +27,32 @@ export default function GatekeeperTabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: "#2563EB",
         tabBarInactiveTintColor: colorScheme === "dark" ? "#8B9DC3" : "#6B7280",
-        tabBarBackground: () => (
-          <BlurView
-            tint={colorScheme === "dark" ? "dark" : "light"}
-            intensity={90}
-            style={{ flex: 1, borderRadius: 50 }}
-          />
-        ),
+        tabBarBackground: () =>
+          Platform.OS === "ios" ? (
+            <BlurView
+              tint={colorScheme === "dark" ? "dark" : "light"}
+              intensity={90}
+              style={{ flex: 1, borderRadius: 50 }}
+            />
+          ) : (
+            <View
+              style={{
+                flex: 1,
+                borderRadius: 50,
+                backgroundColor:
+                  colorScheme === "dark"
+                    ? "rgba(18,18,18,0.96)"
+                    : "rgba(255,255,255,0.96)",
+              }}
+            />
+          ),
         tabBarStyle: {
           position: "absolute",
           bottom: 25,
           left: 20,
           right: 20,
           elevation: 5,
-          backgroundColor: "transparent", // blur handles background
+          backgroundColor: "transparent",
           borderRadius: 50,
           height: 70,
           paddingBottom: Platform.OS === "ios" ? 20 : 10,
@@ -96,6 +108,15 @@ export default function GatekeeperTabsLayout() {
           ...hideTab("DELIVERY_MANAGEMENT"),
           tabBarIcon: ({ color, focused }) => (
             <Feather name="package" size={focused ? 26 : 22} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="intercom"
+        options={{
+          title: "Intercom",
+          tabBarIcon: ({ color, focused }) => (
+            <Feather name="phone" size={focused ? 26 : 22} color={color} />
           ),
         }}
       />

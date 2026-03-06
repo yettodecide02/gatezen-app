@@ -204,9 +204,10 @@ export default function RegisterScreen() {
         return;
       }
       await setToken(res.data.jwttoken);
-      if (res.data.user) await setUser(res.data.user);
+      const user = res.data.user ?? null;
+      if (user) await setUser(user);
       showSuccess("Registration successful! Welcome to CGate.");
-      if (res.data.user.status === "PENDING") router.replace("/auth/pending");
+      if (user?.status === "PENDING") router.replace("/auth/pending");
       else router.replace("/(tabs)/home");
     } catch (e) {
       showError(
@@ -416,7 +417,7 @@ export default function RegisterScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
-              autoComplete="off"
+              autoComplete="email"
               returnKeyType="next"
               onSubmitEditing={() => setShowCommunityModal(true)}
               error={emailErr}
@@ -495,7 +496,7 @@ export default function RegisterScreen() {
               secureTextEntry={!showPw}
               autoCapitalize="none"
               autoCorrect={false}
-              autoComplete="off"
+              autoComplete="new-password"
               returnKeyType="done"
               onSubmitEditing={submit}
               rightIcon={showPw ? "eye-off" : "eye"}

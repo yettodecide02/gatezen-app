@@ -23,7 +23,7 @@ import { getCommunityId, getToken } from "@/lib/auth";
 import { config } from "@/lib/config";
 import {
     DEFAULT_OVERSTAY_LIMITS,
-    fetchOvstayLimits,
+    fetchOverstayLimits,
     formatDuration,
 } from "@/lib/overstayLimits";
 
@@ -193,7 +193,7 @@ export default function AdminOverstayAlert() {
 
   // Reload limits when screen comes back into focus (after editing settings)
   const loadLimits = useCallback(async () => {
-    const data = await fetchOvstayLimits();
+    const data = await fetchOverstayLimits();
     setLimits(data);
   }, []);
 

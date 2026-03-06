@@ -30,9 +30,11 @@ export const config = {
     "1234567890", // Must be set via EXPO_PUBLIC_GOOGLE_SIGNUP_PASSWORD env var
 };
 
-// Log configuration status
-console.log("🔧 Config loaded:", {
-  supabaseUrl: config.supabaseUrl.substring(0, 20) + "...",
-  backendUrl: config.backendUrl,
-  hasAnonKey: !!config.supabaseAnonKey,
-});
+// Log configuration status (development only)
+if (__DEV__) {
+  console.log("🔧 Config loaded:", {
+    supabaseUrl: config.supabaseUrl.substring(0, 20) + "...",
+    backendUrl: config.backendUrl,
+    hasAnonKey: !!config.supabaseAnonKey,
+  });
+}

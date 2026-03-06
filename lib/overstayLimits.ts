@@ -2,11 +2,6 @@
 // lib/overstayLimits.ts
 // Shared utility: fetch + save overstay limits.
 //
-// ROOT CAUSE FIX:
-//   The backend POST /admin/community requires the FULL community object
-//   (name, description, address, facilities, etc.) just like communityConfig.tsx does.
-//   Sending only { communityId, overstayLimits } causes a validation error → "Failed to save".
-//
 // SAVE STRATEGY:
 //   1. GET /admin/community to fetch existing community data
 //   2. Merge overstayLimits into it
@@ -16,7 +11,7 @@
 //   GET /admin/community → res.data.data.overstayLimits
 //   Falls back to DEFAULT_OVERSTAY_LIMITS silently if not set yet
 
-import { getCommunityId, getToken } from "@/lib/auth";
+import { getCommunityId, getToken, registerLogoutCallback } from "@/lib/auth";
 import { config } from "@/lib/config";
 import axios from "axios";
 
@@ -29,19 +24,23 @@ export const DEFAULT_OVERSTAY_LIMITS = {
   OTHER:    120,
 };
 
-export type OvstayLimits = typeof DEFAULT_OVERSTAY_LIMITS;
+// Renamed from OvstayLimits (typo fix)
+export type OverstayLimits = typeof DEFAULT_OVERSTAY_LIMITS;
 
 // ── In-memory session cache ───────────────────────────────────
-// Updated immediately on save so screens always use latest values
-// even if backend hasn't propagated yet.
-let _memCache: OvstayLimits | null = null;
+// Updated immediately on save so screens always use latest values.
+// Cleared on logout via clearOverstayCache().
+let _memCache: OverstayLimits | null = null;
 
-export function clearOvstayCache() {
+export function clearOverstayCache() {
   _memCache = null;
 }
 
+// Auto-clear cache whenever logout() is called
+registerLogoutCallback(clearOverstayCache);
+
 // ── Fetch limits ──────────────────────────────────────────────
-export async function fetchOvstayLimits(): Promise<OvstayLimits> {
+export async function fetchOverstayLimits(): Promise<OverstayLimits> {
   if (_memCache) return { ..._memCache };
 
   try {
@@ -51,7 +50,6 @@ export async function fetchOvstayLimits(): Promise<OvstayLimits> {
       params:  { communityId },
     });
 
-    // Handle both response shapes
     const data   = res.data?.data || res.data || {};
     const limits = data.overstayLimits ?? null;
 
@@ -66,16 +64,12 @@ export async function fetchOvstayLimits(): Promise<OvstayLimits> {
 }
 
 // ── Save limits ───────────────────────────────────────────────
-// Mirrors communityConfig.tsx handleSave exactly:
-//   1. Fetch current community data (GET /admin/community)
-//   2. Rebuild the facilities array from the response
-//   3. POST { ...communityFields, facilities, overstayLimits, communityId }
-export async function saveOvstayLimits(limits: OvstayLimits): Promise<{ ok: boolean; error?: string }> {
+export async function saveOverstayLimits(limits: OverstayLimits): Promise<{ ok: boolean; error?: string }> {
   try {
     const [token, communityId] = await Promise.all([getToken(), getCommunityId()]);
     const headers = { Authorization: `Bearer ${token}` };
 
-    // ── Step 1: fetch existing community data ──────────────────
+    // Step 1: fetch existing community data
     let communityName        = "";
     let communityDescription = "";
     let communityAddress     = "";
@@ -93,7 +87,6 @@ export async function saveOvstayLimits(limits: OvstayLimits): Promise<{ ok: bool
         communityDescription = c.description || "";
         communityAddress     = c.address     || "";
 
-        // Re-shape facilities the same way communityConfig does
         if (Array.isArray(c.facilities) && c.facilities.length > 0) {
           facilitiesArray = c.facilities.map((f: any) => ({
             facilityType:   f.facilityType,
@@ -109,11 +102,10 @@ export async function saveOvstayLimits(limits: OvstayLimits): Promise<{ ok: bool
         }
       }
     } catch (fetchErr) {
-      // If GET fails we still try to save with minimal payload
       console.warn("overstayLimits: could not fetch existing community data", fetchErr?.message);
     }
 
-    // ── Step 2: POST merged payload ───────────────────────────
+    // Step 2: POST merged payload
     const payload = {
       name:          communityName,
       description:   communityDescription,
@@ -130,7 +122,6 @@ export async function saveOvstayLimits(limits: OvstayLimits): Promise<{ ok: bool
     );
 
     if (res.data?.success) {
-      // Update session cache immediately
       _memCache = { ...limits };
       return { ok: true };
     }
@@ -149,16 +140,27 @@ export async function saveOvstayLimits(limits: OvstayLimits): Promise<{ ok: bool
 }
 
 // ── Helpers ────────────────────────────────────────────────────
-export function getLimit(limits: OvstayLimits, type?: string): number {
+export function getLimit(limits: OverstayLimits, type?: string): number {
   const key = type?.toUpperCase() ?? "";
   return limits[key] ?? limits.OTHER ?? DEFAULT_OVERSTAY_LIMITS.OTHER;
 }
 
-export function isOverstay(visitor: any, limits: OvstayLimits): boolean {
-  const checkedIn  = visitor.checkInAt  || visitor.status?.toLowerCase() === "checked_in";
-  const checkedOut = visitor.checkOutAt || visitor.status?.toLowerCase() === "checked_out";
-  if (!checkedIn || checkedOut) return false;
-  const mins  = Math.floor((Date.now() - new Date(visitor.checkInAt || visitor.expectedAt).getTime()) / 60000);
+/**
+ * Returns true if the visitor is currently overstaying.
+ * Fixed: previously used boolean coercion on checkInAt that caused
+ * incorrect date fallback to expectedAt.
+ */
+export function isOverstay(visitor: any, limits: OverstayLimits): boolean {
+  const checkInAt  = visitor.checkInAt;
+  const checkOutAt = visitor.checkOutAt;
+  const status     = visitor.status?.toLowerCase();
+
+  // Must have an actual check-in timestamp
+  if (!checkInAt) return false;
+  // Already left — not an overstay
+  if (checkOutAt || status === "checked_out") return false;
+
+  const mins  = Math.floor((Date.now() - new Date(checkInAt).getTime()) / 60000);
   const limit = getLimit(limits, visitor.visitorType);
   return mins > limit;
 }

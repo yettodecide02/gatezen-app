@@ -240,6 +240,7 @@ export default function ForgotPasswordScreen() {
                   secureTextEntry={!showPw}
                   autoCapitalize="none"
                   autoCorrect={false}
+                  autoComplete="new-password"
                   returnKeyType="done"
                   onSubmitEditing={submit}
                   placeholder="Min. 8 characters"

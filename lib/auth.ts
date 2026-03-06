@@ -4,6 +4,15 @@ import supabase from "@/lib/supabase";
 const TOKEN_KEY = "token";
 const USER_KEY = "user";
 
+// ── Logout side-effect registry ───────────────────────────────
+// Modules that need to clean up on logout (e.g. overstayLimits cache)
+// register a callback here to avoid circular imports.
+const _logoutCallbacks: Array<() => void> = [];
+
+export function registerLogoutCallback(cb: () => void) {
+  if (!_logoutCallbacks.includes(cb)) _logoutCallbacks.push(cb);
+}
+
 export async function getToken() {
   return AsyncStorage.getItem(TOKEN_KEY);
 }
@@ -96,4 +105,6 @@ export async function logout() {
   } catch {}
   await clearToken();
   await clearUser();
+  // Run all registered cleanup callbacks (e.g. clear overstay cache)
+  _logoutCallbacks.forEach((cb) => cb());
 }

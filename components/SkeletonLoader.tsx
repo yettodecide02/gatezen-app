@@ -22,21 +22,20 @@ export function Skeleton({
 }: SkeletonProps) {
   const shimmer = useRef(new Animated.Value(0)).current;
   const scheme = useColorScheme();
-  const base = scheme === "dark" ? "#2a2a2a" : "#e5e7eb";
   const shine = scheme === "dark" ? "#3f3f3f" : "#f3f4f6";
 
   useEffect(() => {
     const anim = Animated.loop(
       Animated.sequence([
         Animated.timing(shimmer, {
-          toValue: 1,
+          toValue: 0.4,
           duration: 750,
-          useNativeDriver: false,
+          useNativeDriver: true,
         }),
         Animated.timing(shimmer, {
-          toValue: 0,
+          toValue: 1,
           duration: 750,
-          useNativeDriver: false,
+          useNativeDriver: true,
         }),
       ]),
     );
@@ -44,15 +43,10 @@ export function Skeleton({
     return () => anim.stop();
   }, [shimmer]);
 
-  const bg = shimmer.interpolate({
-    inputRange: [0, 1],
-    outputRange: [base, shine],
-  });
-
   return (
     <Animated.View
       style={[
-        { width: width as any, height, borderRadius, backgroundColor: bg },
+        { width: width as any, height, borderRadius, backgroundColor: shine, opacity: shimmer },
         style,
       ]}
     />

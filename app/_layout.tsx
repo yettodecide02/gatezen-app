@@ -5,28 +5,93 @@ import {
 } from "@react-navigation/native";
 import { useFonts } from "expo-font";
 import * as Notifications from "expo-notifications";
-import { Stack, useRouter } from "expo-router";
+import { Stack, usePathname, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Platform, View } from "react-native";
 import "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { useColorScheme } from "@/hooks/useColorScheme";
+import { setupAxiosInterceptors } from "@/lib/api";
+import { getUser } from "@/lib/auth";
+import { subscribeToUserChannel } from "@/lib/intercom";
 import { configureNotificationHandler } from "@/lib/notifications";
 
 // Configure foreground notification behaviour once at the module level
 configureNotificationHandler();
 
+// Theme objects defined outside the component — no re-creation on every render
+const LightNavTheme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    background: "#ffffff",
+    card: "#ffffff",
+  },
+} as const;
+
+const DarkNavTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    background: "#000000",
+    card: "#000000",
+    border: "#111111",
+    text: "#ffffff",
+  },
+} as const;
+
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const router = useRouter();
+  const pathname = usePathname();
+  const pathnameRef = useRef(pathname);
   const notificationListener = useRef<
     Notifications.EventSubscription | undefined
   >(undefined);
   const responseListener = useRef<Notifications.EventSubscription | undefined>(
     undefined,
   );
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  // Keep pathname ref current so the subscription closure always reads the latest route
+  useEffect(() => {
+    pathnameRef.current = pathname;
+  }, [pathname]);
+
+  // Set up global 401 axios interceptor once
+  useEffect(() => {
+    setupAxiosInterceptors();
+  }, []);
+
+  // Load user id once (re-checks whenever the component remounts after login)
+  useEffect(() => {
+    getUser<{ id: string }>().then((u) => setCurrentUserId(u?.id ?? null));
+  }, []);
+
+  // Global incoming-call subscription — navigates to call screen from any route
+  useEffect(() => {
+    if (!currentUserId) return;
+    const unsub = subscribeToUserChannel(currentUserId, (type, payload) => {
+      if (type !== "call:incoming") return;
+      // Don't double-navigate if already on the call screen
+      if (pathnameRef.current?.includes("intercom/call")) return;
+      router.push({
+        pathname: "/intercom/call",
+        params: {
+          mode: "incoming",
+          callId: payload.callId,
+          callType: payload.callType,
+          peerId: payload.callerId,
+          peerName: payload.callerName,
+          peerUnit: payload.callerUnit ?? "",
+          peerBlock: payload.callerBlock ?? "",
+        },
+      });
+    });
+    return unsub;
+  }, [currentUserId]);
 
   useEffect(() => {
     // Listen for notifications received while app is in foreground
@@ -62,6 +127,9 @@ export default function RootLayout() {
           case "BOOKING_REMINDER":
             router.push("/resident/bookings");
             break;
+          case "INTERCOM_CALL":
+            // Handled by the global Supabase subscription; tap just opens the app
+            break;
           default:
             break;
         }
@@ -73,30 +141,11 @@ export default function RootLayout() {
     };
   }, []);
 
-  const LightNavTheme = {
-    ...DefaultTheme,
-    colors: {
-      ...DefaultTheme.colors,
-      background: "#ffffff",
-      card: "#ffffff",
-    },
-  } as const;
-  const DarkNavTheme = {
-    ...DarkTheme,
-    colors: {
-      ...DarkTheme.colors,
-      background: "#000000",
-      card: "#000000",
-      border: "#111111",
-      text: "#ffffff",
-    },
-  } as const;
   const [loaded] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
   });
 
   if (!loaded) {
-    // Async font loading only occurs in development.
     return null;
   }
 
@@ -135,6 +184,14 @@ export default function RootLayout() {
             <Stack.Screen name="resident/notice-board" />
             <Stack.Screen name="resident/surveys" />
             <Stack.Screen name="resident/election-polls" />
+            <Stack.Screen
+              name="intercom/call"
+              options={{
+                headerShown: false,
+                presentation: "fullScreenModal",
+                animation: "slide_from_bottom",
+              }}
+            />
           </Stack>
           <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
         </ThemeProvider>

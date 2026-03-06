@@ -80,12 +80,13 @@ export default function LoginScreen() {
         return;
       }
       await setToken(res.data.jwttoken);
-      if (res.data.user) await setUser(res.data.user);
+      const user = res.data.user ?? null;
+      if (user) await setUser(user);
       registerForPushNotifications(res.data.jwttoken).catch(() => {});
       showSuccess("Welcome back!");
-      if (res.data.user.status === "PENDING") router.replace("/auth/pending");
-      else if (res.data.user.role === "ADMIN") router.replace("/admin");
-      else if (res.data.user.role === "GATEKEEPER")
+      if (user?.status === "PENDING") router.replace("/auth/pending");
+      else if (user?.role === "ADMIN") router.replace("/admin");
+      else if (user?.role === "GATEKEEPER")
         router.replace("/gatekeeper/visitors");
       else router.replace("/(tabs)/home");
     } catch (err: any) {
@@ -155,7 +156,7 @@ export default function LoginScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
-              autoComplete="off"
+              autoComplete="email"
               returnKeyType="next"
               onSubmitEditing={() => pwRef.current?.focus()}
               placeholder="you@example.com"
@@ -179,7 +180,7 @@ export default function LoginScreen() {
               secureTextEntry={!showPw}
               autoCapitalize="none"
               autoCorrect={false}
-              autoComplete="off"
+              autoComplete="current-password"
               returnKeyType="done"
               onSubmitEditing={submit}
               placeholder="Your password"

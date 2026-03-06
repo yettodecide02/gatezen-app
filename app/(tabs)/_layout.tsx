@@ -2,7 +2,6 @@
 import { useEffect, useState } from "react";
 import { Tabs } from "expo-router/tabs";
 import { Feather } from "@expo/vector-icons";
-import { BlurView } from "expo-blur";
 import { Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColor } from "@/hooks/useThemeColor";

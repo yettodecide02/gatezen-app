@@ -19,49 +19,59 @@ export default function GoogleSignin() {
 
   const onPress = async () => {
     try {
-      // ✅ Construct redirect dynamically
       const redirectTo = makeRedirectUri({
         scheme: "gatezenapp",
         path: "auth/callback",
       });
 
-      // ✅ Start OAuth
+      // skipBrowserRedirect: true — we open the browser ourselves below.
+      // flowType is not a valid signInWithOAuth option; PKCE vs implicit is
+      // determined by the Supabase project settings or createClient config.
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
           redirectTo,
-          skipBrowserRedirect: false,
-          flowType: "pkce",
+          skipBrowserRedirect: true,
         },
       });
 
       if (error) throw error;
       if (!data?.url) throw new Error("No OAuth URL returned");
 
-      // ✅ Open system browser
       const result = await WebBrowser.openAuthSessionAsync(
         data.url,
         redirectTo,
       );
 
-      // ✅ When user returns
-      if (result.type === "success" && result.url) {
-        // 👇 Parse tokens from the URL fragment
-        const hash = result.url.split("#")[1];
-        const params = Object.fromEntries(new URLSearchParams(hash));
+      if (result.type !== "success" || !result.url) return;
 
+      // PKCE flow: redirect URL contains a `code` query parameter
+      const resultUrl = new URL(result.url);
+      const code = resultUrl.searchParams.get("code");
+      if (code) {
+        const { error: exchangeError } =
+          await supabase.auth.exchangeCodeForSession(result.url);
+        if (exchangeError) throw exchangeError;
+        router.replace("/auth/callback");
+        return;
+      }
+
+      // Implicit flow fallback: tokens in URL hash
+      const hash = result.url.split("#")[1];
+      if (hash) {
+        const params = Object.fromEntries(new URLSearchParams(hash));
         if (params.access_token && params.refresh_token) {
-          const { data, error } = await supabase.auth.setSession({
+          const { error: sessionError } = await supabase.auth.setSession({
             access_token: params.access_token,
             refresh_token: params.refresh_token,
           });
-
-          if (error) throw error;
+          if (sessionError) throw sessionError;
           router.replace("/auth/callback");
-        } else {
-          throw new Error("No access or refresh token in redirect URL");
+          return;
         }
       }
+
+      throw new Error("No authorization code or tokens found in redirect URL");
     } catch (err) {
       console.error("Google Sign-In Error:", err);
       showError(err?.message ?? "Google Sign-In failed");

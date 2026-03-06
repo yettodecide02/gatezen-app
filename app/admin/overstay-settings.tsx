@@ -20,9 +20,9 @@ import { useThemeColor } from "@/hooks/useThemeColor";
 import { useToast } from "@/hooks/useToast";
 import {
     DEFAULT_OVERSTAY_LIMITS,
-    fetchOvstayLimits,
+    fetchOverstayLimits,
     formatDuration,
-    saveOvstayLimits,
+    saveOverstayLimits,
 } from "@/lib/overstayLimits";
 
 // ── Visitor type metadata ──────────────────────────────────────
@@ -124,7 +124,7 @@ export default function OverstaySettings() {
   // Load current limits on mount
   useEffect(() => {
     (async () => {
-      const data = await fetchOvstayLimits();
+      const data = await fetchOverstayLimits();
       setLimits(data);
       setOriginal(data);
       // Initialise text input values
@@ -156,7 +156,7 @@ export default function OverstaySettings() {
 
   const handleSave = async () => {
     setSaving(true);
-    const result = await saveOvstayLimits(limits);
+    const result = await saveOverstayLimits(limits);
     setSaving(false);
     if (result.ok) {
       setOriginal({ ...limits });

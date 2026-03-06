@@ -1,5 +1,5 @@
 ﻿// @ts-nocheck
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -41,7 +41,8 @@ export default function ResidentForm() {
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  // Keep password in a ref, not state, to avoid exposing it in React DevTools
+  const passwordRef = useRef("");
   const [otp, setOtp] = useState("");
   const [selectedCommunity, setSelectedCommunity] = useState("");
   const [selectedBlock, setSelectedBlock] = useState("");
@@ -63,7 +64,7 @@ export default function ResidentForm() {
         if (data?.user) {
           setName(data.user.user_metadata.full_name || "");
           setEmail(data.user.email || "");
-          setPassword(config.googleSignupPassword || "");
+          passwordRef.current = config.googleSignupPassword || "";
           setStep(2);
         }
       } catch (err) {
@@ -190,16 +191,17 @@ export default function ResidentForm() {
       const res = await axios.post(`${config.backendUrl}/auth/signup`, {
         name,
         email,
-        password,
+        password: passwordRef.current,
         communityId: selectedCommunity,
         blockId: selectedBlock || null,
         unitId: selectedUnit || null,
       });
       if (res.status === 201) {
         await setToken(res.data.jwttoken);
-        await setUser(res.data.user);
+        const user = res.data.user ?? null;
+        if (user) await setUser(user);
         showSuccess("Registration successful!");
-        if (res.data.user.status === "PENDING") router.replace("/auth/pending");
+        if (user?.status === "PENDING") router.replace("/auth/pending");
         else router.replace("/(tabs)/home");
       } else showError("Registration failed");
     } catch (e) {

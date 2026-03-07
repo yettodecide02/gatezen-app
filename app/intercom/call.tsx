@@ -11,9 +11,6 @@ import { Feather } from "@expo/vector-icons";
 import { Audio } from "expo-av";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-// react-native-webrtc requires a native build (expo run:android / expo run:ios).
-// Using a safe dynamic require so the route still loads in environments where
-// the native module is not yet linked (e.g. Expo Go / web).
 let mediaDevices: any = null;
 let RTCPeerConnection: any = null;
 let RTCSessionDescription: any = null;

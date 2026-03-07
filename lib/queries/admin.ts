@@ -54,7 +54,7 @@ export async function fetchAdminMaintenance(
     params: { communityId },
     headers: authHeaders(token),
   });
-  const raw = res.data?.tickets ?? res.data;
+  const raw = res.data?.maintenance ?? res.data?.tickets ?? res.data;
   return Array.isArray(raw) ? raw : [];
 }
 
@@ -187,7 +187,7 @@ export async function fetchAdminNoticeBoard(
     params: { communityId },
     headers: authHeaders(token),
   });
-  const raw = res.data?.notices ?? res.data;
+  const raw = res.data?.data ?? res.data?.notices ?? res.data;
   return Array.isArray(raw) ? raw : [];
 }
 

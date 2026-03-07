@@ -131,7 +131,27 @@ export default function RootLayout() {
             router.push("/resident/bookings");
             break;
           case "INTERCOM_CALL":
-            // Handled by the global Supabase subscription; tap just opens the app
+            // Route to call screen from notification data.
+            // Covers the case where the app was killed and the Supabase
+            // broadcast was missed — the push carries all needed params.
+            if (
+              !pathnameRef.current?.includes("intercom/call") &&
+              data.callId &&
+              data.callerId
+            ) {
+              router.push({
+                pathname: "/intercom/call",
+                params: {
+                  mode: "incoming",
+                  callId: data.callId,
+                  callType: data.callType ?? "R2G",
+                  peerId: data.callerId,
+                  peerName: data.callerName ?? "Unknown",
+                  peerUnit: data.callerUnit ?? "",
+                  peerBlock: data.callerBlock ?? "",
+                },
+              });
+            }
             break;
           default:
             break;

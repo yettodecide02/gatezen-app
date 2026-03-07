@@ -14,6 +14,8 @@ export default ({ config }) => ({
       bundleIdentifier: "com.yettodecide.gatezenapp",
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
+        NSMicrophoneUsageDescription:
+          "Allow $(PRODUCT_NAME) to access your microphone for intercom calls.",
       },
     },
     android: {
@@ -22,7 +24,10 @@ export default ({ config }) => ({
         backgroundColor: "#000000",
       },
       edgeToEdgeEnabled: true,
-      permissions: ["android.permission.CAMERA"],
+      permissions: [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+      ],
       package: "com.yettodecide.gatezenapp",
       googleServicesFile: "./google-services.json",
     },

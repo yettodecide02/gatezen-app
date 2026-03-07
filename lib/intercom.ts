@@ -9,7 +9,19 @@ export type CallEventType =
   | "call:incoming"
   | "call:accepted"
   | "call:rejected"
-  | "call:ended";
+  | "call:ended"
+  | "call:sdp_offer"
+  | "call:sdp_answer";
+
+/**
+ * Payload for WebRTC SDP exchange events (call:sdp_offer / call:sdp_answer).
+ * The sdp field contains the complete SDP including all ICE candidates so
+ * no separate trickle-ICE signalling is needed.
+ */
+export interface WebRTCPayload {
+  callId: string;
+  sdp: { type: string; sdp: string };
+}
 
 export interface CallPayload {
   callId: string;
@@ -51,7 +63,7 @@ export function subscribeToUserChannel(
 async function sendToUser(
   userId: string,
   type: CallEventType,
-  payload: CallPayload,
+  payload: CallPayload | WebRTCPayload,
 ): Promise<void> {
   const ch = supabase.channel(`intercom:${userId}`);
 
@@ -90,6 +102,14 @@ export const rejectCall = (p: CallPayload) =>
 export const endCall = (otherUserId: string, p: CallPayload) =>
   sendToUser(otherUserId, "call:ended", p);
 
+/** Send SDP offer (all ICE candidates included) from caller to receiver. */
+export const sendSdpOffer = (targetUserId: string, p: WebRTCPayload) =>
+  sendToUser(targetUserId, "call:sdp_offer", p);
+
+/** Send SDP answer (all ICE candidates included) from receiver to caller. */
+export const sendSdpAnswer = (targetUserId: string, p: WebRTCPayload) =>
+  sendToUser(targetUserId, "call:sdp_answer", p);
+
 /**
  * Send a push notification to the call receiver so they get an alert
  * even when their app is running in the background or closed.
@@ -106,6 +126,7 @@ export async function notifyCallReceiver(
       `${config.backendUrl}/intercom/notify`,
       {
         receiverId: payload.receiverId,
+        callerId: payload.callerId,
         callerName: payload.callerName,
         callId: payload.callId,
         callType: payload.callType,

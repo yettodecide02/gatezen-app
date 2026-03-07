@@ -8,8 +8,14 @@ import {
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { Audio } from "expo-av";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  mediaDevices,
+  RTCPeerConnection,
+  RTCSessionDescription,
+} from "react-native-webrtc";
 
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
@@ -21,9 +27,11 @@ import {
   initiateCall,
   notifyCallReceiver,
   rejectCall,
+  sendSdpAnswer,
+  sendSdpOffer,
   subscribeToUserChannel,
 } from "@/lib/intercom";
-import type { CallPayload, CallType } from "@/lib/intercom";
+import type { CallPayload, CallType, WebRTCPayload } from "@/lib/intercom";
 
 type CallMode = "outgoing" | "incoming" | "active" | "declined" | "ended";
 
@@ -68,6 +76,29 @@ const CALL_TYPE_LABEL: Record<string, string> = {
 /** Ring timeout for outgoing calls (ms). */
 const RING_TIMEOUT_MS = 30_000;
 
+const STUN_CONFIG = {
+  iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+};
+
+/**
+ * Wait until all ICE candidates have been gathered (iceGatheringState ===
+ * "complete"). The null sentinel from onicecandidate signals completion.
+ * Falls back after 5 seconds so a stalled gather never blocks the call.
+ */
+async function waitForIceGathering(pc: RTCPeerConnection): Promise<void> {
+  if (pc.iceGatheringState === "complete") return;
+  return new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, 5000);
+    pc.addEventListener("icecandidate", function onIce({ candidate }) {
+      if (candidate === null) {
+        clearTimeout(timer);
+        pc.removeEventListener("icecandidate", onIce);
+        resolve();
+      }
+    });
+  });
+}
+
 export default function CallScreen() {
   const params = useLocalSearchParams<{
     mode: "outgoing" | "incoming";
@@ -95,6 +126,8 @@ export default function CallScreen() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const ringTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initiatedRef = useRef(false);
+  const pcRef = useRef<RTCPeerConnection | null>(null);
+  const localStreamRef = useRef(null);
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   const buildPayload = useCallback((): CallPayload => {
@@ -127,6 +160,40 @@ export default function CallScreen() {
     }
   }, []);
 
+  // ── WebRTC helpers ────────────────────────────────────────────────────────
+  const setupPeerConnection = useCallback(() => {
+    const pc = new RTCPeerConnection(STUN_CONFIG);
+    pcRef.current = pc;
+    return pc;
+  }, []);
+
+  const startAudio = useCallback(async () => {
+    try {
+      const stream = await mediaDevices.getUserMedia({
+        audio: true,
+        video: false,
+      });
+      localStreamRef.current = stream;
+      const pc = pcRef.current;
+      if (pc) {
+        stream.getAudioTracks().forEach((track) => pc.addTrack(track, stream));
+      }
+    } catch {
+      // Mic permission denied or hardware error — call proceeds without audio
+    }
+  }, []);
+
+  const cleanupWebRTC = useCallback(() => {
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((t) => t.stop());
+      localStreamRef.current = null;
+    }
+    if (pcRef.current) {
+      pcRef.current.close();
+      pcRef.current = null;
+    }
+  }, []);
+
   // ── Load current user ─────────────────────────────────────────────────────
   useEffect(() => {
     getUser().then(setCurrentUser);
@@ -136,7 +203,7 @@ export default function CallScreen() {
   useEffect(() => {
     if (!currentUser?.id) return;
     const unsub = subscribeToUserChannel(currentUser.id, (type, p) => {
-      if (p.callId !== params.callId) return; // different call — ignore
+      if ((p as any).callId !== params.callId) return; // different call — ignore
       if (type === "call:accepted") {
         if (ringTimeoutRef.current) {
           clearTimeout(ringTimeoutRef.current);
@@ -150,14 +217,43 @@ export default function CallScreen() {
         stopTimer();
         setTimeout(() => router.back(), 2500);
       } else if (type === "call:ended") {
+        cleanupWebRTC();
         setCallMode("ended");
         stopTimer();
         setTimeout(() => router.back(), 2500);
+      } else if (type === "call:sdp_offer") {
+        // Receiver: apply the caller's SDP offer and respond with an answer
+        const wp = p as any as WebRTCPayload;
+        if (!pcRef.current || !wp.sdp) return;
+        const pc = pcRef.current;
+        (async () => {
+          try {
+            await pc.setRemoteDescription(new RTCSessionDescription(wp.sdp));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            await waitForIceGathering(pc);
+            await sendSdpAnswer(params.peerId, {
+              callId: params.callId,
+              sdp: {
+                type: pc.localDescription.type,
+                sdp: pc.localDescription.sdp,
+              },
+            });
+          } catch {}
+        })();
+      } else if (type === "call:sdp_answer") {
+        // Caller: complete the WebRTC handshake with the receiver's SDP answer
+        const wp = p as any as WebRTCPayload;
+        if (!pcRef.current || !wp.sdp) return;
+        pcRef.current
+          .setRemoteDescription(new RTCSessionDescription(wp.sdp))
+          .catch(() => {});
       }
     });
     return () => {
       unsub();
       stopTimer();
+      cleanupWebRTC();
     };
   }, [currentUser?.id]);
 
@@ -190,6 +286,10 @@ export default function CallScreen() {
   const handleAccept = async () => {
     setAccepting(true);
     try {
+      // Setup WebRTC peer connection and acquire mic BEFORE signalling
+      // acceptance, so pcRef is ready when the caller's SDP offer arrives.
+      setupPeerConnection();
+      await startAudio();
       await acceptCall(buildPayload());
       setCallMode("active");
       startTimer();
@@ -201,6 +301,7 @@ export default function CallScreen() {
   };
 
   const handleDecline = async () => {
+    cleanupWebRTC();
     try {
       await rejectCall(buildPayload());
     } catch {}
@@ -209,6 +310,7 @@ export default function CallScreen() {
 
   const handleEnd = async () => {
     stopTimer();
+    cleanupWebRTC();
     if (ringTimeoutRef.current) {
       clearTimeout(ringTimeoutRef.current);
       ringTimeoutRef.current = null;
@@ -218,6 +320,45 @@ export default function CallScreen() {
     } catch {}
     router.back();
   };
+
+  // ── Caller: initiate WebRTC once the call becomes active ─────────────────
+  useEffect(() => {
+    if (callMode !== "active" || params.mode !== "outgoing") return;
+    (async () => {
+      try {
+        setupPeerConnection();
+        await startAudio();
+        const pc = pcRef.current;
+        if (!pc) return;
+        const offer = await pc.createOffer({ offerToReceiveAudio: true });
+        await pc.setLocalDescription(offer);
+        await waitForIceGathering(pc);
+        await sendSdpOffer(params.peerId, {
+          callId: params.callId,
+          sdp: { type: pc.localDescription.type, sdp: pc.localDescription.sdp },
+        });
+      } catch {}
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [callMode]);
+
+  // ── Mute: toggle local audio track enabled state ──────────────────────────
+  useEffect(() => {
+    if (!localStreamRef.current) return;
+    localStreamRef.current.getAudioTracks().forEach((track) => {
+      track.enabled = !isMuted;
+    });
+  }, [isMuted]);
+
+  // ── Speaker: route audio output between earpiece and loudspeaker ──────────
+  useEffect(() => {
+    if (callMode !== "active") return;
+    Audio.setAudioModeAsync({
+      allowsRecordingIOS: true,
+      playsInSilentModeIOS: true,
+      playThroughEarpieceAndroid: !isSpeaker,
+    }).catch(() => {});
+  }, [isSpeaker, callMode]);
 
   // ── Render helpers ────────────────────────────────────────────────────────
   const aColor = avatarColor(params.peerName ?? "");

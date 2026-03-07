@@ -11,11 +11,20 @@ import { Feather } from "@expo/vector-icons";
 import { Audio } from "expo-av";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import {
-  mediaDevices,
-  RTCPeerConnection,
-  RTCSessionDescription,
-} from "react-native-webrtc";
+// react-native-webrtc requires a native build (expo run:android / expo run:ios).
+// Using a safe dynamic require so the route still loads in environments where
+// the native module is not yet linked (e.g. Expo Go / web).
+let mediaDevices: any = null;
+let RTCPeerConnection: any = null;
+let RTCSessionDescription: any = null;
+try {
+  const WebRTC = require("react-native-webrtc");
+  mediaDevices = WebRTC.mediaDevices;
+  RTCPeerConnection = WebRTC.RTCPeerConnection;
+  RTCSessionDescription = WebRTC.RTCSessionDescription;
+} catch {
+  // Native module not available – calling features will be disabled
+}
 
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
@@ -162,12 +171,14 @@ export default function CallScreen() {
 
   // ── WebRTC helpers ────────────────────────────────────────────────────────
   const setupPeerConnection = useCallback(() => {
+    if (!RTCPeerConnection) return null;
     const pc = new RTCPeerConnection(STUN_CONFIG);
     pcRef.current = pc;
     return pc;
   }, []);
 
   const startAudio = useCallback(async () => {
+    if (!mediaDevices) return;
     try {
       const stream = await mediaDevices.getUserMedia({
         audio: true,
@@ -224,7 +235,7 @@ export default function CallScreen() {
       } else if (type === "call:sdp_offer") {
         // Receiver: apply the caller's SDP offer and respond with an answer
         const wp = p as any as WebRTCPayload;
-        if (!pcRef.current || !wp.sdp) return;
+        if (!pcRef.current || !wp.sdp || !RTCSessionDescription) return;
         const pc = pcRef.current;
         (async () => {
           try {
@@ -244,7 +255,7 @@ export default function CallScreen() {
       } else if (type === "call:sdp_answer") {
         // Caller: complete the WebRTC handshake with the receiver's SDP answer
         const wp = p as any as WebRTCPayload;
-        if (!pcRef.current || !wp.sdp) return;
+        if (!pcRef.current || !wp.sdp || !RTCSessionDescription) return;
         pcRef.current
           .setRemoteDescription(new RTCSessionDescription(wp.sdp))
           .catch(() => {});

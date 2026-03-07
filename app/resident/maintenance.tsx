@@ -1,6 +1,8 @@
 ﻿// @ts-nocheck
 import React, { useRef, useState } from "react";
 import {
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   Text,
   View,
@@ -399,12 +401,13 @@ export default function Maintenance() {
         transparent
         onRequestClose={() => setShowNew(false)}
       >
-        <View
+        <KeyboardAvoidingView
           style={{
             flex: 1,
             backgroundColor: "rgba(0,0,0,0.5)",
             justifyContent: "flex-end",
           }}
+          behavior={Platform.select({ ios: "padding", android: "height" })}
         >
           <View
             style={{
@@ -563,7 +566,7 @@ export default function Maintenance() {
               )}
             </Pressable>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Detail modal */}

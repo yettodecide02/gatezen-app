@@ -587,7 +587,7 @@ export default function AdminMeetings() {
         <View style={{ flex: 1, backgroundColor: bg }}>
           <View
             style={{
-              paddingTop: 20,
+              paddingTop: Math.max(insets.top, 20),
               paddingBottom: 14,
               paddingHorizontal: 20,
               borderBottomWidth: 1,

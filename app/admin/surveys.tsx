@@ -805,6 +805,10 @@ export default function AdminSurveys() {
     onSettled: () => setDeleteConfirmId(null),
   });
 
+  const handleViewResults = (id: string) => {
+    router.push(`/admin/survey-results?id=${id}`);
+  };
+
   const tabs = [
     { key: "active", label: "Active", icon: "zap" },
     { key: "upcoming", label: "Upcoming", icon: "clock" },

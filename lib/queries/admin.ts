@@ -77,11 +77,11 @@ export async function fetchAdminBookings(
   communityId: string,
 ) {
   try {
-    const res = await axios.get(`${BASE}/admin/parking/spots`, {
+    const res = await axios.get(`${BASE}/admin/bookings`, {
       params: { communityId },
       headers: authHeaders(token),
     });
-    const raw = res.data?.spots ?? res.data;
+    const raw = res.data?.bookings ?? res.data;
     return Array.isArray(raw) ? raw : [];
   } catch {
     return [];

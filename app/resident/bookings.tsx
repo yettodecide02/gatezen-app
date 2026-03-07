@@ -139,7 +139,7 @@ export default function BookingsScreen() {
   const [showBookForm, setShowBookForm] = useState(false);
 
   // Facilities query
-  const { data: rawFacilities = [] } = useQuery({
+  const { data: rawFacilities } = useQuery({
     queryKey: queryKeys.resident.facilities(user?.communityId ?? ""),
     queryFn: () => fetchResidentFacilities(token, user!.communityId as string),
     enabled: !!user?.communityId && !!token,
@@ -147,7 +147,7 @@ export default function BookingsScreen() {
   });
   const facilities = useMemo(
     () =>
-      rawFacilities.map((a) => ({
+      (rawFacilities ?? []).map((a) => ({
         ...a,
         facilityType: a.facilityType?.replace(/_/g, " ") ?? a.facilityType,
       })),

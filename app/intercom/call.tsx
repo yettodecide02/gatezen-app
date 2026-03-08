@@ -433,12 +433,16 @@ export default function CallScreen() {
   }, [isMuted]);
 
   // ── Speaker: route audio output between earpiece and loudspeaker ──────────
+  // iOS only: on Android, react-native-webrtc owns AudioManager
+  // (MODE_IN_COMMUNICATION). Calling setAudioModeAsync here overrides
+  // that and silently breaks remote audio playback — same reason startAudio()
+  // skips this on Android. Speaker button remains visible but only works on iOS.
   useEffect(() => {
     if (callMode !== "active") return;
+    if (Platform.OS !== "ios") return;
     Audio.setAudioModeAsync({
       allowsRecordingIOS: true,
       playsInSilentModeIOS: true,
-      playThroughEarpieceAndroid: !isSpeaker,
     }).catch(() => {});
   }, [isSpeaker, callMode]);
 

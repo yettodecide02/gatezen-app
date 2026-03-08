@@ -21,6 +21,23 @@ export function configureNotificationHandler() {
 }
 
 /**
+ * Create the Android notification channel used for all CGate notifications.
+ * Call this unconditionally at app startup — before any JWT is available —
+ * so the channel exists before any notification can arrive.
+ * Safe to call multiple times; Android's setNotificationChannelAsync is idempotent.
+ */
+export async function createNotificationChannel(): Promise<void> {
+  if (Platform.OS !== "android") return;
+  await Notifications.setNotificationChannelAsync("default", {
+    name: "CGate",
+    importance: Notifications.AndroidImportance.MAX,
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: "#6366F1",
+    sound: "default",
+  });
+}
+
+/**
  * Register for push notifications, obtain the Expo push token,
  * and save it to the backend so the server can send notifications.
  *
@@ -33,17 +50,6 @@ export async function registerForPushNotifications(
   if (!Device.isDevice) {
     console.log("Push notifications require a physical device.");
     return;
-  }
-
-  // Android requires a notification channel
-  if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync("default", {
-      name: "CGate",
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: "#6366F1",
-      sound: "default",
-    });
   }
 
   // Request permission

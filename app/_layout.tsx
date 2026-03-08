@@ -22,6 +22,7 @@ import queryClient from "@/lib/queryClient";
 import { subscribeToUserChannel } from "@/lib/intercom";
 import {
   configureNotificationHandler,
+  createNotificationChannel,
   registerForPushNotifications,
 } from "@/lib/notifications";
 
@@ -66,6 +67,9 @@ function IntercomSubscription() {
 
 // Configure foreground notification behaviour once at the module level
 configureNotificationHandler();
+// Create the Android notification channel at raw startup, before any JWT is
+// available, so Android never silently discards notifications due to a missing channel.
+createNotificationChannel().catch(() => {});
 
 // Theme objects defined outside the component — no re-creation on every render
 const LightNavTheme = {

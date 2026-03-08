@@ -7,19 +7,62 @@ import { useFonts } from "expo-font";
 import * as Notifications from "expo-notifications";
 import { Stack, usePathname, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { Platform, View } from "react-native";
 import "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { QueryClientProvider } from "@tanstack/react-query";
 import { AppContextProvider } from "@/contexts/AppContext";
+import { useAppContext } from "@/contexts/AppContext";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { setupAxiosInterceptors } from "@/lib/api";
-import { getUser } from "@/lib/auth";
+import { getToken } from "@/lib/auth";
 import queryClient from "@/lib/queryClient";
 import { subscribeToUserChannel } from "@/lib/intercom";
-import { configureNotificationHandler } from "@/lib/notifications";
+import {
+  configureNotificationHandler,
+  registerForPushNotifications,
+} from "@/lib/notifications";
+
+/**
+ * Handles the global incoming-call Supabase subscription.
+ * Must live INSIDE AppContextProvider so useAppContext() works and the
+ * subscription is re-established whenever the user logs in or changes.
+ */
+function IntercomSubscription() {
+  const { user } = useAppContext();
+  const router = useRouter();
+  const pathname = usePathname();
+  const pathnameRef = useRef(pathname);
+
+  useEffect(() => {
+    pathnameRef.current = pathname;
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const unsub = subscribeToUserChannel(user.id, (type, payload) => {
+      if (type !== "call:incoming") return;
+      if (pathnameRef.current?.includes("intercom/call")) return;
+      router.push({
+        pathname: "/intercom/call",
+        params: {
+          mode: "incoming",
+          callId: payload.callId,
+          callType: payload.callType,
+          peerId: payload.callerId,
+          peerName: payload.callerName,
+          peerUnit: payload.callerUnit ?? "",
+          peerBlock: payload.callerBlock ?? "",
+        },
+      });
+    });
+    return unsub;
+  }, [user?.id]);
+
+  return null;
+}
 
 // Configure foreground notification behaviour once at the module level
 configureNotificationHandler();
@@ -56,7 +99,6 @@ export default function RootLayout() {
   const responseListener = useRef<Notifications.EventSubscription | undefined>(
     undefined,
   );
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   // Keep pathname ref current so the subscription closure always reads the latest route
   useEffect(() => {
@@ -68,101 +110,99 @@ export default function RootLayout() {
     setupAxiosInterceptors();
   }, []);
 
-  // Load user id once (re-checks whenever the component remounts after login)
+  // Re-register push token on every app cold-start so a stale DB token is refreshed
   useEffect(() => {
-    getUser<{ id: string }>().then((u) => setCurrentUserId(u?.id ?? null));
+    getToken().then((t) => {
+      if (t) registerForPushNotifications(t).catch(() => {});
+    });
   }, []);
 
-  // Global incoming-call subscription — navigates to call screen from any route
-  useEffect(() => {
-    if (!currentUserId) return;
-    const unsub = subscribeToUserChannel(currentUserId, (type, payload) => {
-      if (type !== "call:incoming") return;
-      // Don't double-navigate if already on the call screen
-      if (pathnameRef.current?.includes("intercom/call")) return;
-      router.push({
-        pathname: "/intercom/call",
-        params: {
-          mode: "incoming",
-          callId: payload.callId,
-          callType: payload.callType,
-          peerId: payload.callerId,
-          peerName: payload.callerName,
-          peerUnit: payload.callerUnit ?? "",
-          peerBlock: payload.callerBlock ?? "",
-        },
-      });
-    });
-    return unsub;
-  }, [currentUserId]);
+  // Shared handler so the same navigation logic runs for both:
+  //   (a) background/foreground notification taps  → addNotificationResponseReceivedListener
+  //   (b) killed-app launches via notification tap → getLastNotificationResponseAsync
+  const handleNotificationResponse = useCallback(
+    (data: Record<string, string>) => {
+      if (!data?.type) return;
+      switch (data.type) {
+        case "VISITOR_CHECKIN":
+          router.push("/resident/visitors/passes");
+          break;
+        case "PACKAGE":
+          router.push("/resident/mypackages");
+          break;
+        case "ANNOUNCEMENT":
+          router.push("/(tabs)/home");
+          break;
+        case "TICKET_UPDATE":
+          router.push("/resident/maintenance");
+          break;
+        case "NEW_USER":
+          router.push("/admin");
+          break;
+        case "BOOKING_REMINDER":
+          router.push("/resident/bookings");
+          break;
+        case "INTERCOM_CALL":
+          if (
+            !pathnameRef.current?.includes("intercom/call") &&
+            data.callId &&
+            data.callerId
+          ) {
+            router.push({
+              pathname: "/intercom/call",
+              params: {
+                mode: "incoming",
+                callId: data.callId,
+                callType: data.callType ?? "R2G",
+                peerId: data.callerId,
+                peerName: data.callerName ?? "Unknown",
+                peerUnit: data.callerUnit ?? "",
+                peerBlock: data.callerBlock ?? "",
+              },
+            });
+          }
+          break;
+        default:
+          break;
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
+    // Handle the notification that LAUNCHED the app from a killed state.
+    // addNotificationResponseReceivedListener does NOT fire for this case;
+    // only getLastNotificationResponseAsync() catches it.
+    Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (!response) return;
+      const data = response.notification.request.content.data as Record<
+        string,
+        string
+      >;
+      handleNotificationResponse(data);
+    });
+
     // Listen for notifications received while app is in foreground
     notificationListener.current =
       Notifications.addNotificationReceivedListener(() => {
-        // Notification received — badge / alert handled by the handler above
+        // Notification received — badge / alert handled by configureNotificationHandler
       });
 
-    // Listen for taps on notifications (foreground, background, or closed)
+    // Listen for taps on notifications (foreground or background — NOT killed state)
     responseListener.current =
       Notifications.addNotificationResponseReceivedListener((response) => {
         const data = response.notification.request.content.data as Record<
           string,
           string
         >;
-        if (!data?.type) return;
-        switch (data.type) {
-          case "VISITOR_CHECKIN":
-            router.push("/resident/visitors/passes");
-            break;
-          case "PACKAGE":
-            router.push("/resident/mypackages");
-            break;
-          case "ANNOUNCEMENT":
-            router.push("/(tabs)/home");
-            break;
-          case "TICKET_UPDATE":
-            router.push("/resident/maintenance");
-            break;
-          case "NEW_USER":
-            router.push("/admin");
-            break;
-          case "BOOKING_REMINDER":
-            router.push("/resident/bookings");
-            break;
-          case "INTERCOM_CALL":
-            // Route to call screen from notification data.
-            // Covers the case where the app was killed and the Supabase
-            // broadcast was missed — the push carries all needed params.
-            if (
-              !pathnameRef.current?.includes("intercom/call") &&
-              data.callId &&
-              data.callerId
-            ) {
-              router.push({
-                pathname: "/intercom/call",
-                params: {
-                  mode: "incoming",
-                  callId: data.callId,
-                  callType: data.callType ?? "R2G",
-                  peerId: data.callerId,
-                  peerName: data.callerName ?? "Unknown",
-                  peerUnit: data.callerUnit ?? "",
-                  peerBlock: data.callerBlock ?? "",
-                },
-              });
-            }
-            break;
-          default:
-            break;
-        }
+        handleNotificationResponse(data);
       });
 
     return () => {
       notificationListener.current?.remove();
       responseListener.current?.remove();
     };
-  }, []);
+  }, [handleNotificationResponse]);
 
   const [loaded] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
@@ -175,6 +215,7 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <AppContextProvider>
+        <IntercomSubscription />
         <SafeAreaProvider>
           <View
             style={{

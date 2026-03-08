@@ -28,6 +28,31 @@ export const config = {
     process.env.EXPO_PUBLIC_GOOGLE_SIGNUP_PASSWORD ||
     Constants.expoConfig?.extra?.googleSignupPassword ||
     "1234567890", // Must be set via EXPO_PUBLIC_GOOGLE_SIGNUP_PASSWORD env var
+
+  turnUrl:
+    process.env.EXPO_PUBLIC_TURN_URL ||
+    Constants.expoConfig?.extra?.turnUrl ||
+    "",
+
+  turnUrlTcp:
+    process.env.EXPO_PUBLIC_TURN_URL_TCP ||
+    Constants.expoConfig?.extra?.turnUrlTcp ||
+    "",
+
+  turnUrlTls:
+    process.env.EXPO_PUBLIC_TURN_URL_TLS ||
+    Constants.expoConfig?.extra?.turnUrlTls ||
+    "",
+
+  turnUsername:
+    process.env.EXPO_PUBLIC_TURN_USERNAME ||
+    Constants.expoConfig?.extra?.turnUsername ||
+    "",
+
+  turnCredential:
+    process.env.EXPO_PUBLIC_TURN_CREDENTIAL ||
+    Constants.expoConfig?.extra?.turnCredential ||
+    "",
 };
 
 // Log configuration status (development only)

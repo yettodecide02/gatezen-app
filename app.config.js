@@ -37,6 +37,7 @@ export default ({ config }) => ({
       favicon: "./assets/images/favicon.png",
     },
     plugins: [
+      "./plugins/withWebRTCFix",
       "expo-router",
       [
         "expo-splash-screen",
@@ -98,6 +99,18 @@ export default ({ config }) => ({
         process.env.EXPO_PUBLIC_BACKEND_URL || "https://api.communitygate.in",
       googleSignupPassword:
         process.env.EXPO_PUBLIC_GOOGLE_SIGNUP_PASSWORD || "1234567890",
+      turnUrl:
+        process.env.EXPO_PUBLIC_TURN_URL || "turn:global.relay.metered.ca:80",
+      turnUrlTcp:
+        process.env.EXPO_PUBLIC_TURN_URL_TCP ||
+        "turn:global.relay.metered.ca:80?transport=tcp",
+      turnUrlTls:
+        process.env.EXPO_PUBLIC_TURN_URL_TLS ||
+        "turns:global.relay.metered.ca:443?transport=tcp",
+      turnUsername:
+        process.env.EXPO_PUBLIC_TURN_USERNAME || "d54c960469db5a998b2dc569",
+      turnCredential:
+        process.env.EXPO_PUBLIC_TURN_CREDENTIAL || "FzA2/blPOgmib8e7",
     },
   },
 });

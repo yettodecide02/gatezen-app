@@ -2,6 +2,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   Text,
   Vibration,
@@ -26,6 +27,7 @@ try {
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { getToken, getUser } from "@/lib/auth";
+import { config } from "@/lib/config";
 import {
   acceptCall,
   endCall,
@@ -82,9 +84,27 @@ const CALL_TYPE_LABEL: Record<string, string> = {
 /** Ring timeout for outgoing calls (ms). */
 const RING_TIMEOUT_MS = 30_000;
 
-const STUN_CONFIG = {
-  iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-};
+function buildIceConfig() {
+  const servers: RTCIceServer[] = [
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" },
+  ];
+  const turnUser = config.turnUsername;
+  const turnCred = config.turnCredential;
+  if (turnUser && turnCred) {
+    // Add all TURN variants (UDP, TCP, TLS) for maximum NAT traversal coverage.
+    // Without TCP/TLS fallbacks, calls fail on firewalls that block UDP.
+    const urls: string[] = [];
+    if (config.turnUrl) urls.push(config.turnUrl);
+    if (config.turnUrlTcp) urls.push(config.turnUrlTcp);
+    if (config.turnUrlTls) urls.push(config.turnUrlTls);
+    if (urls.length > 0) {
+      servers.push({ urls, username: turnUser, credential: turnCred });
+    }
+  }
+  return { iceServers: servers };
+}
+const STUN_CONFIG = buildIceConfig();
 
 /**
  * Wait until all ICE candidates have been gathered (iceGatheringState ===
@@ -171,12 +191,51 @@ export default function CallScreen() {
     if (!RTCPeerConnection) return null;
     const pc = new RTCPeerConnection(STUN_CONFIG);
     pcRef.current = pc;
+
+    // Handle remote audio tracks — without this the other party's audio is
+    // received by the peer connection but never routed to the device speaker.
+    pc.ontrack = (event: any) => {
+      console.log("[Intercom] Remote track received:", event.track?.kind);
+    };
+
+    // Monitor ICE connection state — end the call gracefully on failure.
+    pc.oniceconnectionstatechange = () => {
+      const state = pc.iceConnectionState;
+      console.log("[Intercom] ICE connection state:", state);
+      if (state === "failed") {
+        console.warn(
+          "[Intercom] ICE failed — check TURN credentials or network. Ending call.",
+        );
+        // Inline cleanup avoids stale-closure issues with cleanupWebRTC.
+        if (localStreamRef.current) {
+          localStreamRef.current.getTracks().forEach((t: any) => t.stop());
+          localStreamRef.current = null;
+        }
+        pcRef.current?.close();
+        pcRef.current = null;
+        setCallMode("ended");
+        setTimeout(() => router.back(), 2500);
+      }
+    };
+
     return pc;
   }, []);
 
   const startAudio = useCallback(async () => {
     if (!mediaDevices) return;
     try {
+      // iOS: needs explicit audio session for mic + silent-mode playback.
+      // Android: react-native-webrtc owns AudioManager (MODE_IN_COMMUNICATION
+      // + audio focus). Calling setAudioModeAsync on Android BEFORE WebRTC
+      // initializes overrides that setup and silently breaks both mic recording
+      // and remote audio playback. So we skip it entirely on Android.
+      if (Platform.OS === "ios") {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+        });
+      }
+
       const stream = await mediaDevices.getUserMedia({
         audio: true,
         video: false,
@@ -186,8 +245,11 @@ export default function CallScreen() {
       if (pc) {
         stream.getAudioTracks().forEach((track) => pc.addTrack(track, stream));
       }
-    } catch {
-      // Mic permission denied or hardware error — call proceeds without audio
+    } catch (err) {
+      console.error(
+        "[Intercom] startAudio failed (mic denied or hw error):",
+        err,
+      );
     }
   }, []);
 
@@ -247,7 +309,9 @@ export default function CallScreen() {
                 sdp: pc.localDescription.sdp,
               },
             });
-          } catch {}
+          } catch (err) {
+            console.error("[Intercom] SDP answer failed:", err);
+          }
         })();
       } else if (type === "call:sdp_answer") {
         // Caller: complete the WebRTC handshake with the receiver's SDP answer
@@ -255,7 +319,9 @@ export default function CallScreen() {
         if (!pcRef.current || !wp.sdp || !RTCSessionDescription) return;
         pcRef.current
           .setRemoteDescription(new RTCSessionDescription(wp.sdp))
-          .catch(() => {});
+          .catch((err) =>
+            console.error("[Intercom] setRemoteDescription failed:", err),
+          );
       }
     });
     return () => {
@@ -271,11 +337,15 @@ export default function CallScreen() {
       return;
     initiatedRef.current = true;
     const payload = buildPayload();
-    // Initiate Supabase broadcast and send push notification concurrently
-    Promise.all([
-      initiateCall(payload),
-      getToken().then((token) => notifyCallReceiver(payload, token)),
-    ]).catch(() => router.back());
+    // Initiate Supabase realtime broadcast (primary delivery) and push
+    // notification (background/killed fallback) concurrently.
+    // Only navigate back if the realtime broadcast itself fails — the push
+    // notification is best-effort and failures are non-fatal.
+    initiateCall(payload).catch((err) => {
+      console.error("[Intercom] initiateCall failed:", err);
+      router.back();
+    });
+    getToken().then((token) => notifyCallReceiver(payload, token));
 
     // Auto-cancel if no answer within RING_TIMEOUT_MS
     ringTimeoutRef.current = setTimeout(async () => {
@@ -302,7 +372,9 @@ export default function CallScreen() {
       setCallMode("active");
       startTimer();
       Vibration.vibrate(50);
-    } catch {
+    } catch (err) {
+      console.error("[Intercom] handleAccept failed:", err);
+      cleanupWebRTC();
     } finally {
       setAccepting(false);
     }
@@ -345,7 +417,9 @@ export default function CallScreen() {
           callId: params.callId,
           sdp: { type: pc.localDescription.type, sdp: pc.localDescription.sdp },
         });
-      } catch {}
+      } catch (err) {
+        console.error("[Intercom] SDP offer failed:", err);
+      }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callMode]);

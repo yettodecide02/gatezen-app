@@ -9,7 +9,14 @@
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_TURN_URL": "turn:global.relay.metered.ca:80",
+        "EXPO_PUBLIC_TURN_URL_TCP": "turn:global.relay.metered.ca:80?transport=tcp",
+        "EXPO_PUBLIC_TURN_URL_TLS": "turns:global.relay.metered.ca:443?transport=tcp",
+        "EXPO_PUBLIC_TURN_USERNAME": "d54c960469db5a998b2dc569",
+        "EXPO_PUBLIC_TURN_CREDENTIAL": "FzA2/blPOgmib8e7"
+      }
     },
     "production": {
       "autoIncrement": true

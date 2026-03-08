@@ -12,7 +12,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.yettodecide.gatezenapp",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to access your microphone for intercom calls."
       }
     },
     "android": {
@@ -22,10 +23,11 @@
       },
       "edgeToEdgeEnabled": true,
       "permissions": [
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ],
       "package": "com.yettodecide.gatezenapp",
-      "googleServicesFile": "./path/to/google-services.json"
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "bundler": "metro",
@@ -33,6 +35,7 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "./plugins/withWebRTCFix",
       "expo-router",
       [
         "expo-splash-screen",
@@ -51,6 +54,14 @@
         }
       ],
       "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#6366F1",
+          "sounds": []
+        }
+      ],
       [
         "expo-build-properties",
         {
@@ -71,7 +82,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "e56eade6-43e3-4685-9a58-f6b20f009650"
+        "projectId": "522cf5b5-95e5-4b52-bac0-b3273b4cfc5a"
       }
     }
   }

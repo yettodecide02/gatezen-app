@@ -135,7 +135,11 @@ export async function notifyCallReceiver(
       },
       { headers: { Authorization: `Bearer ${token}` } },
     );
-  } catch {
-    // Non-critical — do not block the call
+  } catch (err) {
+    // Non-critical — do not block the call, but log so we can diagnose push issues
+    console.warn(
+      "[Intercom] notifyCallReceiver failed (push not delivered):",
+      err,
+    );
   }
 }

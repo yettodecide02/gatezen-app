@@ -28,6 +28,7 @@ export default function ForgotPasswordScreen() {
   const [showPw, setShowPw] = useState(false);
   const [stage, setStage] = useState<"email" | "otp" | "reset">("email");
   const [loading, setLoading] = useState(false);
+  const [resetToken, setResetToken] = useState("");
   const [emailErr, setEmailErr] = useState("");
   const [otpErr, setOtpErr] = useState("");
   const [passwordErr, setPasswordErr] = useState("");
@@ -107,11 +108,12 @@ export default function ForgotPasswordScreen() {
         showSuccess(
           res?.data?.message || "Code verified — set your new password.",
         );
+        setResetToken(res.data.resetToken || "");
         setStage("reset");
       } else {
         const res = await axios.post(
           `${config.backendUrl}/auth/password-reset`,
-          { email: email.trim(), password: newPassword },
+          { password: newPassword, resetToken },
         );
         showSuccess(
           res?.data?.message || "Password reset! You can now sign in.",

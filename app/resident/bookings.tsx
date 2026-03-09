@@ -233,7 +233,7 @@ export default function BookingsScreen() {
   const minsLeft = Math.max(0, 180 - minsUsed);
 
   const isSlotBooked = (slot) => {
-    const cap = facility?.capacity || 1;
+    const cap = facility?.maxCapacity ?? facility?.capacity ?? 1;
     const bookedPeople = bookings
       .filter(
         (b) =>
@@ -282,7 +282,7 @@ export default function BookingsScreen() {
       );
       return;
     }
-    const cap = facility?.capacity || 10;
+    const cap = facility?.maxCapacity ?? facility?.capacity ?? 10;
     const bookedCount = bookings
       .filter(
         (b) =>
@@ -832,9 +832,18 @@ export default function BookingsScreen() {
               Available Slots
             </Text>
             {!!slotErr && (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 8 }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 4,
+                  marginBottom: 8,
+                }}
+              >
                 <Feather name="alert-circle" size={12} color="#EF4444" />
-                <Text style={{ fontSize: 12, color: "#EF4444" }}>{slotErr}</Text>
+                <Text style={{ fontSize: 12, color: "#EF4444" }}>
+                  {slotErr}
+                </Text>
               </View>
             )}
             {slots.length === 0 ? (
@@ -855,7 +864,7 @@ export default function BookingsScreen() {
                   const past = isSlotPast(slot);
                   const sel = selectedSlot === slot.start;
                   const disabled = booked || past;
-                  const cap = facility?.capacity || 1;
+                  const cap = facility?.maxCapacity ?? facility?.capacity ?? 1;
                   const bookedPeople = bookings
                     .filter(
                       (b) =>
@@ -958,9 +967,18 @@ export default function BookingsScreen() {
                 }}
               />
               {!!peopleErr && (
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 5 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 4,
+                    marginTop: 5,
+                  }}
+                >
                   <Feather name="alert-circle" size={12} color="#EF4444" />
-                  <Text style={{ fontSize: 12, color: "#EF4444" }}>{peopleErr}</Text>
+                  <Text style={{ fontSize: 12, color: "#EF4444" }}>
+                    {peopleErr}
+                  </Text>
                 </View>
               )}
             </View>

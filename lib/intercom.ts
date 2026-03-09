@@ -39,15 +39,37 @@ export function generateCallId(): string {
 }
 
 /**
+ * Subscribe only to new incoming calls addressed to a user.
+ * Uses a dedicated channel (no callId) so the listener can be established
+ * before any call exists — used by the global layout-level listener.
+ * Returns a cleanup function that unsubscribes.
+ */
+export function subscribeToIncomingCalls(
+  userId: string,
+  onIncoming: (payload: CallPayload) => void,
+): () => void {
+  const ch = supabase
+    .channel(`intercom:incoming:${userId}`)
+    .on("broadcast", { event: "call:incoming" }, ({ payload }) => {
+      onIncoming(payload as CallPayload);
+    })
+    .subscribe();
+  return () => supabase.removeChannel(ch);
+}
+
+/**
  * Subscribe to call events addressed to a user.
+ * Each call uses an isolated channel keyed on callId so stale events
+ * from a previous call on the same userId never bleed into the new one.
  * Returns a cleanup function that unsubscribes.
  */
 export function subscribeToUserChannel(
   userId: string,
+  callId: string,
   onEvent: (type: CallEventType, payload: CallPayload) => void,
 ): () => void {
   const ch = supabase
-    .channel(`intercom:${userId}`)
+    .channel(`intercom:${userId}:${callId}`)
     .on("broadcast", { event: "*" }, ({ event, payload }) => {
       onEvent(event as CallEventType, payload as CallPayload);
     })
@@ -58,14 +80,15 @@ export function subscribeToUserChannel(
 
 /**
  * Send a call event to another user's channel.
- * Creates a temporary subscription on the receiver's channel to broadcast.
+ * The channel is keyed on callId so each call has an isolated signalling lane.
  */
 async function sendToUser(
   userId: string,
+  callId: string,
   type: CallEventType,
   payload: CallPayload | WebRTCPayload,
 ): Promise<void> {
-  const ch = supabase.channel(`intercom:${userId}`);
+  const ch = supabase.channel(`intercom:${userId}:${callId}`);
 
   await new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("Timeout")), 8000);
@@ -86,29 +109,46 @@ async function sendToUser(
   supabase.removeChannel(ch);
 }
 
-/** Send call:incoming to the receiver. */
-export const initiateCall = (p: CallPayload) =>
-  sendToUser(p.receiverId, "call:incoming", p);
+/** Send call:incoming to the receiver's dedicated incoming-call channel. */
+export const initiateCall = (p: CallPayload) => {
+  const ch = supabase.channel(`intercom:incoming:${p.receiverId}`);
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("Timeout")), 8000);
+    ch.subscribe((status) => {
+      if (status === "SUBSCRIBED") {
+        clearTimeout(timer);
+        resolve();
+      } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+        clearTimeout(timer);
+        reject(new Error(status));
+      }
+    });
+  }).then(async () => {
+    await ch.send({ type: "broadcast", event: "call:incoming", payload: p });
+    await new Promise((r) => setTimeout(r, 300));
+    supabase.removeChannel(ch);
+  });
+};
 
 /** Send call:accepted to the caller. */
 export const acceptCall = (p: CallPayload) =>
-  sendToUser(p.callerId, "call:accepted", p);
+  sendToUser(p.callerId, p.callId, "call:accepted", p);
 
 /** Send call:rejected to the caller. */
 export const rejectCall = (p: CallPayload) =>
-  sendToUser(p.callerId, "call:rejected", p);
+  sendToUser(p.callerId, p.callId, "call:rejected", p);
 
 /** Send call:ended to the other party. */
 export const endCall = (otherUserId: string, p: CallPayload) =>
-  sendToUser(otherUserId, "call:ended", p);
+  sendToUser(otherUserId, p.callId, "call:ended", p);
 
 /** Send SDP offer (all ICE candidates included) from caller to receiver. */
 export const sendSdpOffer = (targetUserId: string, p: WebRTCPayload) =>
-  sendToUser(targetUserId, "call:sdp_offer", p);
+  sendToUser(targetUserId, p.callId, "call:sdp_offer", p);
 
 /** Send SDP answer (all ICE candidates included) from receiver to caller. */
 export const sendSdpAnswer = (targetUserId: string, p: WebRTCPayload) =>
-  sendToUser(targetUserId, "call:sdp_answer", p);
+  sendToUser(targetUserId, p.callId, "call:sdp_answer", p);
 
 /**
  * Send a push notification to the call receiver so they get an alert
@@ -141,5 +181,30 @@ export async function notifyCallReceiver(
       "[Intercom] notifyCallReceiver failed (push not delivered):",
       err,
     );
+  }
+}
+
+/**
+ * Tell the receiver (via push) that the caller cancelled before they answered.
+ * Best-effort — allows the receiver to clear the incoming-call notification
+ * even when their app is backgrounded/killed.
+ */
+export async function notifyCallCancelled(
+  payload: CallPayload,
+  token: string | null,
+): Promise<void> {
+  if (!token || !payload.receiverId) return;
+  try {
+    await axios.post(
+      `${config.backendUrl}/intercom/notify-cancel`,
+      {
+        receiverId: payload.receiverId,
+        callId: payload.callId,
+        callerName: payload.callerName,
+      },
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+  } catch {
+    // Non-critical
   }
 }

@@ -13,6 +13,8 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -206,136 +208,147 @@ function AnnouncementModal({
   return (
     <Modal visible={visible} transparent animationType="slide">
       <View style={styles.modalOverlay}>
-        <View
-          style={[
-            styles.modal,
-            { backgroundColor: isDark ? "#1A1A1A" : "#FFFFFF" },
-          ]}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ width: "100%" }}
         >
-          <View style={styles.modalHandle} />
           <View
             style={[
-              styles.modalHeader,
-              {
-                borderBottomColor: isDark
-                  ? "rgba(255,255,255,0.06)"
-                  : "rgba(0,0,0,0.06)",
-              },
+              styles.modal,
+              { backgroundColor: isDark ? "#1A1A1A" : "#FFFFFF" },
             ]}
           >
-            <Text style={[styles.modalTitle, { color: textColor }]}>
-              New Announcement
-            </Text>
-            <TouchableOpacity onPress={onClose} style={styles.modalClose}>
-              <Feather
-                name="x"
-                size={20}
-                color={isDark ? "#94A3B8" : "#64748B"}
-              />
-            </TouchableOpacity>
-          </View>
-          <View style={styles.modalBody}>
-            <Text
+            <View style={styles.modalHandle} />
+            <View
               style={[
-                styles.inputLabel,
-                { color: isDark ? "#94A3B8" : "#64748B" },
+                styles.modalHeader,
+                {
+                  borderBottomColor: isDark
+                    ? "rgba(255,255,255,0.06)"
+                    : "rgba(0,0,0,0.06)",
+                },
               ]}
             >
-              TITLE
-            </Text>
-            <TextInput
-              style={[
+              <Text style={[styles.modalTitle, { color: textColor }]}>
+                New Announcement
+              </Text>
+              <TouchableOpacity onPress={onClose} style={styles.modalClose}>
+                <Feather
+                  name="x"
+                  size={20}
+                  color={isDark ? "#94A3B8" : "#64748B"}
+                />
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              style={styles.modalBody}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <Text
+                style={[
+                  styles.inputLabel,
+                  { color: isDark ? "#94A3B8" : "#64748B" },
+                ]}
+              >
+                TITLE
+              </Text>
+              <TextInput
+                style={[
                 styles.input,
                 inputStyle,
                 titleErr ? { borderColor: "#EF4444" } : null,
               ]}
-              value={title}
-              onChangeText={(v) => {
+                value={title}
+                onChangeText={(v) => {
                 setTitle(v);
                 if (titleErr) setTitleErr("");
               }}
-              placeholder="Announcement title"
-              placeholderTextColor={isDark ? "#4B5563" : "#9CA3AF"}
-            />
+                placeholder="Announcement title"
+                placeholderTextColor={isDark ? "#4B5563" : "#9CA3AF"}
+              />
             {!!titleErr && (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 5 }}>
                 <Feather name="alert-circle" size={12} color="#EF4444" />
                 <Text style={{ fontSize: 12, color: "#EF4444" }}>{titleErr}</Text>
               </View>
             )}
-            <Text
-              style={[
-                styles.inputLabel,
-                { color: isDark ? "#94A3B8" : "#64748B", marginTop: 14 },
-              ]}
-            >
-              CONTENT
-            </Text>
-            <TextInput
-              style={[
+              <Text
+                style={[
+                  styles.inputLabel,
+                  { color: isDark ? "#94A3B8" : "#64748B", marginTop: 14 },
+                ]}
+              >
+                CONTENT
+              </Text>
+              <TextInput
+                style={[
                 styles.textarea,
                 inputStyle,
                 contentErr ? { borderColor: "#EF4444" } : null,
               ]}
-              value={content}
-              onChangeText={(v) => {
+                value={content}
+                onChangeText={(v) => {
                 setContent(v);
                 if (contentErr) setContentErr("");
               }}
-              placeholder="Write your announcement..."
-              placeholderTextColor={isDark ? "#4B5563" : "#9CA3AF"}
-              multiline
-              numberOfLines={4}
-            />
+                placeholder="Write your announcement..."
+                placeholderTextColor={isDark ? "#4B5563" : "#9CA3AF"}
+                multiline
+                numberOfLines={4}
+              />
             {!!contentErr && (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 5 }}>
                 <Feather name="alert-circle" size={12} color="#EF4444" />
                 <Text style={{ fontSize: 12, color: "#EF4444" }}>{contentErr}</Text>
               </View>
             )}
-          </View>
-          <View
-            style={[
-              styles.modalFooter,
-              {
-                borderTopColor: isDark
-                  ? "rgba(255,255,255,0.06)"
-                  : "rgba(0,0,0,0.06)",
-              },
-            ]}
-          >
-            <TouchableOpacity
+            </ScrollView>
+            <View
               style={[
-                styles.btnOutline,
-                { borderColor: isDark ? "rgba(255,255,255,0.15)" : "#E2E8F0" },
+                styles.modalFooter,
+                {
+                  borderTopColor: isDark
+                    ? "rgba(255,255,255,0.06)"
+                    : "rgba(0,0,0,0.06)",
+                },
               ]}
-              onPress={onClose}
             >
-              <Text
+              <TouchableOpacity
                 style={[
-                  styles.btnOutlineText,
-                  { color: isDark ? "#94A3B8" : "#64748B" },
+                  styles.btnOutline,
+                  {
+                    borderColor: isDark ? "rgba(255,255,255,0.15)" : "#E2E8F0",
+                  },
                 ]}
+                onPress={onClose}
               >
-                Cancel
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.btnPrimary,
-                { backgroundColor: tint, opacity: isSubmitting ? 0.6 : 1 },
-              ]}
-              onPress={handleSubmit}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? (
-                <ActivityIndicator size="small" color="#ffffff" />
-              ) : (
-                <Text style={styles.btnPrimaryText}>Publish</Text>
-              )}
-            </TouchableOpacity>
+                <Text
+                  style={[
+                    styles.btnOutlineText,
+                    { color: isDark ? "#94A3B8" : "#64748B" },
+                  ]}
+                >
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.btnPrimary,
+                  { backgroundColor: tint, opacity: isSubmitting ? 0.6 : 1 },
+                ]}
+                onPress={handleSubmit}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text style={styles.btnPrimaryText}>Publish</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
@@ -441,9 +454,11 @@ export default function AdminDashboard() {
     const openMaint = maintenance.filter(
       (m) => m.status !== "RESOLVED" && m.status !== "CLOSED",
     ).length;
-    const cancelledBookings = bookings.filter(
-      (b) => b.status === "CANCELLED",
-    ).length;
+    const cancelledBookings = bookings.filter((b) => {
+      const d = new Date(b.startTime ?? b.date ?? b.createdAt ?? 0);
+      const today = new Date();
+      return d.toDateString() === today.toDateString();
+    }).length;
     return { totalDue, openMaint, cancelledBookings };
   }, [payments, maintenance, bookings]);
 
@@ -567,9 +582,9 @@ export default function AdminDashboard() {
             />
             <StatCard
               icon="calendar"
-              title="Cancelled"
+              title="Today"
               value={kpis.cancelledBookings}
-              hint="Bookings"
+              hint="Bookings today"
               accentColor="#06B6D4"
               theme={theme}
               textColor={textColor}

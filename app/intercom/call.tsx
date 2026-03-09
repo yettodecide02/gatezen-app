@@ -24,6 +24,16 @@ try {
   // Native module not available – calling features will be disabled
 }
 
+// react-native-incall-manager: manages audio routing (speaker vs earpiece)
+// on both iOS and Android during an active call.
+let InCallManager: any = null;
+try {
+  const icm = require("react-native-incall-manager");
+  InCallManager = icm.default ?? icm.InCallManager ?? icm;
+} catch {
+  // Not installed — speaker toggle falls back to expo-av on iOS only
+}
+
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { getToken, getUser } from "@/lib/auth";
@@ -33,6 +43,7 @@ import {
   endCall,
   generateCallId,
   initiateCall,
+  notifyCallCancelled,
   notifyCallReceiver,
   rejectCall,
   sendSdpAnswer,
@@ -154,6 +165,9 @@ export default function CallScreen() {
   const initiatedRef = useRef(false);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef(null);
+  const ringRef = useRef<any>(null);
+  const prewarmedOfferRef = useRef<{ type: string; sdp: string } | null>(null);
+  const iceGatheredRef = useRef(false);
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   const buildPayload = useCallback((): CallPayload => {
@@ -235,6 +249,13 @@ export default function CallScreen() {
           playsInSilentModeIOS: true,
         });
       }
+      // Start InCallManager so the OS routes audio through the earpiece /
+      // speaker correctly and applies echo cancellation on both platforms.
+      if (InCallManager) {
+        try {
+          InCallManager.start({ media: "audio" });
+        } catch {}
+      }
 
       const stream = await mediaDevices.getUserMedia({
         audio: true,
@@ -254,6 +275,13 @@ export default function CallScreen() {
   }, []);
 
   const cleanupWebRTC = useCallback(() => {
+    prewarmedOfferRef.current = null;
+    iceGatheredRef.current = false;
+    if (InCallManager) {
+      try {
+        InCallManager.stop();
+      } catch {}
+    }
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((t) => t.stop());
       localStreamRef.current = null;
@@ -264,6 +292,102 @@ export default function CallScreen() {
     }
   }, []);
 
+  // mode: "outgoing" → caller ringback tone; "incoming" → device ringtone
+  const startRing = useCallback(async (mode: CallMode) => {
+    // ── Tier 1: InCallManager (available after  expo run:android / expo run:ios) ──
+    if (InCallManager) {
+      try {
+        if (mode === "outgoing") {
+          InCallManager.startRingback("_DTMF_");
+        } else {
+          InCallManager.startRingtone("_DEFAULT_");
+        }
+        return;
+      } catch {}
+    }
+
+    // ── Tier 2: JS-only fallback — works without any native rebuild ──────────
+    if (mode === "incoming") {
+      // Android: content://settings/system/ringtone resolves to the user's
+      // current default ringtone.  ExoPlayer (used by expo-av) supports
+      // content:// URIs, so this plays the real ringtone without native code.
+      if (Platform.OS === "android") {
+        try {
+          if (ringRef.current) return;
+          await Audio.setAudioModeAsync({
+            allowsRecordingIOS: false,
+            playsInSilentModeIOS: false,
+            staysActiveInBackground: true,
+            shouldDuckAndroid: false,
+            playThroughEarpieceAndroid: false,
+          });
+          const { sound } = await Audio.Sound.createAsync(
+            { uri: "content://settings/system/ringtone" },
+            { isLooping: true, volume: 1.0 },
+          );
+          ringRef.current = sound;
+          await sound.playAsync();
+          return;
+        } catch {
+          // Content URI failed — fall through to vibration.
+        }
+        // Vibration-only ring as last resort.
+        Vibration.vibrate([0, 800, 600], true);
+        return;
+      }
+
+      // iOS: try the bundled ring.mp3 (replace the stub with a real file to enable).
+      try {
+        if (ringRef.current) return;
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          allowsRecordingIOS: false,
+        });
+        const { sound } = await Audio.Sound.createAsync(
+          require("../../assets/sounds/ring.mp3"),
+          { isLooping: true, volume: 1.0 },
+        );
+        ringRef.current = sound;
+        await sound.playAsync();
+      } catch {
+        // ring.mp3 is still a stub — no audio until InCallManager is linked
+        // or a real file is dropped into assets/sounds/ring.mp3.
+      }
+    }
+    // outgoing: no vibration — caller knows they placed the call.
+  }, []);
+
+  const stopRing = useCallback(async () => {
+    if (InCallManager) {
+      try {
+        InCallManager.stopRingback();
+      } catch {}
+      try {
+        InCallManager.stopRingtone();
+      } catch {}
+    }
+    Vibration.cancel();
+    if (!ringRef.current) return;
+    try {
+      await ringRef.current.stopAsync();
+      await ringRef.current.unloadAsync();
+    } catch {}
+    ringRef.current = null;
+  }, []);
+
+  // ── Ring while waiting (outgoing / incoming) ─────────────────────────────
+  useEffect(() => {
+    if (callMode === "outgoing" || callMode === "incoming") {
+      startRing(callMode);
+    } else {
+      stopRing();
+    }
+    return () => {
+      stopRing();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [callMode]);
+
   // ── Load current user ─────────────────────────────────────────────────────
   useEffect(() => {
     getUser().then(setCurrentUser);
@@ -272,58 +396,62 @@ export default function CallScreen() {
   // ── Subscribe to own channel for call state changes ───────────────────────
   useEffect(() => {
     if (!currentUser?.id) return;
-    const unsub = subscribeToUserChannel(currentUser.id, (type, p) => {
-      if ((p as any).callId !== params.callId) return; // different call — ignore
-      if (type === "call:accepted") {
-        if (ringTimeoutRef.current) {
-          clearTimeout(ringTimeoutRef.current);
-          ringTimeoutRef.current = null;
-        }
-        setCallMode("active");
-        startTimer();
-        Vibration.vibrate(50);
-      } else if (type === "call:rejected") {
-        setCallMode("declined");
-        stopTimer();
-        setTimeout(() => router.back(), 2500);
-      } else if (type === "call:ended") {
-        cleanupWebRTC();
-        setCallMode("ended");
-        stopTimer();
-        setTimeout(() => router.back(), 2500);
-      } else if (type === "call:sdp_offer") {
-        // Receiver: apply the caller's SDP offer and respond with an answer
-        const wp = p as any as WebRTCPayload;
-        if (!pcRef.current || !wp.sdp || !RTCSessionDescription) return;
-        const pc = pcRef.current;
-        (async () => {
-          try {
-            await pc.setRemoteDescription(new RTCSessionDescription(wp.sdp));
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            await waitForIceGathering(pc);
-            await sendSdpAnswer(params.peerId, {
-              callId: params.callId,
-              sdp: {
-                type: pc.localDescription.type,
-                sdp: pc.localDescription.sdp,
-              },
-            });
-          } catch (err) {
-            console.error("[Intercom] SDP answer failed:", err);
+    // Channel is already scoped to this specific callId — no extra filter needed.
+    const unsub = subscribeToUserChannel(
+      currentUser.id,
+      params.callId,
+      (type, p) => {
+        if (type === "call:accepted") {
+          if (ringTimeoutRef.current) {
+            clearTimeout(ringTimeoutRef.current);
+            ringTimeoutRef.current = null;
           }
-        })();
-      } else if (type === "call:sdp_answer") {
-        // Caller: complete the WebRTC handshake with the receiver's SDP answer
-        const wp = p as any as WebRTCPayload;
-        if (!pcRef.current || !wp.sdp || !RTCSessionDescription) return;
-        pcRef.current
-          .setRemoteDescription(new RTCSessionDescription(wp.sdp))
-          .catch((err) =>
-            console.error("[Intercom] setRemoteDescription failed:", err),
-          );
-      }
-    });
+          setCallMode("active");
+          startTimer();
+          Vibration.vibrate(50);
+        } else if (type === "call:rejected") {
+          setCallMode("declined");
+          stopTimer();
+          setTimeout(() => router.back(), 2500);
+        } else if (type === "call:ended") {
+          cleanupWebRTC();
+          setCallMode("ended");
+          stopTimer();
+          setTimeout(() => router.back(), 2500);
+        } else if (type === "call:sdp_offer") {
+          // Receiver: apply the caller's SDP offer and respond with an answer
+          const wp = p as any as WebRTCPayload;
+          if (!pcRef.current || !wp.sdp || !RTCSessionDescription) return;
+          const pc = pcRef.current;
+          (async () => {
+            try {
+              await pc.setRemoteDescription(new RTCSessionDescription(wp.sdp));
+              const answer = await pc.createAnswer();
+              await pc.setLocalDescription(answer);
+              await waitForIceGathering(pc);
+              await sendSdpAnswer(params.peerId, {
+                callId: params.callId,
+                sdp: {
+                  type: pc.localDescription.type,
+                  sdp: pc.localDescription.sdp,
+                },
+              });
+            } catch (err) {
+              console.error("[Intercom] SDP answer failed:", err);
+            }
+          })();
+        } else if (type === "call:sdp_answer") {
+          // Caller: complete the WebRTC handshake with the receiver's SDP answer
+          const wp = p as any as WebRTCPayload;
+          if (!pcRef.current || !wp.sdp || !RTCSessionDescription) return;
+          pcRef.current
+            .setRemoteDescription(new RTCSessionDescription(wp.sdp))
+            .catch((err) =>
+              console.error("[Intercom] setRemoteDescription failed:", err),
+            );
+        }
+      },
+    );
     return () => {
       unsub();
       stopTimer();
@@ -347,8 +475,36 @@ export default function CallScreen() {
     });
     getToken().then((token) => notifyCallReceiver(payload, token));
 
+    // Pre-warm the WebRTC peer connection while waiting for the receiver to
+    // pick up. ICE gathering runs in background so the offer is ready
+    // instantly when the call is accepted — cuts the ~10 s audio delay.
+    (async () => {
+      try {
+        setupPeerConnection();
+        await startAudio();
+        const pc = pcRef.current;
+        if (!pc) return;
+        const offer = await pc.createOffer({ offerToReceiveAudio: true });
+        await pc.setLocalDescription(offer);
+        waitForIceGathering(pc).then(() => {
+          iceGatheredRef.current = true;
+          if (pc.localDescription) {
+            prewarmedOfferRef.current = {
+              type: pc.localDescription.type,
+              sdp: pc.localDescription.sdp,
+            };
+          }
+        });
+      } catch (err) {
+        console.warn("[Intercom] Pre-warm failed (non-fatal):", err);
+      }
+    })();
+
     // Auto-cancel if no answer within RING_TIMEOUT_MS
     ringTimeoutRef.current = setTimeout(async () => {
+      cleanupWebRTC();
+      const token = await getToken().catch(() => null);
+      if (token) notifyCallCancelled(payload, token).catch(() => {});
       try {
         await endCall(params.peerId, payload);
       } catch {}
@@ -375,6 +531,11 @@ export default function CallScreen() {
     } catch (err) {
       console.error("[Intercom] handleAccept failed:", err);
       cleanupWebRTC();
+      // Tell the caller the call failed so they don't keep waiting.
+      try {
+        await rejectCall(buildPayload());
+      } catch {}
+      router.back();
     } finally {
       setAccepting(false);
     }
@@ -395,24 +556,52 @@ export default function CallScreen() {
       clearTimeout(ringTimeoutRef.current);
       ringTimeoutRef.current = null;
     }
+    const payload = buildPayload();
+    // If caller cancels while still ringing, push-notify the receiver so
+    // they can dismiss the incoming-call notification from the tray.
+    if (callMode === "outgoing") {
+      getToken()
+        .then((token) => notifyCallCancelled(payload, token))
+        .catch(() => {});
+    }
     try {
-      await endCall(params.peerId, buildPayload());
+      await endCall(params.peerId, payload);
     } catch {}
     router.back();
   };
 
-  // ── Caller: initiate WebRTC once the call becomes active ─────────────────
+  // ── Caller: send SDP offer once the call becomes active ──────────────────
+  // Uses the pre-warmed peer connection/ICE candidates from the outgoing call
+  // initiation phase, so the offer is ready almost immediately.
   useEffect(() => {
     if (callMode !== "active" || params.mode !== "outgoing") return;
     (async () => {
       try {
-        setupPeerConnection();
-        await startAudio();
         const pc = pcRef.current;
-        if (!pc) return;
-        const offer = await pc.createOffer({ offerToReceiveAudio: true });
-        await pc.setLocalDescription(offer);
-        await waitForIceGathering(pc);
+        if (!pc) {
+          // Pre-warm didn't succeed — set up a fresh connection.
+          setupPeerConnection();
+          await startAudio();
+          const freshPc = pcRef.current;
+          if (!freshPc) return;
+          const freshOffer = await freshPc.createOffer({
+            offerToReceiveAudio: true,
+          });
+          await freshPc.setLocalDescription(freshOffer);
+          await waitForIceGathering(freshPc);
+          await sendSdpOffer(params.peerId, {
+            callId: params.callId,
+            sdp: {
+              type: freshPc.localDescription.type,
+              sdp: freshPc.localDescription.sdp,
+            },
+          });
+          return;
+        }
+        // Wait for ICE gathering to finish if it hasn't yet (usually already done).
+        if (!iceGatheredRef.current) {
+          await waitForIceGathering(pc);
+        }
         await sendSdpOffer(params.peerId, {
           callId: params.callId,
           sdp: { type: pc.localDescription.type, sdp: pc.localDescription.sdp },
@@ -433,17 +622,20 @@ export default function CallScreen() {
   }, [isMuted]);
 
   // ── Speaker: route audio output between earpiece and loudspeaker ──────────
-  // iOS only: on Android, react-native-webrtc owns AudioManager
-  // (MODE_IN_COMMUNICATION). Calling setAudioModeAsync here overrides
-  // that and silently breaks remote audio playback — same reason startAudio()
-  // skips this on Android. Speaker button remains visible but only works on iOS.
+  // InCallManager handles both platforms properly.
+  // Fallback to expo-av on iOS if InCallManager is not installed.
   useEffect(() => {
     if (callMode !== "active") return;
-    if (Platform.OS !== "ios") return;
-    Audio.setAudioModeAsync({
-      allowsRecordingIOS: true,
-      playsInSilentModeIOS: true,
-    }).catch(() => {});
+    if (InCallManager) {
+      try {
+        InCallManager.setSpeakerphoneOn(isSpeaker);
+      } catch {}
+    } else if (Platform.OS === "ios") {
+      Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      }).catch(() => {});
+    }
   }, [isSpeaker, callMode]);
 
   // ── Render helpers ────────────────────────────────────────────────────────

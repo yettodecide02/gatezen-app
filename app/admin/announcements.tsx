@@ -10,6 +10,8 @@ import {
   RefreshControl,
   Modal,
   TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -146,126 +148,124 @@ function CreateAnnouncementModal({
   return (
     <Modal visible={visible} transparent animationType="slide">
       <View style={styles.modalOverlay}>
-        <View style={[styles.sheet, { backgroundColor: sheetBg }]}>
-          <View style={styles.sheetHandle} />
-          <View style={[styles.sheetHeader, { borderBottomColor: borderCol }]}>
-            <View style={styles.sheetHeaderLeft}>
-              <View
-                style={[styles.sheetIconWrap, { backgroundColor: tint + "15" }]}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ width: "100%" }}
+        >
+          <View style={[styles.sheet, { backgroundColor: sheetBg }]}>
+            <View style={styles.sheetHandle} />
+            <View
+              style={[styles.sheetHeader, { borderBottomColor: borderCol }]}
+            >
+              <View style={styles.sheetHeaderLeft}>
+                <View
+                  style={[
+                    styles.sheetIconWrap,
+                    { backgroundColor: tint + "15" },
+                  ]}
+                >
+                  <Feather name="bell" size={18} color={tint} />
+                </View>
+                <Text style={[styles.sheetTitle, { color: textColor }]}>
+                  New Announcement
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.sheetCloseBtn, { borderColor: borderCol }]}
+                onPress={handleClose}
               >
-                <Feather name="bell" size={18} color={tint} />
-              </View>
-              <Text style={[styles.sheetTitle, { color: textColor }]}>
-                New Announcement
-              </Text>
+                <Feather name="x" size={18} color={textColor} />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              style={[styles.sheetCloseBtn, { borderColor: borderCol }]}
-              onPress={handleClose}
+            <ScrollView
+              style={styles.sheetBody}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
             >
-              <Feather name="x" size={18} color={textColor} />
-            </TouchableOpacity>
-          </View>
-          <ScrollView
-            style={styles.sheetBody}
-            showsVerticalScrollIndicator={false}
-          >
-            {!!error && (
-              <View style={styles.errorBanner}>
-                <Feather name="alert-circle" size={14} color="#EF4444" />
-                <Text style={styles.errorBannerText}>{error}</Text>
-              </View>
-            )}
-            <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: muted }]}>TITLE</Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: inputBg,
-                    borderColor: titleErr ? "#EF4444" : inputBorder,
-                    color: textColor,
-                  },
-                ]}
-                value={title}
-                onChangeText={(v) => {
-                  setTitle(v);
-                  if (titleErr) setTitleErr("");
-                }}
-                placeholder="Announcement title"
-                placeholderTextColor={muted}
-                maxLength={200}
-              />
-              {!!titleErr && (
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 5 }}>
-                  <Feather name="alert-circle" size={12} color="#EF4444" />
-                  <Text style={{ fontSize: 12, color: "#EF4444" }}>{titleErr}</Text>
+              {!!error && (
+                <View style={styles.errorBanner}>
+                  <Feather name="alert-circle" size={14} color="#EF4444" />
+                  <Text style={styles.errorBannerText}>{error}</Text>
                 </View>
               )}
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: muted }]}>CONTENT</Text>
-              <TextInput
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: muted }]}>TITLE</Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: inputBg,
+                      borderColor: inputBorder,
+                      color: textColor,
+                    },
+                  ]}
+                  value={title}
+                  onChangeText={setTitle}
+                  placeholder="Announcement title"
+                  placeholderTextColor={muted}
+                  maxLength={200}
+                />
+              </View>
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: muted }]}>
+                  CONTENT
+                </Text>
+                <TextInput
+                  style={[
+                    styles.textarea,
+                    {
+                      backgroundColor: inputBg,
+                      borderColor: inputBorder,
+                      color: textColor,
+                    },
+                  ]}
+                  value={content}
+                  onChangeText={setContent}
+                  placeholder="Write your announcement..."
+                  placeholderTextColor={muted}
+                  multiline
+                  numberOfLines={6}
+                  maxLength={1000}
+                />
+                <Text style={[styles.charCount, { color: muted }]}>
+                  {content.length}/1000
+                </Text>
+              </View>
+            </ScrollView>
+            <View style={[styles.sheetFooter, { borderTopColor: borderCol }]}>
+              <TouchableOpacity
                 style={[
-                  styles.textarea,
+                  styles.btnOutline,
                   {
-                    backgroundColor: inputBg,
-                    borderColor: contentErr ? "#EF4444" : inputBorder,
-                    color: textColor,
+                    borderColor: isDark ? "rgba(255,255,255,0.15)" : "#E2E8F0",
                   },
                 ]}
-                value={content}
-                onChangeText={(v) => {
-                  setContent(v);
-                  if (contentErr) setContentErr("");
-                }}
-                placeholder="Write your announcement..."
-                placeholderTextColor={muted}
-                multiline
-                numberOfLines={6}
-                maxLength={1000}
-              />
-              {!!contentErr && (
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 5 }}>
-                  <Feather name="alert-circle" size={12} color="#EF4444" />
-                  <Text style={{ fontSize: 12, color: "#EF4444" }}>{contentErr}</Text>
-                </View>
-              )}
-              <Text style={[styles.charCount, { color: muted }]}>
-                {content.length}/1000
-              </Text>
+                onPress={handleClose}
+              >
+                <Text style={[styles.btnOutlineText, { color: muted }]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.btnPrimary,
+                  {
+                    backgroundColor: tint,
+                    flex: 1.5,
+                    opacity:
+                      loading || !title.trim() || !content.trim() ? 0.5 : 1,
+                  },
+                ]}
+                onPress={handleSubmit}
+                disabled={loading || !title.trim() || !content.trim()}
+              >
+                <Text style={styles.btnPrimaryText}>
+                  {loading ? "Creating..." : "Create Announcement"}
+                </Text>
+              </TouchableOpacity>
             </View>
-          </ScrollView>
-          <View style={[styles.sheetFooter, { borderTopColor: borderCol }]}>
-            <TouchableOpacity
-              style={[
-                styles.btnOutline,
-                { borderColor: isDark ? "rgba(255,255,255,0.15)" : "#E2E8F0" },
-              ]}
-              onPress={handleClose}
-            >
-              <Text style={[styles.btnOutlineText, { color: muted }]}>
-                Cancel
-              </Text>
-            </TouchableOpacity>
-            <Pressable
-              style={({ pressed }) => [
-                styles.btnPrimary,
-                {
-                  backgroundColor: tint,
-                  flex: 1.5,
-                  opacity: loading ? 0.5 : pressed ? 0.7 : 1,
-                },
-              ]}
-              onPress={handleSubmit}
-              disabled={loading}
-            >
-              <Text style={styles.btnPrimaryText}>
-                {loading ? "Creating..." : "Create Announcement"}
-              </Text>
-            </Pressable>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );

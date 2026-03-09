@@ -416,7 +416,7 @@ function CreatePollModal({
     <Modal visible={visible} transparent animationType="slide">
       <View style={styles.modalOverlay}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={{ width: "100%" }}
         >
           <View

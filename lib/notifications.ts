@@ -79,6 +79,7 @@ export async function registerForPushNotifications(
   try {
     const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
     const pushToken = tokenData.data;
+    console.log("[Push] Registering token:", pushToken);
 
     // Save the token to the backend
     await axios.post(
@@ -91,8 +92,9 @@ export async function registerForPushNotifications(
         },
       },
     );
+    console.log("[Push] Token saved successfully");
   } catch (error) {
-    console.error("Failed to register push token:", error);
+    console.error("[Push] Token registration failed:", error);
   }
 }
 

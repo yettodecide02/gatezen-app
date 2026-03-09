@@ -57,6 +57,8 @@ export default function BlocksAndUnits() {
   const [unitBlockId, setUnitBlockId] = useState(null);
   const [deleteBlockId, setDeleteBlockId] = useState(null);
   const [deleteUnitId, setDeleteUnitId] = useState(null);
+  const [blockNameErr, setBlockNameErr] = useState("");
+  const [unitNumberErr, setUnitNumberErr] = useState("");
 
   const { toast, showError, showSuccess, showInfo, hideToast } = useToast();
   const { user, token } = useAppContext();
@@ -91,6 +93,7 @@ export default function BlocksAndUnits() {
       showSuccess(editingBlock ? "Block updated!" : "Block created!");
       setShowBlockModal(false);
       setBlockForm({ name: "", description: "" });
+      setBlockNameErr("");
       setEditingBlock(null);
       queryClient.invalidateQueries({ queryKey: blocksKey });
     },
@@ -142,9 +145,10 @@ export default function BlocksAndUnits() {
 
   const handleCreateBlock = () => {
     if (!blockForm.name.trim()) {
-      showError("Block name is required");
+      setBlockNameErr("Block name is required");
       return;
     }
+    setBlockNameErr("");
     blockMutation.mutate({ ...blockForm, communityId: user?.communityId });
   };
 
@@ -157,9 +161,10 @@ export default function BlocksAndUnits() {
 
   const handleCreateUnit = () => {
     if (!currentUnitNumber.trim()) {
-      showError("Unit number required");
+      setUnitNumberErr("Unit number is required");
       return;
     }
+    setUnitNumberErr("");
     createUnitMutation.mutate({
       number: currentUnitNumber.trim(),
       blockId: unitBlockId,
@@ -174,6 +179,7 @@ export default function BlocksAndUnits() {
     setCurrentUnitNumber("");
     setCreatedUnits([]);
     setUnitBlockId(null);
+    setUnitNumberErr("");
   };
 
   const startCreateUnit = (blockId) => {
@@ -499,6 +505,7 @@ export default function BlocksAndUnits() {
                   setShowBlockModal(false);
                   setBlockForm({ name: "", description: "" });
                   setEditingBlock(null);
+                  setBlockNameErr("");
                 }}
                 style={[styles.modalClose, { borderColor: borderCol }]}
               >
@@ -514,22 +521,29 @@ export default function BlocksAndUnits() {
                   style={[
                     styles.fieldRow,
                     {
-                      borderColor: borderCol,
+                      borderColor: blockNameErr ? "#EF4444" : borderCol,
                       backgroundColor: isDark ? "#111111" : "#F8FAFC",
                     },
                   ]}
                 >
-                  <Feather name="grid" size={16} color={muted} />
+                  <Feather name="grid" size={16} color={blockNameErr ? "#EF4444" : muted} />
                   <TextInput
                     style={[styles.fieldInput, { color: textColor }]}
                     placeholder="e.g. Block A, Tower 1"
                     placeholderTextColor={muted}
                     value={blockForm.name}
-                    onChangeText={(v) =>
-                      setBlockForm((p) => ({ ...p, name: v }))
-                    }
+                    onChangeText={(v) => {
+                      setBlockForm((p) => ({ ...p, name: v }));
+                      if (blockNameErr) setBlockNameErr("");
+                    }}
                   />
                 </View>
+                {!!blockNameErr && (
+                  <View style={styles.inlineError}>
+                    <Feather name="alert-circle" size={12} color="#EF4444" />
+                    <Text style={styles.inlineErrorText}>{blockNameErr}</Text>
+                  </View>
+                )}
               </View>
               <View style={styles.fieldWrap}>
                 <Text style={[styles.fieldLabel, { color: muted }]}>
@@ -572,6 +586,7 @@ export default function BlocksAndUnits() {
                   setShowBlockModal(false);
                   setBlockForm({ name: "", description: "" });
                   setEditingBlock(null);
+                  setBlockNameErr("");
                 }}
                 style={[styles.cancelBtn, { borderColor: borderCol }]}
               >
@@ -684,21 +699,30 @@ export default function BlocksAndUnits() {
                       style={[
                         styles.fieldRow,
                         {
-                          borderColor: borderCol,
+                          borderColor: unitNumberErr ? "#EF4444" : borderCol,
                           backgroundColor: isDark ? "#111111" : "#F8FAFC",
                         },
                       ]}
                     >
-                      <Feather name="home" size={16} color={muted} />
+                      <Feather name="home" size={16} color={unitNumberErr ? "#EF4444" : muted} />
                       <TextInput
                         style={[styles.fieldInput, { color: textColor }]}
                         placeholder="e.g. 101, A-01"
                         placeholderTextColor={muted}
                         value={currentUnitNumber}
-                        onChangeText={setCurrentUnitNumber}
+                        onChangeText={(v) => {
+                          setCurrentUnitNumber(v);
+                          if (unitNumberErr) setUnitNumberErr("");
+                        }}
                         autoFocus
                       />
                     </View>
+                    {!!unitNumberErr && (
+                      <View style={styles.inlineError}>
+                        <Feather name="alert-circle" size={12} color="#EF4444" />
+                        <Text style={styles.inlineErrorText}>{unitNumberErr}</Text>
+                      </View>
+                    )}
                   </View>
                 </>
               )}
@@ -957,4 +981,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   createdNum: { fontSize: 11, fontWeight: "600" },
+  inlineError: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
+  inlineErrorText: { color: "#EF4444", fontSize: 12, fontWeight: "500" },
 });

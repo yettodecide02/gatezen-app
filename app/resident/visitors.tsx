@@ -143,6 +143,8 @@ export default function Visitors() {
   const [expectedTime, setExpectedTime] = useState(nowTime());
   const [vehicle, setVehicle] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [nameErr, setNameErr] = useState("");
+  const [emailErr, setEmailErr] = useState("");
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [showFromPicker, setShowFromPicker] = useState(false);
@@ -210,6 +212,8 @@ export default function Visitors() {
       setVehicle("");
       setExpectedDate(nowDate());
       setExpectedTime(nowTime());
+      setNameErr("");
+      setEmailErr("");
       setShowNew(false);
       queryClient.invalidateQueries({ queryKey: visitorsKey });
     },
@@ -219,18 +223,20 @@ export default function Visitors() {
   });
 
   const createVisitor = () => {
+    let valid = true;
     if (!name.trim()) {
-      showError("Visitor name is required");
-      return;
-    }
+      setNameErr("Visitor name is required");
+      valid = false;
+    } else setNameErr("");
     if (
       type === "GUEST" &&
       email.trim() &&
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
     ) {
-      showError("Invalid email address");
-      return;
-    }
+      setEmailErr("Enter a valid email address");
+      valid = false;
+    } else setEmailErr("");
+    if (!valid) return;
     setSubmitting(true);
     const [yr, mo, dy] = expectedDate.split("-").map(Number);
     const [hr, mn] = expectedTime.split(":").map(Number);
@@ -798,58 +804,91 @@ export default function Visitors() {
               </View>
             </View>
 
-            {[
-              {
-                label: "Name *",
-                value: name,
-                set: setName,
-                placeholder: "Visitor name",
-              },
-              {
-                label: type === "GUEST" ? "Email" : "Contact",
-                value: email,
-                set: setEmail,
-                placeholder:
-                  type === "GUEST" ? "visitor@email.com" : "Phone number",
-                keyboardType: type === "GUEST" ? "email-address" : "phone-pad",
-              },
-              {
-                label: "Vehicle No.",
-                value: vehicle,
-                set: setVehicle,
-                placeholder: "Optional",
-              },
-            ].map((f) => (
-              <View key={f.label} style={{ marginBottom: 12 }}>
-                <Text
-                  style={{
-                    fontSize: 12,
-                    color: muted,
-                    fontWeight: "600",
-                    marginBottom: 5,
-                  }}
-                >
-                  {f.label}
-                </Text>
-                <TextInput
-                  value={f.value}
-                  onChangeText={f.set}
-                  placeholder={f.placeholder}
-                  placeholderTextColor={muted}
-                  keyboardType={f.keyboardType || "default"}
-                  style={{
-                    backgroundColor: fieldBg,
-                    borderRadius: 10,
-                    borderWidth: 1,
-                    borderColor: borderCol,
-                    paddingHorizontal: 12,
-                    paddingVertical: 10,
-                    fontSize: 14,
-                    color: text,
-                  }}
-                />
-              </View>
-            ))}
+            {/* Name */}
+            <View style={{ marginBottom: 12 }}>
+              <Text style={{ fontSize: 12, color: muted, fontWeight: "600", marginBottom: 5 }}>
+                Name *
+              </Text>
+              <TextInput
+                value={name}
+                onChangeText={(v) => {
+                  setName(v);
+                  if (nameErr) setNameErr("");
+                }}
+                placeholder="Visitor name"
+                placeholderTextColor={muted}
+                style={{
+                  backgroundColor: fieldBg,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: nameErr ? "#EF4444" : borderCol,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  fontSize: 14,
+                  color: text,
+                }}
+              />
+              {!!nameErr && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 5 }}>
+                  <Feather name="alert-circle" size={12} color="#EF4444" />
+                  <Text style={{ fontSize: 12, color: "#EF4444" }}>{nameErr}</Text>
+                </View>
+              )}
+            </View>
+            {/* Email / Contact */}
+            <View style={{ marginBottom: 12 }}>
+              <Text style={{ fontSize: 12, color: muted, fontWeight: "600", marginBottom: 5 }}>
+                {type === "GUEST" ? "Email" : "Contact"}
+              </Text>
+              <TextInput
+                value={email}
+                onChangeText={(v) => {
+                  setEmail(v);
+                  if (emailErr) setEmailErr("");
+                }}
+                placeholder={type === "GUEST" ? "visitor@email.com" : "Phone number"}
+                placeholderTextColor={muted}
+                keyboardType={type === "GUEST" ? "email-address" : "phone-pad"}
+                style={{
+                  backgroundColor: fieldBg,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: emailErr ? "#EF4444" : borderCol,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  fontSize: 14,
+                  color: text,
+                }}
+              />
+              {!!emailErr && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 5 }}>
+                  <Feather name="alert-circle" size={12} color="#EF4444" />
+                  <Text style={{ fontSize: 12, color: "#EF4444" }}>{emailErr}</Text>
+                </View>
+              )}
+            </View>
+            {/* Vehicle No */}
+            <View style={{ marginBottom: 12 }}>
+              <Text style={{ fontSize: 12, color: muted, fontWeight: "600", marginBottom: 5 }}>
+                Vehicle No.
+              </Text>
+              <TextInput
+                value={vehicle}
+                onChangeText={setVehicle}
+                placeholder="Optional"
+                placeholderTextColor={muted}
+                style={{
+                  backgroundColor: fieldBg,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: borderCol,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  fontSize: 14,
+                  color: text,
+                }}
+              />
+            </View>
 
             {/* Date / Time */}
             <View style={{ flexDirection: "row", gap: 10, marginBottom: 14 }}>

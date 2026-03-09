@@ -5,6 +5,7 @@ import {
   Text,
   View,
   TouchableOpacity,
+  Pressable,
   ScrollView,
   RefreshControl,
   Modal,
@@ -101,29 +102,41 @@ function CreateAnnouncementModal({
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [titleErr, setTitleErr] = useState("");
+  const [contentErr, setContentErr] = useState("");
 
-  const handleSubmit = async () => {
-    if (!title.trim() || !content.trim()) {
-      setError("Title and content are required");
-      return;
-    }
+  const handleSubmit = () => {
+    let valid = true;
+    if (!title.trim()) {
+      setTitleErr("Title is required");
+      valid = false;
+    } else setTitleErr("");
+    if (!content.trim()) {
+      setContentErr("Content is required");
+      valid = false;
+    } else setContentErr("");
+    if (!valid) return;
     setLoading(true);
-    try {
-      await onSubmit({ title: title.trim(), content: content.trim() });
-      setTitle("");
-      setContent("");
-      setError("");
-      onClose();
-    } catch (e) {
-      setError("Failed to create announcement");
-    } finally {
-      setLoading(false);
-    }
+    onSubmit({ title: title.trim(), content: content.trim() })
+      .then(() => {
+        setTitle("");
+        setContent("");
+        setError("");
+        onClose();
+      })
+      .catch(() => {
+        setError("Failed to create announcement");
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   };
   const handleClose = () => {
     setTitle("");
     setContent("");
     setError("");
+    setTitleErr("");
+    setContentErr("");
     onClose();
   };
   const inputBg = isDark ? "#252525" : "#F8FAFC";
@@ -170,16 +183,25 @@ function CreateAnnouncementModal({
                   styles.input,
                   {
                     backgroundColor: inputBg,
-                    borderColor: inputBorder,
+                    borderColor: titleErr ? "#EF4444" : inputBorder,
                     color: textColor,
                   },
                 ]}
                 value={title}
-                onChangeText={setTitle}
+                onChangeText={(v) => {
+                  setTitle(v);
+                  if (titleErr) setTitleErr("");
+                }}
                 placeholder="Announcement title"
                 placeholderTextColor={muted}
                 maxLength={200}
               />
+              {!!titleErr && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 5 }}>
+                  <Feather name="alert-circle" size={12} color="#EF4444" />
+                  <Text style={{ fontSize: 12, color: "#EF4444" }}>{titleErr}</Text>
+                </View>
+              )}
             </View>
             <View style={styles.inputGroup}>
               <Text style={[styles.inputLabel, { color: muted }]}>CONTENT</Text>
@@ -188,18 +210,27 @@ function CreateAnnouncementModal({
                   styles.textarea,
                   {
                     backgroundColor: inputBg,
-                    borderColor: inputBorder,
+                    borderColor: contentErr ? "#EF4444" : inputBorder,
                     color: textColor,
                   },
                 ]}
                 value={content}
-                onChangeText={setContent}
+                onChangeText={(v) => {
+                  setContent(v);
+                  if (contentErr) setContentErr("");
+                }}
                 placeholder="Write your announcement..."
                 placeholderTextColor={muted}
                 multiline
                 numberOfLines={6}
                 maxLength={1000}
               />
+              {!!contentErr && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 5 }}>
+                  <Feather name="alert-circle" size={12} color="#EF4444" />
+                  <Text style={{ fontSize: 12, color: "#EF4444" }}>{contentErr}</Text>
+                </View>
+              )}
               <Text style={[styles.charCount, { color: muted }]}>
                 {content.length}/1000
               </Text>
@@ -217,23 +248,22 @@ function CreateAnnouncementModal({
                 Cancel
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[
+            <Pressable
+              style={({ pressed }) => [
                 styles.btnPrimary,
                 {
                   backgroundColor: tint,
                   flex: 1.5,
-                  opacity:
-                    loading || !title.trim() || !content.trim() ? 0.5 : 1,
+                  opacity: loading ? 0.5 : pressed ? 0.7 : 1,
                 },
               ]}
               onPress={handleSubmit}
-              disabled={loading || !title.trim() || !content.trim()}
+              disabled={loading}
             >
               <Text style={styles.btnPrimaryText}>
                 {loading ? "Creating..." : "Create Announcement"}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </View>
       </View>

@@ -28,6 +28,9 @@ export default function ForgotPasswordScreen() {
   const [showPw, setShowPw] = useState(false);
   const [stage, setStage] = useState<"email" | "otp" | "reset">("email");
   const [loading, setLoading] = useState(false);
+  const [emailErr, setEmailErr] = useState("");
+  const [otpErr, setOtpErr] = useState("");
+  const [passwordErr, setPasswordErr] = useState("");
 
   const insets = useSafeAreaInsets();
   const { toast, showError, showSuccess, hideToast } = useToast();
@@ -46,25 +49,45 @@ export default function ForgotPasswordScreen() {
   const STEPS = ["email", "otp", "reset"] as const;
   const stepIndex = STEPS.indexOf(stage);
 
-  const submit = async () => {
-    if (stage === "email" && !email.trim()) {
-      showError("Email address is required");
-      return;
+  const validate = () => {
+    if (stage === "email") {
+      if (!email.trim()) {
+        setEmailErr("Email address is required");
+        return false;
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+        setEmailErr("Enter a valid email address");
+        return false;
+      }
+      setEmailErr("");
     }
-    if (stage === "otp" && !otp.trim()) {
-      showError("Please enter the verification code");
-      return;
+    if (stage === "otp") {
+      if (!otp.trim()) {
+        setOtpErr("Please enter the verification code");
+        return false;
+      }
+      if (otp.trim().length !== 6) {
+        setOtpErr("Code must be 6 digits");
+        return false;
+      }
+      setOtpErr("");
     }
     if (stage === "reset") {
       if (!newPassword) {
-        showError("New password is required");
-        return;
+        setPasswordErr("New password is required");
+        return false;
       }
       if (newPassword.length < 8) {
-        showError("Password must be at least 8 characters");
-        return;
+        setPasswordErr("Password must be at least 8 characters");
+        return false;
       }
+      setPasswordErr("");
     }
+    return true;
+  };
+
+  const submit = async () => {
+    if (!validate()) return;
     setLoading(true);
     try {
       if (stage === "email") {
@@ -196,7 +219,11 @@ export default function ForgotPasswordScreen() {
                   icon="mail"
                   required
                   value={email}
-                  onChangeText={setEmail}
+                  onChangeText={(v) => {
+                    setEmail(v);
+                    if (emailErr) setEmailErr("");
+                  }}
+                  error={emailErr}
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -216,7 +243,11 @@ export default function ForgotPasswordScreen() {
                   icon="hash"
                   required
                   value={otp}
-                  onChangeText={setOtp}
+                  onChangeText={(v) => {
+                    setOtp(v);
+                    if (otpErr) setOtpErr("");
+                  }}
+                  error={otpErr}
                   keyboardType="numeric"
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -236,7 +267,11 @@ export default function ForgotPasswordScreen() {
                   icon="lock"
                   required
                   value={newPassword}
-                  onChangeText={setNewPassword}
+                  onChangeText={(v) => {
+                    setNewPassword(v);
+                    if (passwordErr) setPasswordErr("");
+                  }}
+                  error={passwordErr}
                   secureTextEntry={!showPw}
                   autoCapitalize="none"
                   autoCorrect={false}

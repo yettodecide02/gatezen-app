@@ -96,6 +96,7 @@ export default function CommunityConfig() {
   });
   const [facilities, setFacilities] = useState({});
   const [selectedFacility, setSelectedFacility] = useState(null);
+  const [nameErr, setNameErr] = useState("");
 
   const { toast, showError, showSuccess, hideToast } = useToast();
   const { user, token } = useAppContext();
@@ -167,9 +168,10 @@ export default function CommunityConfig() {
 
   const handleSave = () => {
     if (!communityData.name.trim()) {
-      showError("Community name is required");
+      setNameErr("Community name is required");
       return;
     }
+    setNameErr("");
     const enabledFacilities = Object.entries(facilities)
       .filter(([_, f]) => (f as any).enabled)
       .map(([id, f]) => ({ facilityType: id, ...(f as object) }));
@@ -305,45 +307,55 @@ export default function CommunityConfig() {
               multiline: true,
               icon: "map-pin",
             },
-          ].map(({ label, field, placeholder, multiline, icon }) => (
-            <View key={field} style={styles.fieldWrap}>
-              <Text style={[styles.fieldLabel, { color: muted }]}>
-                {label}
-                {field === "name" ? " *" : ""}
-              </Text>
-              <View
-                style={[
-                  styles.fieldRow,
-                  {
-                    borderColor: borderCol,
-                    backgroundColor: isDark ? "#111111" : "#F8FAFC",
-                    alignItems: multiline ? "flex-start" : "center",
-                  },
-                ]}
-              >
-                <Feather
-                  name={icon}
-                  size={16}
-                  color={muted}
-                  style={multiline ? { marginTop: 2 } : {}}
-                />
-                <TextInput
+          ].map(({ label, field, placeholder, multiline, icon }) => {
+            const hasErr = field === "name" && !!nameErr;
+            return (
+              <View key={field} style={styles.fieldWrap}>
+                <Text style={[styles.fieldLabel, { color: muted }]}>
+                  {label}
+                  {field === "name" ? " *" : ""}
+                </Text>
+                <View
                   style={[
-                    styles.fieldInput,
-                    { color: textColor },
-                    multiline && { height: 72, textAlignVertical: "top" },
+                    styles.fieldRow,
+                    {
+                      borderColor: hasErr ? "#EF4444" : borderCol,
+                      backgroundColor: isDark ? "#111111" : "#F8FAFC",
+                      alignItems: multiline ? "flex-start" : "center",
+                    },
                   ]}
-                  placeholder={placeholder}
-                  placeholderTextColor={muted}
-                  value={communityData[field]}
-                  onChangeText={(v) =>
-                    setCommunityData((p) => ({ ...p, [field]: v }))
-                  }
-                  multiline={multiline}
-                />
+                >
+                  <Feather
+                    name={icon}
+                    size={16}
+                    color={hasErr ? "#EF4444" : muted}
+                    style={multiline ? { marginTop: 2 } : {}}
+                  />
+                  <TextInput
+                    style={[
+                      styles.fieldInput,
+                      { color: textColor },
+                      multiline && { height: 72, textAlignVertical: "top" },
+                    ]}
+                    placeholder={placeholder}
+                    placeholderTextColor={muted}
+                    value={communityData[field]}
+                    onChangeText={(v) => {
+                      setCommunityData((p) => ({ ...p, [field]: v }));
+                      if (field === "name" && nameErr) setNameErr("");
+                    }}
+                    multiline={multiline}
+                  />
+                </View>
+                {hasErr && (
+                  <View style={styles.inlineError}>
+                    <Feather name="alert-circle" size={12} color="#EF4444" />
+                    <Text style={styles.inlineErrorText}>{nameErr}</Text>
+                  </View>
+                )}
               </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
 
         {/* Facilities */}
@@ -994,4 +1006,6 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
   },
   cancelBtnText: { fontSize: 14, fontWeight: "600" },
+  inlineError: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
+  inlineErrorText: { color: "#EF4444", fontSize: 12, fontWeight: "500" },
 });

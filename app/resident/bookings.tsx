@@ -134,6 +134,8 @@ export default function BookingsScreen() {
   const [note, setNote] = useState("");
   const [peopleCount, setPeopleCount] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [slotErr, setSlotErr] = useState("");
+  const [peopleErr, setPeopleErr] = useState("");
   const [showFacilityModal, setShowFacilityModal] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showBookForm, setShowBookForm] = useState(false);
@@ -250,17 +252,28 @@ export default function BookingsScreen() {
   };
 
   const createBooking = () => {
+    let valid = true;
     if (!facilityId || !selectedSlot) {
-      showError("Select a facility and time slot");
-      return;
+      setSlotErr("Please select a time slot");
+      valid = false;
+    } else {
+      setSlotErr("");
     }
+    const count = peopleCount === "" ? 1 : Number(peopleCount);
+    if (peopleCount !== "" && (isNaN(count) || count < 1)) {
+      setPeopleErr("Enter a valid number (1 or more)");
+      valid = false;
+    } else {
+      setPeopleErr("");
+    }
+    if (!valid) return;
     const slot = slots.find((s) => s.start === selectedSlot);
     if (!slot) {
-      showError("Select a valid time slot");
+      setSlotErr("Select a valid time slot");
       return;
     }
     if (new Date(slot.start) < new Date()) {
-      showError("Cannot book a past slot");
+      setSlotErr("Cannot book a past slot");
       return;
     }
     if (minsLeft < (facility?.slotMins || 60)) {
@@ -269,7 +282,6 @@ export default function BookingsScreen() {
       );
       return;
     }
-    const count = peopleCount === "" ? 1 : Number(peopleCount);
     const cap = facility?.capacity || 10;
     const bookedCount = bookings
       .filter(
@@ -279,7 +291,7 @@ export default function BookingsScreen() {
       )
       .reduce((s, b) => s + (b.peopleCount || 1), 0);
     if (bookedCount + count > cap) {
-      showError("This slot is fully booked");
+      setSlotErr("This slot is fully booked");
       return;
     }
     setSubmitting(true);
@@ -819,6 +831,12 @@ export default function BookingsScreen() {
             >
               Available Slots
             </Text>
+            {!!slotErr && (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 8 }}>
+                <Feather name="alert-circle" size={12} color="#EF4444" />
+                <Text style={{ fontSize: 12, color: "#EF4444" }}>{slotErr}</Text>
+              </View>
+            )}
             {slots.length === 0 ? (
               <Text style={{ fontSize: 13, color: muted, marginBottom: 12 }}>
                 No slots available for this date.
@@ -849,7 +867,12 @@ export default function BookingsScreen() {
                   return (
                     <Pressable
                       key={slot.start}
-                      onPress={() => !disabled && setSelectedSlot(slot.start)}
+                      onPress={() => {
+                        if (!disabled) {
+                          setSelectedSlot(slot.start);
+                          if (slotErr) setSlotErr("");
+                        }
+                      }}
                       style={{
                         paddingHorizontal: 12,
                         paddingVertical: 8,
@@ -916,7 +939,10 @@ export default function BookingsScreen() {
               </Text>
               <TextInput
                 value={peopleCount}
-                onChangeText={setPeopleCount}
+                onChangeText={(v) => {
+                  setPeopleCount(v);
+                  if (peopleErr) setPeopleErr("");
+                }}
                 placeholder="1"
                 placeholderTextColor={muted}
                 keyboardType="number-pad"
@@ -924,13 +950,19 @@ export default function BookingsScreen() {
                   backgroundColor: fieldBg,
                   borderRadius: 10,
                   borderWidth: 1,
-                  borderColor: borderCol,
+                  borderColor: peopleErr ? "#EF4444" : borderCol,
                   paddingHorizontal: 12,
                   paddingVertical: 10,
                   fontSize: 14,
                   color: text,
                 }}
               />
+              {!!peopleErr && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 5 }}>
+                  <Feather name="alert-circle" size={12} color="#EF4444" />
+                  <Text style={{ fontSize: 12, color: "#EF4444" }}>{peopleErr}</Text>
+                </View>
+              )}
             </View>
             <View style={{ marginBottom: 16 }}>
               <Text

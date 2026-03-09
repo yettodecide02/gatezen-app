@@ -165,24 +165,36 @@ function AnnouncementModal({
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [titleErr, setTitleErr] = useState("");
+  const [contentErr, setContentErr] = useState("");
   const isDark = theme === "dark";
 
-  const handleSubmit = async () => {
-    if (!title.trim() || !content.trim()) return;
+  const handleSubmit = () => {
+    let valid = true;
+    if (!title.trim()) {
+      setTitleErr("Title is required");
+      valid = false;
+    } else setTitleErr("");
+    if (!content.trim()) {
+      setContentErr("Content is required");
+      valid = false;
+    } else setContentErr("");
+    if (!valid) return;
     setIsSubmitting(true);
-    try {
-      await onSubmit({
-        title: title.trim(),
-        content: content.trim(),
+    onSubmit({ title: title.trim(), content: content.trim() })
+      .then(() => {
+        setTitle("");
+        setContent("");
+        setTitleErr("");
+        setContentErr("");
+        onClose();
+      })
+      .catch((error) => {
+        console.error("Error creating announcement:", error);
+      })
+      .finally(() => {
+        setIsSubmitting(false);
       });
-      setTitle("");
-      setContent("");
-      onClose();
-    } catch (error) {
-      console.error("Error creating announcement:", error);
-    } finally {
-      setIsSubmitting(false);
-    }
   };
 
   const inputStyle = {
@@ -232,12 +244,25 @@ function AnnouncementModal({
               TITLE
             </Text>
             <TextInput
-              style={[styles.input, inputStyle]}
+              style={[
+                styles.input,
+                inputStyle,
+                titleErr ? { borderColor: "#EF4444" } : null,
+              ]}
               value={title}
-              onChangeText={setTitle}
+              onChangeText={(v) => {
+                setTitle(v);
+                if (titleErr) setTitleErr("");
+              }}
               placeholder="Announcement title"
               placeholderTextColor={isDark ? "#4B5563" : "#9CA3AF"}
             />
+            {!!titleErr && (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 5 }}>
+                <Feather name="alert-circle" size={12} color="#EF4444" />
+                <Text style={{ fontSize: 12, color: "#EF4444" }}>{titleErr}</Text>
+              </View>
+            )}
             <Text
               style={[
                 styles.inputLabel,
@@ -247,14 +272,27 @@ function AnnouncementModal({
               CONTENT
             </Text>
             <TextInput
-              style={[styles.textarea, inputStyle]}
+              style={[
+                styles.textarea,
+                inputStyle,
+                contentErr ? { borderColor: "#EF4444" } : null,
+              ]}
               value={content}
-              onChangeText={setContent}
+              onChangeText={(v) => {
+                setContent(v);
+                if (contentErr) setContentErr("");
+              }}
               placeholder="Write your announcement..."
               placeholderTextColor={isDark ? "#4B5563" : "#9CA3AF"}
               multiline
               numberOfLines={4}
             />
+            {!!contentErr && (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 5 }}>
+                <Feather name="alert-circle" size={12} color="#EF4444" />
+                <Text style={{ fontSize: 12, color: "#EF4444" }}>{contentErr}</Text>
+              </View>
+            )}
           </View>
           <View
             style={[
@@ -361,7 +399,7 @@ export default function AdminDashboard() {
     title: string;
     content: string;
   }) => {
-    announcementMutation.mutate({ ...data, communityId });
+    await announcementMutation.mutateAsync({ ...data, communityId });
   };
 
   const handleResidentAction = async (userId, action) => {

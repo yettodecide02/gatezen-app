@@ -65,6 +65,7 @@ export default function Maintenance() {
   const [submitting, setSubmitting] = useState(false);
   const [comment, setComment] = useState("");
   const [addingComment, setAddingComment] = useState(false);
+  const [titleErr, setTitleErr] = useState("");
   const { toast, showError, showSuccess, hideToast } = useToast();
   const { user, token } = useAppContext();
   const queryClient = useQueryClient();
@@ -123,9 +124,10 @@ export default function Maintenance() {
 
   const submitTicket = () => {
     if (!title.trim()) {
-      showError("Title is required");
+      setTitleErr("Title is required");
       return;
     }
+    setTitleErr("");
     setSubmitting(true);
     submitMutation.mutate({
       userId: user?.id,
@@ -456,20 +458,29 @@ export default function Maintenance() {
               </Text>
               <TextInput
                 value={title}
-                onChangeText={setTitle}
+                onChangeText={(v) => {
+                  setTitle(v);
+                  if (titleErr) setTitleErr("");
+                }}
                 placeholder="Describe the issue briefly"
                 placeholderTextColor={muted}
                 style={{
                   backgroundColor: fieldBg,
                   borderRadius: 10,
                   borderWidth: 1,
-                  borderColor: borderCol,
+                  borderColor: titleErr ? "#EF4444" : borderCol,
                   paddingHorizontal: 12,
                   paddingVertical: 10,
                   fontSize: 14,
                   color: text,
                 }}
               />
+              {!!titleErr && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 5 }}>
+                  <Feather name="alert-circle" size={12} color="#EF4444" />
+                  <Text style={{ fontSize: 12, color: "#EF4444" }}>{titleErr}</Text>
+                </View>
+              )}
             </View>
             <View>
               <Text

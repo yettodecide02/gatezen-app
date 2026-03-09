@@ -77,6 +77,7 @@ export default function MyVehicles() {
   const [brand, setBrand] = useState("");
   const [model, setModel] = useState("");
   const [color, setColor] = useState("");
+  const [plateErr, setPlateErr] = useState("");
 
   const {
     data: vehicles = [],
@@ -120,6 +121,7 @@ export default function MyVehicles() {
     setBrand("");
     setModel("");
     setColor("");
+    setPlateErr("");
   };
 
   return (
@@ -418,7 +420,7 @@ export default function MyVehicles() {
                   backgroundColor: fieldBg,
                   borderRadius: 12,
                   borderWidth: 1,
-                  borderColor: borderCol,
+                  borderColor: plateErr ? "#EF4444" : borderCol,
                   padding: 12,
                   fontSize: 16,
                   color: text,
@@ -426,12 +428,21 @@ export default function MyVehicles() {
                   letterSpacing: 1,
                 }}
                 value={plate}
-                onChangeText={(v) => setPlate(v.toUpperCase())}
+                onChangeText={(v) => {
+                  setPlate(v.toUpperCase());
+                  if (plateErr) setPlateErr("");
+                }}
                 placeholder="e.g. TN01AB1234"
                 placeholderTextColor={muted}
                 autoCapitalize="characters"
                 autoCorrect={false}
               />
+              {!!plateErr && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 5 }}>
+                  <Feather name="alert-circle" size={12} color="#EF4444" />
+                  <Text style={{ fontSize: 12, color: "#EF4444" }}>{plateErr}</Text>
+                </View>
+              )}
             </View>
 
             {/* Type */}
@@ -569,7 +580,7 @@ export default function MyVehicles() {
             <Pressable
               onPress={() => {
                 if (!plate.trim()) {
-                  showError("Please enter a plate number.");
+                  setPlateErr("Plate number is required");
                   return;
                 }
                 addMutation.mutate({

@@ -215,6 +215,8 @@ function PostNoticeModal({
   const [pinned, setPinned] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [titleErr, setTitleErr] = useState("");
+  const [contentErr, setContentErr] = useState("");
 
   const handleClose = () => {
     setTitle("");
@@ -222,13 +224,15 @@ function PostNoticeModal({
     setCategory("GENERAL");
     setPinned(false);
     setError("");
+    setTitleErr("");
+    setContentErr("");
     onClose();
   };
   const handleSubmit = async () => {
-    if (!title.trim() || !content.trim()) {
-      setError("Title and content are required");
-      return;
-    }
+    let valid = true;
+    if (!title.trim()) { setTitleErr("Title is required"); valid = false; } else setTitleErr("");
+    if (!content.trim()) { setContentErr("Content is required"); valid = false; } else setContentErr("");
+    if (!valid) return;
     setLoading(true);
     try {
       await onSubmit({

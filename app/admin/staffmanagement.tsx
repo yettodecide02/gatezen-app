@@ -45,6 +45,9 @@ export default function StaffManagement() {
     email: "",
     password: "",
   });
+  const [nameErr, setNameErr] = useState("");
+  const [emailErr, setEmailErr] = useState("");
+  const [passwordErr, setPasswordErr] = useState("");
 
   const { toast, showError, showSuccess, hideToast } = useToast();
   const { user, token } = useAppContext();
@@ -94,6 +97,7 @@ export default function StaffManagement() {
     onSuccess: () => {
       showSuccess("Gatekeeper created successfully");
       setFormData({ name: "", email: "", password: "" });
+      setNameErr(""); setEmailErr(""); setPasswordErr("");
       setShowModal(false);
       queryClient.invalidateQueries({ queryKey: staffKey });
     },
@@ -106,14 +110,26 @@ export default function StaffManagement() {
   };
 
   const handleSubmit = () => {
-    if (!formData.name || !formData.email || !formData.password) {
-      showError("All fields are required");
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      showError("Please enter a valid email address");
-      return;
-    }
+    let valid = true;
+    if (!formData.name.trim()) {
+      setNameErr("Full name is required");
+      valid = false;
+    } else setNameErr("");
+    if (!formData.email.trim()) {
+      setEmailErr("Email is required");
+      valid = false;
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      setEmailErr("Enter a valid email address");
+      valid = false;
+    } else setEmailErr("");
+    if (!formData.password) {
+      setPasswordErr("Password is required");
+      valid = false;
+    } else if (formData.password.length < 8) {
+      setPasswordErr("Password must be at least 8 characters");
+      valid = false;
+    } else setPasswordErr("");
+    if (!valid) return;
     createMutation.mutate({ ...formData, communityId: user?.communityId });
   };
 
@@ -367,7 +383,10 @@ export default function StaffManagement() {
                 Add Gatekeeper
               </Text>
               <TouchableOpacity
-                onPress={() => setShowModal(false)}
+                onPress={() => {
+                  setShowModal(false);
+                  setNameErr(""); setEmailErr(""); setPasswordErr("");
+                }}
                 style={[styles.modalClose, { borderColor: borderCol }]}
               >
                 <Feather name="x" size={16} color={textColor} />
@@ -383,14 +402,18 @@ export default function StaffManagement() {
                   field: "name",
                   placeholder: "Enter full name",
                   icon: "user",
+                  err: nameErr,
+                  setErr: setNameErr,
                 },
                 {
                   label: "Email Address",
                   field: "email",
                   placeholder: "Enter email",
                   icon: "mail",
+                  err: emailErr,
+                  setErr: setEmailErr,
                 },
-              ].map(({ label, field, placeholder, icon }) => (
+              ].map(({ label, field, placeholder, icon, err, setErr }) => (
                 <View key={field} style={styles.fieldWrap}>
                   <Text style={[styles.fieldLabel, { color: muted }]}>
                     {label}
@@ -399,26 +422,33 @@ export default function StaffManagement() {
                     style={[
                       styles.fieldRow,
                       {
-                        borderColor: borderCol,
+                        borderColor: err ? "#EF4444" : borderCol,
                         backgroundColor: isDark ? "#111111" : "#F8FAFC",
                       },
                     ]}
                   >
-                    <Feather name={icon} size={16} color={muted} />
+                    <Feather name={icon} size={16} color={err ? "#EF4444" : muted} />
                     <TextInput
                       style={[styles.fieldInput, { color: textColor }]}
                       placeholder={placeholder}
                       placeholderTextColor={muted}
                       value={formData[field]}
-                      onChangeText={(v) =>
-                        setFormData((p) => ({ ...p, [field]: v }))
-                      }
+                      onChangeText={(v) => {
+                        setFormData((p) => ({ ...p, [field]: v }));
+                        if (err) setErr("");
+                      }}
                       keyboardType={
                         field === "email" ? "email-address" : "default"
                       }
                       autoCapitalize="none"
                     />
                   </View>
+                  {!!err && (
+                    <View style={styles.inlineError}>
+                      <Feather name="alert-circle" size={12} color="#EF4444" />
+                      <Text style={styles.inlineErrorText}>{err}</Text>
+                    </View>
+                  )}
                 </View>
               ))}
               <View style={styles.fieldWrap}>
@@ -429,20 +459,21 @@ export default function StaffManagement() {
                   style={[
                     styles.fieldRow,
                     {
-                      borderColor: borderCol,
+                      borderColor: passwordErr ? "#EF4444" : borderCol,
                       backgroundColor: isDark ? "#111111" : "#F8FAFC",
                     },
                   ]}
                 >
-                  <Feather name="lock" size={16} color={muted} />
+                  <Feather name="lock" size={16} color={passwordErr ? "#EF4444" : muted} />
                   <TextInput
                     style={[styles.fieldInput, { color: textColor }]}
                     placeholder="Set a password"
                     placeholderTextColor={muted}
                     value={formData.password}
-                    onChangeText={(v) =>
-                      setFormData((p) => ({ ...p, password: v }))
-                    }
+                    onChangeText={(v) => {
+                      setFormData((p) => ({ ...p, password: v }));
+                      if (passwordErr) setPasswordErr("");
+                    }}
                     secureTextEntry={!showPassword}
                   />
                   <TouchableOpacity onPress={() => setShowPassword((p) => !p)}>
@@ -453,11 +484,20 @@ export default function StaffManagement() {
                     />
                   </TouchableOpacity>
                 </View>
+                {!!passwordErr && (
+                  <View style={styles.inlineError}>
+                    <Feather name="alert-circle" size={12} color="#EF4444" />
+                    <Text style={styles.inlineErrorText}>{passwordErr}</Text>
+                  </View>
+                )}
               </View>
             </ScrollView>
             <View style={[styles.modalFooter, { borderTopColor: borderCol }]}>
               <TouchableOpacity
-                onPress={() => setShowModal(false)}
+                onPress={() => {
+                  setShowModal(false);
+                  setNameErr(""); setEmailErr(""); setPasswordErr("");
+                }}
                 style={[styles.cancelBtn, { borderColor: borderCol }]}
               >
                 <Text style={[styles.cancelBtnText, { color: muted }]}>
@@ -680,4 +720,6 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
   },
   submitBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
+  inlineError: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
+  inlineErrorText: { color: "#EF4444", fontSize: 12, fontWeight: "500" },
 });

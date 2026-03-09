@@ -43,6 +43,8 @@ export default function Profile() {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
+  const [nameErr, setNameErr] = useState("");
+  const [phoneErr, setPhoneErr] = useState("");
   const { toast, showSuccess, showError, showWarning, hideToast } = useToast();
 
   const queryClient = useQueryClient();
@@ -88,10 +90,16 @@ export default function Profile() {
   });
 
   const handleSave = async () => {
+    let valid = true;
     if (!editName.trim()) {
-      showWarning("Name cannot be empty.");
-      return;
-    }
+      setNameErr("Name cannot be empty");
+      valid = false;
+    } else setNameErr("");
+    if (editPhone?.trim() && !/^\+?[\d\s\-()]{7,15}$/.test(editPhone.trim())) {
+      setPhoneErr("Enter a valid phone number");
+      valid = false;
+    } else setPhoneErr("");
+    if (!valid) return;
     setSaving(true);
     saveProfileMutation.mutate({
       name: editName.trim(),
@@ -251,22 +259,32 @@ export default function Profile() {
             </Text>
           </View>
           {editing ? (
-            <TextInput
-              value={editName}
-              onChangeText={setEditName}
-              style={{
-                fontSize: 20,
-                fontWeight: "700",
-                color: text,
-                textAlign: "center",
-                borderBottomWidth: 2,
-                borderBottomColor: tint,
-                paddingBottom: 4,
-                minWidth: 160,
-              }}
-              placeholder="Your name"
-              placeholderTextColor={muted}
-            />
+            <View style={{ alignItems: "center" }}>
+              <TextInput
+                value={editName}
+                onChangeText={(v) => {
+                  setEditName(v);
+                  if (nameErr) setNameErr("");
+                }}
+                style={{
+                  fontSize: 20,
+                  fontWeight: "700",
+                  color: text,
+                  textAlign: "center",
+                  borderBottomWidth: 2,
+                  borderBottomColor: nameErr ? "#EF4444" : tint,
+                  paddingBottom: 4,
+                  minWidth: 160,
+                }}
+                placeholder="Your name"
+                placeholderTextColor={muted}
+              />
+              {!!nameErr && (
+                <Text style={{ fontSize: 12, color: "#EF4444", marginTop: 4 }}>
+                  {nameErr}
+                </Text>
+              )}
+            </View>
           ) : (
             <Text style={{ fontSize: 20, fontWeight: "700", color: text }}>
               {profile.name}
@@ -324,22 +342,32 @@ export default function Profile() {
                   {row.label}
                 </Text>
                 {editing && row.label === "Phone" ? (
-                  <TextInput
-                    value={editPhone}
-                    onChangeText={setEditPhone}
-                    style={{
-                      fontSize: 15,
-                      color: text,
-                      fontWeight: "500",
-                      marginTop: 1,
-                      borderBottomWidth: 1,
-                      borderBottomColor: tint + "60",
-                      paddingBottom: 2,
-                    }}
-                    placeholder="+91 98765 43210"
-                    placeholderTextColor={muted}
-                    keyboardType="phone-pad"
-                  />
+                  <View>
+                    <TextInput
+                      value={editPhone}
+                      onChangeText={(v) => {
+                        setEditPhone(v);
+                        if (phoneErr) setPhoneErr("");
+                      }}
+                      style={{
+                        fontSize: 15,
+                        color: text,
+                        fontWeight: "500",
+                        marginTop: 1,
+                        borderBottomWidth: 1,
+                        borderBottomColor: phoneErr ? "#EF4444" : tint + "60",
+                        paddingBottom: 2,
+                      }}
+                      placeholder="+91 98765 43210"
+                      placeholderTextColor={muted}
+                      keyboardType="phone-pad"
+                    />
+                    {!!phoneErr && (
+                      <Text style={{ fontSize: 12, color: "#EF4444", marginTop: 3 }}>
+                        {phoneErr}
+                      </Text>
+                    )}
+                  </View>
                 ) : (
                   <Text
                     style={{

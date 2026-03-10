@@ -60,6 +60,7 @@ export default function AdminParking() {
   const [floor, setFloor] = useState("");
   const [block, setBlock] = useState("");
   const [pricePerDay, setPricePerDay] = useState("");
+  const [spotNumberErr, setSpotNumberErr] = useState("");
 
   const {
     data: spotsRaw = [],
@@ -124,13 +125,15 @@ export default function AdminParking() {
     setFloor("");
     setBlock("");
     setPricePerDay("");
+    setSpotNumberErr("");
   };
 
   const handleAdd = () => {
     if (!spotNumber.trim()) {
-      showError("Spot number is required.");
+      setSpotNumberErr("Spot number is required");
       return;
     }
+    setSpotNumberErr("");
     createMutation.mutate({
       communityId,
       spotNumber: spotNumber.trim(),
@@ -377,17 +380,19 @@ export default function AdminParking() {
           </View>
           <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
             {[
-              ["Spot Number *", spotNumber, setSpotNumber, "e.g. A-01", false],
-              ["Floor", floor, setFloor, "e.g. B1, Ground", false],
-              ["Block / Zone", block, setBlock, "e.g. Block A", false],
+              ["Spot Number *", spotNumber, setSpotNumber, "e.g. A-01", false, spotNumberErr, setSpotNumberErr],
+              ["Floor", floor, setFloor, "e.g. B1, Ground", false, "", null],
+              ["Block / Zone", block, setBlock, "e.g. Block A", false, "", null],
               [
                 "Price per Day (₹)",
                 pricePerDay,
                 setPricePerDay,
                 "e.g. 50",
                 true,
+                "",
+                null,
               ],
-            ].map(([label, val, setter, ph, numeric]) => (
+            ].map(([label, val, setter, ph, numeric, err, setErr]) => (
               <View key={label} style={{ gap: 6 }}>
                 <Text
                   style={{
@@ -405,17 +410,23 @@ export default function AdminParking() {
                     backgroundColor: fieldBg,
                     borderRadius: 12,
                     borderWidth: 1,
-                    borderColor: borderCol,
+                    borderColor: err ? "#EF4444" : borderCol,
                     padding: 12,
                     fontSize: 14,
                     color: text,
                   }}
                   value={val}
-                  onChangeText={setter}
+                  onChangeText={(v) => { setter(v); if (err && setErr) setErr(""); }}
                   placeholder={ph}
                   placeholderTextColor={muted}
                   keyboardType={numeric ? "numeric" : "default"}
                 />
+                {!!err && (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
+                    <Feather name="alert-circle" size={12} color="#EF4444" />
+                    <Text style={{ color: "#EF4444", fontSize: 12, fontWeight: "500" }}>{err}</Text>
+                  </View>
+                )}
               </View>
             ))}
 

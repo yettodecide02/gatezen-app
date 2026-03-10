@@ -81,6 +81,7 @@ export default function AdminMeetings() {
 
   // Form state
   const [title, setTitle] = useState("");
+  const [titleErr, setTitleErr] = useState("");
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
   const [scheduledAt, setScheduledAt] = useState(
@@ -132,6 +133,7 @@ export default function AdminMeetings() {
 
   const resetForm = () => {
     setTitle("");
+    setTitleErr("");
     setDescription("");
     setLocation("");
     setScheduledAt(new Date(Date.now() + 86400000));
@@ -151,9 +153,10 @@ export default function AdminMeetings() {
 
   const handleSave = () => {
     if (!title.trim()) {
-      showError("Title is required.");
+      setTitleErr("Title is required");
       return;
     }
+    setTitleErr("");
     const body = {
       communityId: user?.communityId,
       title: title.trim(),
@@ -628,16 +631,22 @@ export default function AdminMeetings() {
                   backgroundColor: fieldBg,
                   borderRadius: 12,
                   borderWidth: 1,
-                  borderColor: borderCol,
+                  borderColor: titleErr ? "#EF4444" : borderCol,
                   padding: 12,
                   fontSize: 14,
                   color: text,
                 }}
                 value={title}
-                onChangeText={setTitle}
+                onChangeText={(v) => { setTitle(v); if (titleErr) setTitleErr(""); }}
                 placeholder="e.g. Monthly HOA Meeting"
                 placeholderTextColor={muted}
               />
+              {!!titleErr && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
+                  <Feather name="alert-circle" size={12} color="#EF4444" />
+                  <Text style={{ color: "#EF4444", fontSize: 12, fontWeight: "500" }}>{titleErr}</Text>
+                </View>
+              )}
             </View>
 
             {/* Scheduled Date */}

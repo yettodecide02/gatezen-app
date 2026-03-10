@@ -74,6 +74,8 @@ export default function GatekeeperPackages() {
   const [showImageSource, setShowImageSource] = useState(false);
   const [updating2, setUpdating2] = useState(false);
   const [resSearch, setResSearch] = useState("");
+  const [nameErr, setNameErr] = useState("");
+  const [editNameErr, setEditNameErr] = useState("");
   const imageCallbackRef = useRef(null);
 
   // Feature guard
@@ -131,6 +133,7 @@ export default function GatekeeperPackages() {
     onSuccess: () => {
       showSuccess("Package logged!");
       setNewPkg({ userId: "", name: "", image: "" });
+      setNameErr("");
       setShowCreate(false);
       queryClient.invalidateQueries({ queryKey: packagesKey });
     },
@@ -143,6 +146,7 @@ export default function GatekeeperPackages() {
       updateGatekeeperPackage(token, id, payload),
     onSuccess: () => {
       showSuccess("Package updated!");
+      setEditNameErr("");
       setShowEdit(false);
       queryClient.invalidateQueries({ queryKey: packagesKey });
     },
@@ -213,9 +217,10 @@ export default function GatekeeperPackages() {
       return;
     }
     if (!newPkg.name.trim()) {
-      showError("Please enter a package name");
+      setNameErr("Package name is required");
       return;
     }
+    setNameErr("");
     setSubmitting(true);
     createMutation.mutate({
       userId: newPkg.userId,
@@ -231,9 +236,10 @@ export default function GatekeeperPackages() {
       return;
     }
     if (!editPkg.name.trim()) {
-      showError("Please enter a package name");
+      setEditNameErr("Package name is required");
       return;
     }
+    setEditNameErr("");
     setUpdating2(true);
     editMutation.mutate({
       id: editPkg.id,
@@ -651,22 +657,29 @@ export default function GatekeeperPackages() {
               </Text>
               <TextInput
                 value={newPkg.name}
-                onChangeText={(v) =>
-                  setNewPkg((prev) => ({ ...prev, name: v }))
-                }
+                onChangeText={(v) => {
+                  setNewPkg((prev) => ({ ...prev, name: v }));
+                  if (nameErr) setNameErr("");
+                }}
                 placeholder="e.g. Amazon parcel"
                 placeholderTextColor={muted}
                 style={{
                   backgroundColor: fieldBg,
                   borderRadius: 10,
                   borderWidth: 1,
-                  borderColor: borderCol,
+                  borderColor: nameErr ? "#EF4444" : borderCol,
                   paddingHorizontal: 12,
                   paddingVertical: 10,
                   fontSize: 14,
                   color: text,
                 }}
               />
+              {!!nameErr && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
+                  <Feather name="alert-circle" size={12} color="#EF4444" />
+                  <Text style={{ color: "#EF4444", fontSize: 12, fontWeight: "500" }}>{nameErr}</Text>
+                </View>
+              )}
             </View>
 
             {/* Image upload */}
@@ -1039,22 +1052,29 @@ export default function GatekeeperPackages() {
               </Text>
               <TextInput
                 value={editPkg.name}
-                onChangeText={(v) =>
-                  setEditPkg((prev) => ({ ...prev, name: v }))
-                }
+                onChangeText={(v) => {
+                  setEditPkg((prev) => ({ ...prev, name: v }));
+                  if (editNameErr) setEditNameErr("");
+                }}
                 placeholder="e.g. Amazon parcel"
                 placeholderTextColor={muted}
                 style={{
                   backgroundColor: fieldBg,
                   borderRadius: 10,
                   borderWidth: 1,
-                  borderColor: borderCol,
+                  borderColor: editNameErr ? "#EF4444" : borderCol,
                   paddingHorizontal: 12,
                   paddingVertical: 10,
                   fontSize: 14,
                   color: text,
                 }}
               />
+              {!!editNameErr && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
+                  <Feather name="alert-circle" size={12} color="#EF4444" />
+                  <Text style={{ color: "#EF4444", fontSize: 12, fontWeight: "500" }}>{editNameErr}</Text>
+                </View>
+              )}
             </View>
 
             {/* Image */}

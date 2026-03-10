@@ -291,16 +291,22 @@ function PostNoticeModal({
                   styles.input,
                   {
                     backgroundColor: inputBg,
-                    borderColor: inputBorder,
+                    borderColor: titleErr ? "#EF4444" : inputBorder,
                     color: textColor,
                   },
                 ]}
                 value={title}
-                onChangeText={setTitle}
+                onChangeText={(v) => { setTitle(v); if (titleErr) setTitleErr(""); }}
                 placeholder="Notice title"
                 placeholderTextColor={muted}
                 maxLength={200}
               />
+              {!!titleErr && (
+                <View style={styles.inlineError}>
+                  <Feather name="alert-circle" size={12} color="#EF4444" />
+                  <Text style={styles.inlineErrorText}>{titleErr}</Text>
+                </View>
+              )}
             </View>
 
             <View style={styles.inputGroup}>
@@ -354,18 +360,24 @@ function PostNoticeModal({
                   styles.textarea,
                   {
                     backgroundColor: inputBg,
-                    borderColor: inputBorder,
+                    borderColor: contentErr ? "#EF4444" : inputBorder,
                     color: textColor,
                   },
                 ]}
                 value={content}
-                onChangeText={setContent}
+                onChangeText={(v) => { setContent(v); if (contentErr) setContentErr(""); }}
                 placeholder="Write notice content..."
                 placeholderTextColor={muted}
                 multiline
                 numberOfLines={6}
                 maxLength={2000}
               />
+              {!!contentErr && (
+                <View style={styles.inlineError}>
+                  <Feather name="alert-circle" size={12} color="#EF4444" />
+                  <Text style={styles.inlineErrorText}>{contentErr}</Text>
+                </View>
+              )}
               <Text style={[styles.charCount, { color: muted }]}>
                 {content.length}/2000
               </Text>
@@ -1098,4 +1110,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   btnOutlineText: { fontSize: 14, fontWeight: "600" },
+  inlineError: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
+  inlineErrorText: { color: "#EF4444", fontSize: 12, fontWeight: "500" },
 });

@@ -560,6 +560,8 @@ function CreatePollModal({
   ]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [titleErr, setTitleErr] = useState("");
+  const [candidateErrs, setCandidateErrs] = useState<Record<number, string>>({});
 
   const addCandidate = () =>
     setCandidates((cs) => [
@@ -568,16 +570,22 @@ function CreatePollModal({
     ]);
   const removeCandidate = (id) =>
     setCandidates((cs) => cs.filter((c) => c.id !== id));
-  const updateCandidate = (id, field, val) =>
+  const updateCandidate = (id, field, val) => {
     setCandidates((cs) =>
       cs.map((c) => (c.id === id ? { ...c, [field]: val } : c)),
     );
+    if (field === "name" && candidateErrs[id]) {
+      setCandidateErrs((prev) => { const n = { ...prev }; delete n[id]; return n; });
+    }
+  };
 
   const handleClose = () => {
     setTitle("");
     setDesc("");
     setEndDate("");
     setError("");
+    setTitleErr("");
+    setCandidateErrs({});
     setCandidates([
       { id: 1, name: "", description: "" },
       { id: 2, name: "", description: "" },
@@ -586,18 +594,13 @@ function CreatePollModal({
   };
 
   const handleSubmit = async () => {
-    if (!title.trim()) {
-      setError("Poll title is required");
-      return;
-    }
-    if (candidates.some((c) => !c.name.trim())) {
-      setError("All candidates must have a name");
-      return;
-    }
-    if (candidates.length < 2) {
-      setError("At least 2 candidates are required");
-      return;
-    }
+    let valid = true;
+    if (!title.trim()) { setTitleErr("Poll title is required"); valid = false; } else setTitleErr("");
+    const cErrs: Record<number, string> = {};
+    candidates.forEach((c) => { if (!c.name.trim()) { cErrs[c.id] = "Candidate name is required"; valid = false; } });
+    setCandidateErrs(cErrs);
+    if (candidates.length < 2) { setError("At least 2 candidates are required"); valid = false; }
+    if (!valid) return;
     setLoading(true);
     try {
       await onSubmit({
@@ -658,15 +661,21 @@ function CreatePollModal({
                   styles.input,
                   {
                     backgroundColor: inputBg,
-                    borderColor: inputBorder,
+                    borderColor: titleErr ? "#EF4444" : inputBorder,
                     color: textColor,
                   },
                 ]}
                 value={title}
-                onChangeText={setTitle}
+                onChangeText={(v) => { setTitle(v); if (titleErr) setTitleErr(""); }}
                 placeholder="e.g. Committee Chair Election 2025"
                 placeholderTextColor={muted}
               />
+              {!!titleErr && (
+                <View style={styles.inlineError}>
+                  <Feather name="alert-circle" size={12} color="#EF4444" />
+                  <Text style={styles.inlineErrorText}>{titleErr}</Text>
+                </View>
+              )}
             </View>
             <View style={styles.inputGroup}>
               <Text style={[styles.inputLabel, { color: muted }]}>
@@ -755,7 +764,7 @@ function CreatePollModal({
                         styles.input,
                         {
                           backgroundColor: isDark ? "#1A1A1A" : "#fff",
-                          borderColor: inputBorder,
+                          borderColor: candidateErrs[c.id] ? "#EF4444" : inputBorder,
                           color: textColor,
                         },
                       ]}
@@ -764,6 +773,12 @@ function CreatePollModal({
                       placeholder="Candidate name"
                       placeholderTextColor={muted}
                     />
+                    {!!candidateErrs[c.id] && (
+                      <View style={styles.inlineError}>
+                        <Feather name="alert-circle" size={12} color="#EF4444" />
+                        <Text style={styles.inlineErrorText}>{candidateErrs[c.id]}</Text>
+                      </View>
+                    )}
                   </View>
                   <View style={styles.inputGroup}>
                     <Text style={[styles.inputLabel, { color: muted }]}>
@@ -1617,4 +1632,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   btnOutlineText: { fontSize: 14, fontWeight: "600" },
+  inlineError: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
+  inlineErrorText: { color: "#EF4444", fontSize: 12, fontWeight: "500" },
 });

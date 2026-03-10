@@ -87,6 +87,7 @@ export default function HomePlanner() {
 
   // Form
   const [title, setTitle] = useState("");
+  const [titleErr, setTitleErr] = useState("");
   const [description, setDescription] = useState("");
   const [taskType, setTaskType] = useState("MAINTENANCE");
   const [scheduledDate, setScheduledDate] = useState(new Date());
@@ -179,6 +180,7 @@ export default function HomePlanner() {
 
   const resetForm = () => {
     setTitle("");
+    setTitleErr("");
     setDescription("");
     setTaskType("MAINTENANCE");
     setScheduledDate(new Date());
@@ -186,9 +188,10 @@ export default function HomePlanner() {
 
   const handleAdd = () => {
     if (!title.trim()) {
-      showError("Please enter a title.");
+      setTitleErr("Title is required");
       return;
     }
+    setTitleErr("");
     addMutation.mutate({
       communityId: user?.communityId,
       userId: user?.id,
@@ -599,16 +602,22 @@ export default function HomePlanner() {
                   backgroundColor: fieldBg,
                   borderRadius: 12,
                   borderWidth: 1,
-                  borderColor: borderCol,
+                  borderColor: titleErr ? "#EF4444" : borderCol,
                   padding: 12,
                   fontSize: 14,
                   color: text,
                 }}
                 value={title}
-                onChangeText={setTitle}
+                onChangeText={(v) => { setTitle(v); if (titleErr) setTitleErr(""); }}
                 placeholder="e.g. Plumbing repair"
                 placeholderTextColor={muted}
               />
+              {!!titleErr && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
+                  <Feather name="alert-circle" size={12} color="#EF4444" />
+                  <Text style={{ color: "#EF4444", fontSize: 12, fontWeight: "500" }}>{titleErr}</Text>
+                </View>
+              )}
             </View>
 
             {/* Description */}

@@ -607,6 +607,7 @@ function CreateSurveyModal({
   ]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [titleErr, setTitleErr] = useState("");
 
   const QTYPES = ["MULTIPLE_CHOICE", "YES_NO", "RATING", "TEXT"];
   const QTYPE_LABELS = {
@@ -664,6 +665,7 @@ function CreateSurveyModal({
     setDesc("");
     setEndDate("");
     setError("");
+    setTitleErr("");
     setQuestions([
       {
         id: Date.now(),
@@ -676,14 +678,13 @@ function CreateSurveyModal({
   };
 
   const handleSubmit = async () => {
-    if (!title.trim()) {
-      setError("Survey title is required");
-      return;
-    }
+    let valid = true;
+    if (!title.trim()) { setTitleErr("Survey title is required"); valid = false; } else setTitleErr("");
     if (questions.some((q) => !q.question.trim())) {
       setError("All questions must have text");
-      return;
+      valid = false;
     }
+    if (!valid) return;
     setLoading(true);
     try {
       await onSubmit({
@@ -744,15 +745,21 @@ function CreateSurveyModal({
                   styles.input,
                   {
                     backgroundColor: inputBg,
-                    borderColor: inputBorder,
+                    borderColor: titleErr ? "#EF4444" : inputBorder,
                     color: textColor,
                   },
                 ]}
                 value={title}
-                onChangeText={setTitle}
+                onChangeText={(v) => { setTitle(v); if (titleErr) setTitleErr(""); }}
                 placeholder="e.g. Resident Satisfaction Survey"
                 placeholderTextColor={muted}
               />
+              {!!titleErr && (
+                <View style={styles.inlineError}>
+                  <Feather name="alert-circle" size={12} color="#EF4444" />
+                  <Text style={styles.inlineErrorText}>{titleErr}</Text>
+                </View>
+              )}
             </View>
             <View style={styles.inputGroup}>
               <Text style={[styles.inputLabel, { color: muted }]}>
@@ -1726,4 +1733,6 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   btnOutlineText: { fontSize: 14, fontWeight: "600" },
+  inlineError: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
+  inlineErrorText: { color: "#EF4444", fontSize: 12, fontWeight: "500" },
 });

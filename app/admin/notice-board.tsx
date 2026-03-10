@@ -11,6 +11,8 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -252,227 +254,242 @@ function PostNoticeModal({
   return (
     <Modal visible={visible} transparent animationType="slide">
       <View style={styles.modalOverlay}>
-        <View style={[styles.sheet, { backgroundColor: sheetBg }]}>
-          <View style={styles.sheetHandle} />
-          <View style={[styles.sheetHeader, { borderBottomColor: borderCol }]}>
-            <View style={styles.sheetHeaderLeft}>
-              <View
-                style={[styles.sheetIconWrap, { backgroundColor: tint + "15" }]}
-              >
-                <Feather name="file-text" size={18} color={tint} />
-              </View>
-              <Text style={[styles.sheetTitle, { color: textColor }]}>
-                Post Notice
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={[styles.sheetCloseBtn, { borderColor: borderCol }]}
-              onPress={handleClose}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ width: "100%" }}
+        >
+          <View style={[styles.sheet, { backgroundColor: sheetBg }]}>
+            <View style={styles.sheetHandle} />
+            <View
+              style={[styles.sheetHeader, { borderBottomColor: borderCol }]}
             >
-              <Feather name="x" size={18} color={textColor} />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView
-            style={styles.sheetBody}
-            showsVerticalScrollIndicator={false}
-          >
-            {!!error && (
-              <View style={styles.errorBanner}>
-                <Feather name="alert-circle" size={14} color="#EF4444" />
-                <Text style={styles.errorBannerText}>{error}</Text>
+              <View style={styles.sheetHeaderLeft}>
+                <View
+                  style={[
+                    styles.sheetIconWrap,
+                    { backgroundColor: tint + "15" },
+                  ]}
+                >
+                  <Feather name="file-text" size={18} color={tint} />
+                </View>
+                <Text style={[styles.sheetTitle, { color: textColor }]}>
+                  Post Notice
+                </Text>
               </View>
-            )}
+              <TouchableOpacity
+                style={[styles.sheetCloseBtn, { borderColor: borderCol }]}
+                onPress={handleClose}
+              >
+                <Feather name="x" size={18} color={textColor} />
+              </TouchableOpacity>
+            </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: muted }]}>TITLE</Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: inputBg,
-                    borderColor: titleErr ? "#EF4444" : inputBorder,
-                    color: textColor,
-                  },
-                ]}
-                value={title}
-                onChangeText={(v) => { setTitle(v); if (titleErr) setTitleErr(""); }}
-                placeholder="Notice title"
-                placeholderTextColor={muted}
-                maxLength={200}
-              />
+            <ScrollView
+              style={styles.sheetBody}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              {!!error && (
+                <View style={styles.errorBanner}>
+                  <Feather name="alert-circle" size={14} color="#EF4444" />
+                  <Text style={styles.errorBannerText}>{error}</Text>
+                </View>
+              )}
+
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: muted }]}>TITLE</Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: inputBg,
+                      borderColor: titleErr ? "#EF4444" : inputBorder,
+                      color: textColor,
+                    },
+                  ]}
+                  value={title}
+                  onChangeText={(v) => { setTitle(v); if (titleErr) setTitleErr(""); }}
+                  placeholder="Notice title"
+                  placeholderTextColor={muted}
+                  maxLength={200}
+                />
               {!!titleErr && (
                 <View style={styles.inlineError}>
                   <Feather name="alert-circle" size={12} color="#EF4444" />
                   <Text style={styles.inlineErrorText}>{titleErr}</Text>
                 </View>
               )}
-            </View>
+              </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: muted }]}>
-                CATEGORY
-              </Text>
-              <View style={styles.catGrid}>
-                {Object.entries(CATEGORIES).map(([key, cfg]) => {
-                  const active = category === key;
-                  return (
-                    <TouchableOpacity
-                      key={key}
-                      onPress={() => setCategory(key)}
-                      style={[
-                        styles.catOption,
-                        {
-                          backgroundColor: active
-                            ? isDark
-                              ? cfg.darkBg
-                              : cfg.bg
-                            : isDark
-                              ? "#252525"
-                              : "#F8FAFC",
-                          borderColor: active ? cfg.color : inputBorder,
-                        },
-                      ]}
-                    >
-                      <Feather
-                        name={cfg.icon}
-                        size={11}
-                        color={active ? cfg.color : muted}
-                      />
-                      <Text
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: muted }]}>
+                  CATEGORY
+                </Text>
+                <View style={styles.catGrid}>
+                  {Object.entries(CATEGORIES).map(([key, cfg]) => {
+                    const active = category === key;
+                    return (
+                      <TouchableOpacity
+                        key={key}
+                        onPress={() => setCategory(key)}
                         style={[
-                          styles.catOptionText,
-                          { color: active ? cfg.color : muted },
+                          styles.catOption,
+                          {
+                            backgroundColor: active
+                              ? isDark
+                                ? cfg.darkBg
+                                : cfg.bg
+                              : isDark
+                                ? "#252525"
+                                : "#F8FAFC",
+                            borderColor: active ? cfg.color : inputBorder,
+                          },
                         ]}
                       >
-                        {cfg.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+                        <Feather
+                          name={cfg.icon}
+                          size={11}
+                          color={active ? cfg.color : muted}
+                        />
+                        <Text
+                          style={[
+                            styles.catOptionText,
+                            { color: active ? cfg.color : muted },
+                          ]}
+                        >
+                          {cfg.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
               </View>
-            </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: muted }]}>CONTENT</Text>
-              <TextInput
-                style={[
-                  styles.textarea,
-                  {
-                    backgroundColor: inputBg,
-                    borderColor: contentErr ? "#EF4444" : inputBorder,
-                    color: textColor,
-                  },
-                ]}
-                value={content}
-                onChangeText={(v) => { setContent(v); if (contentErr) setContentErr(""); }}
-                placeholder="Write notice content..."
-                placeholderTextColor={muted}
-                multiline
-                numberOfLines={6}
-                maxLength={2000}
-              />
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: muted }]}>
+                  CONTENT
+                </Text>
+                <TextInput
+                  style={[
+                    styles.textarea,
+                    {
+                      backgroundColor: inputBg,
+                      borderColor: contentErr ? "#EF4444" : inputBorder,
+                      color: textColor,
+                    },
+                  ]}
+                  value={content}
+                  onChangeText={(v) => { setContent(v); if (contentErr) setContentErr(""); }}
+                  placeholder="Write notice content..."
+                  placeholderTextColor={muted}
+                  multiline
+                  numberOfLines={6}
+                  maxLength={2000}
+                />
               {!!contentErr && (
                 <View style={styles.inlineError}>
                   <Feather name="alert-circle" size={12} color="#EF4444" />
                   <Text style={styles.inlineErrorText}>{contentErr}</Text>
                 </View>
               )}
-              <Text style={[styles.charCount, { color: muted }]}>
-                {content.length}/2000
-              </Text>
-            </View>
+                <Text style={[styles.charCount, { color: muted }]}>
+                  {content.length}/2000
+                </Text>
+              </View>
 
-            {/* Pin toggle */}
-            <TouchableOpacity
-              onPress={() => setPinned((p) => !p)}
-              style={[
-                styles.pinRow,
-                {
-                  backgroundColor: isDark ? "#252525" : "#F8FAFC",
-                  borderColor: inputBorder,
-                },
-              ]}
-            >
-              <View
+              {/* Pin toggle */}
+              <TouchableOpacity
+                onPress={() => setPinned((p) => !p)}
                 style={[
-                  styles.pinIconWrap,
+                  styles.pinRow,
                   {
-                    backgroundColor: pinned
-                      ? "#3B82F620"
-                      : isDark
-                        ? "#1A1A1A"
-                        : "#EEF2FF",
-                  },
-                ]}
-              >
-                <Feather
-                  name="bookmark"
-                  size={14}
-                  color={pinned ? "#3B82F6" : muted}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.pinLabel, { color: textColor }]}>
-                  Pin this notice
-                </Text>
-                <Text style={[styles.pinSub, { color: muted }]}>
-                  Pinned notices appear at the top
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.toggleTrack,
-                  {
-                    backgroundColor: pinned
-                      ? "#3B82F6"
-                      : isDark
-                        ? "#3A3A3A"
-                        : "#D1D5DB",
+                    backgroundColor: isDark ? "#252525" : "#F8FAFC",
+                    borderColor: inputBorder,
                   },
                 ]}
               >
                 <View
                   style={[
-                    styles.toggleThumb,
-                    { transform: [{ translateX: pinned ? 18 : 2 }] },
+                    styles.pinIconWrap,
+                    {
+                      backgroundColor: pinned
+                        ? "#3B82F620"
+                        : isDark
+                          ? "#1A1A1A"
+                          : "#EEF2FF",
+                    },
                   ]}
-                />
-              </View>
-            </TouchableOpacity>
-          </ScrollView>
+                >
+                  <Feather
+                    name="bookmark"
+                    size={14}
+                    color={pinned ? "#3B82F6" : muted}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.pinLabel, { color: textColor }]}>
+                    Pin this notice
+                  </Text>
+                  <Text style={[styles.pinSub, { color: muted }]}>
+                    Pinned notices appear at the top
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.toggleTrack,
+                    {
+                      backgroundColor: pinned
+                        ? "#3B82F6"
+                        : isDark
+                          ? "#3A3A3A"
+                          : "#D1D5DB",
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.toggleThumb,
+                      { transform: [{ translateX: pinned ? 18 : 2 }] },
+                    ]}
+                  />
+                </View>
+              </TouchableOpacity>
+            </ScrollView>
 
-          <View style={[styles.sheetFooter, { borderTopColor: borderCol }]}>
-            <TouchableOpacity
-              style={[
-                styles.btnOutline,
-                { borderColor: isDark ? "rgba(255,255,255,0.15)" : "#E2E8F0" },
-              ]}
-              onPress={handleClose}
-            >
-              <Text style={[styles.btnOutlineText, { color: muted }]}>
-                Cancel
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.btnPrimary,
-                {
-                  backgroundColor: tint,
-                  flex: 1.5,
-                  opacity:
-                    loading || !title.trim() || !content.trim() ? 0.5 : 1,
-                },
-              ]}
-              onPress={handleSubmit}
-              disabled={loading || !title.trim() || !content.trim()}
-            >
-              <Text style={styles.btnPrimaryText}>
-                {loading ? "Posting..." : "Post Notice"}
-              </Text>
-            </TouchableOpacity>
+            <View style={[styles.sheetFooter, { borderTopColor: borderCol }]}>
+              <TouchableOpacity
+                style={[
+                  styles.btnOutline,
+                  {
+                    borderColor: isDark ? "rgba(255,255,255,0.15)" : "#E2E8F0",
+                  },
+                ]}
+                onPress={handleClose}
+              >
+                <Text style={[styles.btnOutlineText, { color: muted }]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.btnPrimary,
+                  {
+                    backgroundColor: tint,
+                    flex: 1.5,
+                    opacity:
+                      loading || !title.trim() || !content.trim() ? 0.5 : 1,
+                  },
+                ]}
+                onPress={handleSubmit}
+                disabled={loading || !title.trim() || !content.trim()}
+              >
+                <Text style={styles.btnPrimaryText}>
+                  {loading ? "Posting..." : "Post Notice"}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
@@ -703,15 +720,6 @@ export default function AdminNoticeBoard() {
                 Total Notices
               </Text>
             </View>
-            <TouchableOpacity
-              style={[styles.newBtnInline, { backgroundColor: tint + "15" }]}
-              onPress={() => setShowPostModal(true)}
-            >
-              <Feather name="plus" size={14} color={tint} />
-              <Text style={[styles.newBtnInlineText, { color: tint }]}>
-                New
-              </Text>
-            </TouchableOpacity>
           </View>
 
           <View style={styles.sectionRow}>

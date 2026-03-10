@@ -695,6 +695,20 @@ export default function AdminMeetings() {
               </Pressable>
             </View>
 
+            {/* iOS inline date-time picker */}
+            {Platform.OS === "ios" && showDatePicker && (
+              <DateTimePicker
+                value={scheduledAt}
+                mode="datetime"
+                display="spinner"
+                minimumDate={new Date()}
+                onChange={(e, d) => {
+                  setShowDatePicker(false);
+                  if (e.type === "set" && d) setScheduledAt(d);
+                }}
+              />
+            )}
+
             {/* Location */}
             <View style={{ gap: 6 }}>
               <Text
@@ -940,18 +954,6 @@ export default function AdminMeetings() {
             )}
           </View>
         </View>
-      )}
-
-      {Platform.OS === "ios" && showDatePicker && (
-        <DateTimePicker
-          value={scheduledAt}
-          mode="datetime"
-          minimumDate={new Date()}
-          onChange={(e, d) => {
-            setShowDatePicker(false);
-            if (e.type === "set" && d) setScheduledAt(d);
-          }}
-        />
       )}
 
       <Toast {...toast} onHide={hideToast} />

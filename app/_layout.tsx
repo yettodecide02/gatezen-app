@@ -19,7 +19,7 @@ import { useColorScheme } from "@/hooks/useColorScheme";
 import { setupAxiosInterceptors } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import queryClient from "@/lib/queryClient";
-import { subscribeToUserChannel } from "@/lib/intercom";
+import { subscribeToIncomingCalls } from "@/lib/intercom";
 import {
   configureNotificationHandler,
   createNotificationChannel,
@@ -43,8 +43,7 @@ function IntercomSubscription() {
 
   useEffect(() => {
     if (!user?.id) return;
-    const unsub = subscribeToUserChannel(user.id, (type, payload) => {
-      if (type !== "call:incoming") return;
+    const unsub = subscribeToIncomingCalls(user.id, (payload) => {
       if (pathnameRef.current?.includes("intercom/call")) return;
       router.push({
         pathname: "/intercom/call",

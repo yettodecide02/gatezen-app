@@ -51,7 +51,7 @@
     "expo-web-browser": "~15.0.10",
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "react-native": "^0.81.5",
+    "react-native": "0.81.5",
     "react-native-gesture-handler": "~2.28.0",
     "react-native-get-random-values": "^1.11.0",
     "react-native-gifted-charts": "^1.4.64",
@@ -62,6 +62,7 @@
     "react-native-url-polyfill": "^2.0.0",
     "react-native-web": "^0.21.0",
     "react-native-webrtc": "^124.0.7",
+    "react-native-incall-manager": "^4.2.0",
     "react-native-webview": "13.15.0",
     "react-native-worklets": "0.5.1"
   },
@@ -78,7 +79,8 @@
     "doctor": {
       "reactNativeDirectoryCheck": {
         "exclude": [
-          "react-native-webrtc"
+          "react-native-webrtc",
+          "react-native-incall-manager"
         ]
       }
     }
